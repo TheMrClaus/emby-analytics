@@ -66,6 +66,13 @@ create index if not exists idx_play_event_ts     on play_event(event_ts);
 create index if not exists idx_play_user_ts      on play_event(emby_user_id, event_ts);
 create index if not exists idx_play_item_ts      on play_event(item_id, event_ts);
 create index if not exists idx_library_type      on library_item(type);
+
+-- add columns if not present (safe to run every start)
+alter table library_item add column video_codec text;
+alter table library_item add column video_height integer;
+
+create index if not exists idx_library_codec   on library_item(video_codec);
+create index if not exists idx_library_height  on library_item(video_height);
 """
 
 # --- DB ------------------------------------------------------------------
@@ -123,17 +130,36 @@ async def refresh_worker():
                 )
                 r.raise_for_status()
                 items = (r.json() or {}).get("Items") or []
-                if not items: break
+                if not items:
+                    break
 
                 for i in items:
+                    streams = i.get("MediaStreams") or []
+                    v = next((s for s in streams if (s.get("Type") or "").lower() == "video"), {})
+                    codec = (v.get("Codec") or "").lower() or None
+                    height = v.get("Height") or None
+
                     await conn.execute(
-                        "insert or replace into library_item (id,type,name,added_at) values (?,?,?,?)",
-                        (i["Id"], i.get("Type"), i.get("Name"), (i.get("DateCreated") or "")[:19]),
+                        """
+                        insert or replace into library_item
+                          (id, type, name, added_at, video_codec, video_height)
+                        values (?,?,?,?,?,?)
+                        """,
+                        (
+                            i["Id"],
+                            i.get("Type"),
+                            i.get("Name"),
+                            (i.get("DateCreated") or "")[:19],
+                            codec,
+                            height,
+                        ),
                     )
+
                 await conn.commit()
                 total += len(items)
                 refresh_state["imported"] = total
                 page += 1
+
         refresh_state["running"] = False
     except Exception as e:
         refresh_state.update({"running": False, "error": str(e)})
@@ -278,6 +304,126 @@ async def top_items(window: str = "30d", limit: int = 10):
         """, (since, cap_ms, limit))
         data = await rows.fetchall()
         return [{"item_id": r["item_id"], "hours": float(r["hours"])} for r in data]
+    finally:
+        await conn.close()
+
+@app.get("/stats/qualities")
+async def stats_qualities():
+    """
+    Buckets by video_height: 4K(>=2160), 1080p(1080-2159), 720p(720-1079), SD(1-719), Unknown(NULL/0).
+    Returns {buckets: {bucket: {Movie: n, Episode: n}}}
+    """
+    conn = await db()
+    try:
+        cur = await conn.execute("""
+            with buckets as (
+              select
+                case
+                  when video_height is null or video_height = 0 then 'Unknown'
+                  when video_height >= 2160 then '4K'
+                  when video_height >= 1080 then '1080p'
+                  when video_height >= 720  then '720p'
+                  else 'SD'
+                end as bucket,
+                coalesce(type,'Unknown') as t,
+                count(*) as c
+              from library_item
+              group by 1,2
+            )
+            select bucket, t as type, c from buckets;
+        """)
+        rows = await cur.fetchall()
+        out = {}
+        for r in rows:
+            out.setdefault(r["bucket"], {}).setdefault(r["type"], 0)
+            out[r["bucket"]][r["type"]] += r["c"]
+        return {"buckets": out}
+    finally:
+        await conn.close()
+
+@app.get("/stats/codecs")
+async def stats_codecs(limit: int = 10):
+    """
+    Top codecs by count, split by type. Unknown/empty grouped as 'unknown'.
+    """
+    conn = await db()
+    try:
+        cur = await conn.execute("""
+            with norm as (
+              select lower(coalesce(nullif(video_codec,''),'unknown')) as codec,
+                     coalesce(type,'Unknown') as t
+              from library_item
+            ),
+            agg as (
+              select codec, t as type, count(*) c
+              from norm
+              group by 1,2
+            )
+            select codec, type, c
+            from agg
+            order by (select sum(c) from agg a2 where a2.codec=agg.codec) desc, codec asc, type asc
+            limit ?;
+        """, (limit * 2,))
+        rows = await cur.fetchall()
+        out = {}
+        for r in rows:
+            out.setdefault(r["codec"], {}).setdefault(r["type"], 0)
+            out[r["codec"]][r["type"]] += r["c"]
+        return {"codecs": out}
+    finally:
+        await conn.close()
+
+@app.get("/stats/active-users")
+async def stats_active_users(window: str = "30d", limit: int = 5):
+    """
+    Returns top users by total watch time in the window.
+    """
+    cap_ms = 5000
+    since = _window_to_sql(window)
+    conn = await db()
+    try:
+        cur = await conn.execute("""
+            with o as (
+              select datetime(event_ts) ts, emby_user_id uid, item_id iid, position_ms pos,
+                     lag(position_ms) over (partition by emby_user_id,item_id order by datetime(event_ts)) ppos,
+                     lag(datetime(event_ts)) over (partition by emby_user_id,item_id order by datetime(event_ts)) pts
+              from play_event
+              where emby_user_id is not null
+                and datetime(event_ts) >= datetime('now', ?)
+            ),
+            d as (
+              select uid,
+                     cast(max(0, min(coalesce(pos-ppos,0), ?, cast((julianday(ts)-julianday(pts))*86400000 as integer))) as integer) d_ms
+              from o
+              where ppos is not null and pts is not null
+              group by ts, uid, iid
+            )
+            select coalesce(u.name, d.uid) as user,
+                   sum(d_ms) / 60000.0 as minutes
+            from d left join emby_user u on u.id=d.uid
+            group by coalesce(u.name, d.uid)
+            order by minutes desc
+            limit ?;
+        """, (since, cap_ms, limit))
+        rows = await cur.fetchall()
+        # Return breakdown too (days/hours/min for convenience)
+        out = []
+        for r in rows:
+            mins = float(r["minutes"])
+            days = int(mins // (60*24)); mins -= days * 60*24
+            hours = int(mins // 60);     mins -= hours * 60
+            out.append({"user": r["user"], "days": days, "hours": hours, "minutes": int(mins), "total_minutes": int(float(r["minutes"]))})
+        return out
+    finally:
+        await conn.close()
+
+@app.get("/stats/users/total")
+async def stats_total_users():
+    conn = await db()
+    try:
+        cur = await conn.execute("select count(*) as c from emby_user")
+        r = await cur.fetchone()
+        return {"total_users": r["c"]}
     finally:
         await conn.close()
 

@@ -19,6 +19,10 @@ export default function Home(){
   const [topUsers, setTopUsers] = useState<TopUser[]>([]);
   const [topItems, setTopItems] = useState<TopItem[]>([]);
   const [refresh, setRefresh] = useState<{running:boolean;imported:number;page:number;error:string|null}>({running:false,imported:0,page:0,error:null});
+  const [qualities, setQualities] = useState<any>({});
+  const [codecs, setCodecs] = useState<any>({});
+  const [activeUsers, setActiveUsers] = useState<any[]>([]);
+  const [totalUsers, setTotalUsers] = useState<number>(0);
 
   // initial fetches
   useEffect(()=>{
@@ -26,6 +30,10 @@ export default function Home(){
     fetch(`${API}/stats/overview`).then(r=>r.json()).then(setOverview);
     fetch(`${API}/stats/top/users?window=14d&limit=5`).then(r=>r.json()).then(setTopUsers);
     fetch(`${API}/stats/top/items?window=14d&limit=5`).then(r=>r.json()).then(setTopItems);
+    fetch(`${API}/stats/qualities`).then(r=>r.json()).then(setQualities);
+    fetch(`${API}/stats/codecs?limit=8`).then(r=>r.json()).then(setCodecs);
+    fetch(`${API}/stats/active-users?window=180d&limit=1`).then(r=>r.json()).then(setActiveUsers);
+    fetch(`${API}/stats/users/total`).then(r=>r.json()).then(d=>setTotalUsers(d.total_users||0));
 
     const es = new EventSource(`${API}/now/stream`);
     es.onmessage = (e)=> setNow(JSON.parse(e.data||"[]"));
@@ -124,6 +132,62 @@ export default function Home(){
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+<div style={{display:"grid", gap:16, gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", marginTop:24}}>
+  {/* Media Qualities */}
+  <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12}}>
+    <div style={{fontWeight:700, textAlign:"center"}}>Media Qualities</div>
+    <table style={{width:"100%", marginTop:8}}>
+      <thead><tr><th></th><th>Movies</th><th>Episodes</th></tr></thead>
+      <tbody>
+        {["4K","1080p","720p","SD","Unknown"].map(b=>(
+          <tr key={b}>
+            <td>{b}</td>
+            <td style={{textAlign:"right"}}>{qualities.buckets?.[b]?.Movie || 0}</td>
+            <td style={{textAlign:"right"}}>{qualities.buckets?.[b]?.Episode || 0}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  {/* Media Codecs */}
+  <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12}}>
+    <div style={{fontWeight:700, textAlign:"center"}}>Media Codecs</div>
+    <table style={{width:"100%", marginTop:8}}>
+      <thead><tr><th></th><th>Movies</th><th>Episodes</th></tr></thead>
+      <tbody>
+        {(codecs.codecs ? Object.keys(codecs.codecs) : []).map((c:string)=>(
+          <tr key={c}>
+            <td>{c}</td>
+            <td style={{textAlign:"right"}}>{codecs.codecs[c]?.Movie || 0}</td>
+            <td style={{textAlign:"right"}}>{codecs.codecs[c]?.Episode || 0}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  {/* Most Active Users (single) */}
+  <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12}}>
+    <div style={{fontWeight:700, textAlign:"center"}}>Most Active Users</div>
+    {activeUsers.length === 0 ? <div>—</div> : (
+      <div style={{display:"grid", gridTemplateColumns:"1fr auto auto auto", gap:8, marginTop:8, alignItems:"center"}}>
+        <div>{activeUsers[0].user}</div>
+        <div><b>Days</b><br/>{activeUsers[0].days}</div>
+        <div><b>Hours</b><br/>{activeUsers[0].hours}</div>
+        <div><b>Minutes</b><br/>{activeUsers[0].minutes}</div>
+      </div>
+    )}
+  </div>
+
+  {/* Total Users */}
+  <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12, display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center"}}>
+    <div style={{fontWeight:700}}>Total Users</div>
+    <div style={{fontSize:28, fontWeight:800}}>{totalUsers}</div>
+  </div>
+</div>
+
 
       {/* Top users / items */}
       <div style={{display:"grid", gap:24, gridTemplateColumns:"repeat(auto-fit, minmax(320px, 1fr))", marginTop:24}}>
