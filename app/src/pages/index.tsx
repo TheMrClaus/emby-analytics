@@ -1,0 +1,162 @@
+'use client';
+import { useEffect, useMemo, useState } from "react";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar
+} from "recharts";
+
+// Use relative API when UI is served by FastAPI
+const API = ""; // was process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080"
+
+type UsageRow = { day: string; user: string; hours: number };
+type TopUser = { user: string; hours: number };
+type TopItem = { item_id: string | null; hours: number };
+
+export default function Home(){
+  const [now, setNow] = useState<any[]>([]);
+  const [usage, setUsage] = useState<UsageRow[]>([]);
+  const [overview, setOverview] = useState<any>({});
+  const [topUsers, setTopUsers] = useState<TopUser[]>([]);
+  const [topItems, setTopItems] = useState<TopItem[]>([]);
+  const [refresh, setRefresh] = useState<{running:boolean;imported:number;page:number;error:string|null}>({running:false,imported:0,page:0,error:null});
+
+  // initial fetches
+  useEffect(()=>{
+    fetch(`${API}/stats/usage?days=14`).then(r=>r.json()).then(setUsage);
+    fetch(`${API}/stats/overview`).then(r=>r.json()).then(setOverview);
+    fetch(`${API}/stats/top/users?window=14d&limit=5`).then(r=>r.json()).then(setTopUsers);
+    fetch(`${API}/stats/top/items?window=14d&limit=5`).then(r=>r.json()).then(setTopItems);
+
+    const es = new EventSource(`${API}/now/stream`);
+    es.onmessage = (e)=> setNow(JSON.parse(e.data||"[]"));
+    return ()=> es.close();
+  },[]);
+
+  // refresh status poll
+  useEffect(()=>{
+    let t: any;
+    const tick = async () => {
+      const s = await fetch(`${API}/admin/refresh/status`).then(r=>r.json()).catch(()=>null);
+      if (s) setRefresh(s);
+      if (s?.running) t = setTimeout(tick, 1500);
+    };
+    tick();
+    return ()=> t && clearTimeout(t);
+  },[]);
+
+  // reshape usage -> one line per user
+  const days = useMemo(()=>Array.from(new Set(usage.map(u=>u.day))).sort(), [usage]);
+  const users = useMemo(()=>Array.from(new Set(usage.map(u=>u.user))), [usage]);
+  const series = useMemo(()=>days.map(d=>{
+    const row:any = { day: d };
+    users.forEach(u=>{
+      row[u] = usage.filter(x=>x.day===d && x.user===u).reduce((a,b)=>a+b.hours,0);
+    });
+    return row;
+  }), [days, users, usage]);
+
+  const startRefresh = async () => {
+    await fetch(`${API}/admin/refresh`, { method:"POST" });
+  };
+
+  const pct = (n:number)=> Math.max(0, Math.min(100, n||0));
+
+  return (
+    <div style={{padding:20, fontFamily:"system-ui, sans-serif"}}>
+      <h1>Emby Analytics</h1>
+
+      {/* Controls */}
+      <div style={{display:"flex", gap:12, alignItems:"center", marginTop:8}}>
+        <button onClick={startRefresh} disabled={refresh.running}
+          style={{padding:"6px 12px", border:"1px solid #ddd", borderRadius:8, cursor: refresh.running ? "not-allowed":"pointer"}}>
+          {refresh.running ? "Importing..." : "Refresh Library"}
+        </button>
+        {refresh.running && <span>page {refresh.page} • imported {refresh.imported}</span>}
+        {refresh.error && <span style={{color:"#c00"}}>Error: {refresh.error}</span>}
+      </div>
+
+      {/* Now Playing */}
+      <h2 style={{marginTop:16}}>Now Playing</h2>
+      <div style={{display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))"}}>
+        {now.length===0 && <div>Nothing playing.</div>}
+        {now.map((s:any,i:number)=>(
+          <div key={i} style={{border:"1px solid #ddd", borderRadius:12, padding:12, display:"flex", gap:12}}>
+            {s.poster
+              ? <img src={s.poster} alt="" width={90} height={135} style={{objectFit:"cover", borderRadius:8}}/>
+              : <div style={{width:90,height:135,background:"#eee",borderRadius:8}}/>
+            }
+            <div style={{flex:1, minWidth:0}}>
+              <div style={{fontWeight:700, overflow:"hidden", textOverflow:"ellipsis"}} title={s.title}>{s.title || "—"}</div>
+              <div style={{color:"#555"}}>{s.user} • {s.app}{s.device ? ` • ${s.device}` : ""}</div>
+
+              <div style={{marginTop:6, display:"flex", gap:6, flexWrap:"wrap", fontSize:12}}>
+                <span style={{padding:"2px 6px", border:"1px solid #ddd", borderRadius:8}}>
+                  {s.play_method || (s.video==="Transcode" || s.audio==="Transcode" ? "Transcode" : "Direct")}
+                </span>
+                <span style={{padding:"2px 6px", border:"1px solid #ddd", borderRadius:8}}>Video: {s.video}</span>
+                <span style={{padding:"2px 6px", border:"1px solid #ddd", borderRadius:8}}>Audio: {s.audio}</span>
+                <span style={{padding:"2px 6px", border:"1px solid #ddd", borderRadius:8}}>Subs: {s.subs}</span>
+                {typeof s.bitrate === "number" && (
+                  <span style={{padding:"2px 6px", border:"1px solid #ddd", borderRadius:8}}>
+                    { (s.bitrate/1000000).toFixed(2) } Mbps
+                  </span>
+                )}
+              </div>
+
+              <div style={{marginTop:8, height:8, background:"#eee", borderRadius:6}}>
+                <div style={{height:8, width:`${pct(s.progress_pct)}%`, background:"#666", borderRadius:6}}/>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Usage line chart */}
+      <h2 style={{marginTop:24}}>Usage (last 14 days)</h2>
+      <div style={{width:"100%", height:320}}>
+        <ResponsiveContainer>
+          <LineChart data={series}>
+            <XAxis dataKey="day" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            {users.map(u => <Line key={u} type="monotone" dataKey={u} dot={false} />)}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Top users / items */}
+      <div style={{display:"grid", gap:24, gridTemplateColumns:"repeat(auto-fit, minmax(320px, 1fr))", marginTop:24}}>
+        <div>
+          <h3>Top users (14d)</h3>
+          <div style={{width:"100%", height:260}}>
+            <ResponsiveContainer>
+              <BarChart data={topUsers.map(x=>({ user: x.user, hours: x.hours }))}>
+                <XAxis dataKey="user" /><YAxis /><Tooltip />
+                <Bar dataKey="hours" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div>
+          <h3>Top items (14d)</h3>
+          <div style={{width:"100%", height:260}}>
+            <ResponsiveContainer>
+              <BarChart data={topItems.map(x=>({ item: x.item_id || "Unknown", hours: x.hours }))}>
+                <XAxis dataKey="item" /><YAxis /><Tooltip />
+                <Bar dataKey="hours" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <small style={{color:"#666"}}>Tip: we can resolve IDs → titles next.</small>
+        </div>
+      </div>
+
+      {/* Library overview */}
+      <h2 style={{marginTop:24}}>Library overview</h2>
+      <pre style={{whiteSpace:"pre-wrap", background:"#fafafa", border:"1px solid #eee", borderRadius:8, padding:12}}>
+        {JSON.stringify(overview, null, 2)}
+      </pre>
+    </div>
+  );
+}
