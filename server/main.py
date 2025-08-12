@@ -84,10 +84,43 @@ async def db():
 
 # --- Startup -------------------------------------------------------------
 
+# --- Startup -------------------------------------------------------------
+
 @app.on_event("startup")
 async def startup():
     conn = await db()
-    await conn.executescript(SCHEMA)
+    # Create base objects that are safe to re-run
+    await conn.executescript("""
+create table if not exists emby_user(id text primary key, name text);
+create table if not exists library_item(id text primary key, type text, name text, added_at text);
+create table if not exists play_event(
+  id integer primary key autoincrement,
+  emby_user_id text, item_id text, event_ts text, event_type text,
+  position_ms integer, transcode integer
+);
+create view if not exists daily_watch as
+select substr(event_ts,1,10) as day, emby_user_id, sum(coalesce(position_ms,0))/3600000.0 as hours
+from play_event group by 1,2;
+create index if not exists idx_play_event_ts     on play_event(event_ts);
+create index if not exists idx_play_user_ts      on play_event(emby_user_id, event_ts);
+create index if not exists idx_play_item_ts      on play_event(item_id, event_ts);
+create index if not exists idx_library_type      on library_item(type);
+""")
+
+    # Conditionally add new columns (SQLite has no IF NOT EXISTS for ADD COLUMN)
+    cur = await conn.execute("PRAGMA table_info(library_item)")
+    cols = {row["name"] for row in await cur.fetchall()}
+    if "video_codec" not in cols:
+        await conn.execute("alter table library_item add column video_codec text")
+    if "video_height" not in cols:
+        await conn.execute("alter table library_item add column video_height integer")
+
+    # Indices for the new columns (safe to re-run)
+    await conn.executescript("""
+create index if not exists idx_library_codec   on library_item(video_codec);
+create index if not exists idx_library_height  on library_item(video_height);
+""")
+
     await conn.close()
     asyncio.create_task(collector_loop())
 
