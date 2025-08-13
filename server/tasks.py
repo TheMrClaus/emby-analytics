@@ -33,11 +33,22 @@ async def sync_users_from_emby():
 
     conn = await db()
     try:
-        for u in users:
-            await conn.execute(
-                "insert or replace into emby_user (id, name) values (?, ?)",
-                (u.get("Id"), u.get("Name")),
+        # upsert current users
+        rows = [(u.get("Id"), u.get("Name")) for u in users if u.get("Id")]
+        if rows:
+            await conn.executemany(
+                "insert or replace into emby_user (id, name) values (?, ?)", rows
             )
+        # prune users that no longer exist in Emby
+        ids = [r[0] for r in rows]
+        if ids:
+            placeholders = ",".join("?" * len(ids))
+            await conn.execute(
+                f"delete from emby_user where id not in ({placeholders})", ids
+            )
+        else:
+            # Emby returned no users; treat as authoritative
+            await conn.execute("delete from emby_user")
         await conn.commit()
     finally:
         await conn.close()
