@@ -1,0 +1,24 @@
+services:
+  emby-analytics:
+    build: .
+    container_name: emby-analytics
+    ports:
+      - "8080:8080"
+    environment:
+      EMBY_BASE_URL: "http://emby:8096"   # point to your Emby
+      EMBY_API_KEY: "${EMBY_API_KEY}"     # set in .env
+      SQLITE_PATH: "/data/emby.db"
+    volumes:
+      - emby-db:/data                      # persist the SQLite DB
+    networks:
+      - mediaserver
+      - infra
+
+networks:
+  mediaserver:
+    external: true
+  infra:
+    external: true
+
+volumes:
+  emby-db:
