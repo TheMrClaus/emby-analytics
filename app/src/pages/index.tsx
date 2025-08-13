@@ -246,8 +246,8 @@ const fmtTooltipTime = (h: number) => {
         <ResponsiveContainer>
           <LineChart data={series}>
             <XAxis dataKey="day" />
-            <YAxis />
-            <Tooltip />
+            <YAxis tickFormatter={fmtAxisTime} />
+            <Tooltip formatter={(v: any, name: string) => [fmtTooltipTime(Number(v)), name]} />
             <Legend />
             {users.map(u => <Line key={u} type="monotone" dataKey={u} dot={false} />)}
           </LineChart>
