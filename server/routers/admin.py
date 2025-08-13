@@ -108,6 +108,18 @@ async def admin_refresh():
 async def admin_refresh_status():
     return _refresh_state
 
+@router.post("/refresh/full")
+async def admin_refresh_full():
+    # wipe first, then start refresh
+    conn = await db()
+    try:
+        await conn.execute("delete from library_item")
+        await conn.commit()
+    finally:
+        await conn.close()
+    asyncio.create_task(_refresh_worker(_refresh_state))
+    return {"started": True, "full": True}
+
 # Health endpoints
 @router.get("/health")
 async def health():
