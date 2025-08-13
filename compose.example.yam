@@ -1,0 +1,14 @@
+services:
+  emby-analytics:
+    image: ghcr.io/themrclaus/emby-analytics:latest   # or: themrclaus/emby-analytics:latest or gcr.io/YOUR-PROJECT/emby-analytics:latest
+    ports:
+      - "8080:8080"
+    environment:
+      EMBY_BASE_URL: "http://emby:8096"
+      EMBY_API_KEY: "${EMBY_API_KEY}"
+      SQLITE_PATH: "/data/emby.db"
+    volumes:
+      - emby-db:/data
+volumes:
+  emby-db:
+
