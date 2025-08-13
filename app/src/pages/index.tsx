@@ -87,7 +87,7 @@ const fmtTooltipTime = (h: number) => {
       .then(r=>r.json())
       .then((rows: Array<{id:string; name:string; type:string}>)=>{
         const m: Record<string,string> = {};
-        rows.forEach(r => { m[r.id] = r.name || r.type || r.id; });
+        rows.forEach(r => { m[r.id] = r.display || r.name || r.type || r.id; });
         setItemNameMap(m);
       })
       .catch(()=>{ /* ignore */});
@@ -335,7 +335,6 @@ const fmtTooltipTime = (h: number) => {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <small style={{color:"#666"}}>Names resolved via /items/by-ids.</small>
         </div>
       </div>
 
