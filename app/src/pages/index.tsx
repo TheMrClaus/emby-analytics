@@ -30,6 +30,25 @@ export default function Home(){
   const [toast, setToast] = useState<string | null>(null);
   const [itemNameMap, setItemNameMap] = useState<Record<string, string>>({});
 
+  // Pretty time: keep data as hours, render h/m/s nicely
+const fmtAxisTime = (h: number) => {
+  if (!isFinite(h) || h <= 0) return "0m";
+  if (h < 1/60) return `${Math.round(h * 3600)}s`;      // < 1 min
+  if (h < 1)     return `${Math.round(h * 60)}m`;       // < 1 hour
+  if (h < 10)    return `${h.toFixed(1)}h`;             // 1–10h
+  return `${Math.round(h)}h`;                           // 10h+
+};
+
+const fmtTooltipTime = (h: number) => {
+  if (!isFinite(h) || h <= 0) return "0m";
+  const totalMin = Math.round(h * 60);
+  if (totalMin < 1) return `${Math.round(h * 3600)}s`;
+  if (totalMin < 60) return `${totalMin}m`;
+  const hr = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  return min ? `${hr}h ${min}m` : `${hr}h`;
+};
+
   // initial fetches
   useEffect(()=>{
     fetch(`${API}/stats/usage?days=14`).then(r=>r.json()).then(setUsage);
@@ -296,7 +315,9 @@ export default function Home(){
           <div style={{width:"100%", height:260}}>
             <ResponsiveContainer>
               <BarChart data={topUsers.map(x=>({ user: x.user, hours: x.hours }))}>
-                <XAxis dataKey="user" /><YAxis /><Tooltip />
+                <XAxis dataKey="user" />
+                <YAxis tickFormatter={fmtAxisTime} />
+                <Tooltip formatter={(v)=>[fmtTooltipTime(v as number), "time"]} />
                 <Bar dataKey="hours" />
               </BarChart>
             </ResponsiveContainer>
@@ -307,7 +328,9 @@ export default function Home(){
           <div style={{width:"100%", height:260}}>
             <ResponsiveContainer>
               <BarChart data={topItemsDisplay}>
-                <XAxis dataKey="item" /><YAxis /><Tooltip />
+                <XAxis dataKey="item" />
+                <YAxis tickFormatter={fmtAxisTime} />
+                <Tooltip formatter={(v)=>[fmtTooltipTime(v as number), "time"]} />
                 <Bar dataKey="hours" />
               </BarChart>
             </ResponsiveContainer>
