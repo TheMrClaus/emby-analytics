@@ -126,6 +126,25 @@ async def health():
     from datetime import datetime
     return {"ok": True, "time": datetime.utcnow().isoformat()}
 
+@router.get("/health/schema")
+async def health_schema():
+    from ..db import ensure_schema, db
+    await ensure_schema()
+    conn = await db()
+    try:
+        ver = await (await conn.execute("pragma user_version")).fetchone()
+        objs = await (await conn.execute(
+            "select name, type from sqlite_master where type in ('table','view') order by 2,1"
+        )).fetchall()
+        return {
+            "ok": True,
+            "user_version": int(ver[0] or 0),
+            "objects": [{"name": r[0], "type": r[1]} for r in objs],
+        }
+    finally:
+        await conn.close()
+
+
 @router.get("/health/emby")
 async def health_emby():
     try:

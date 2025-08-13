@@ -1,3 +1,4 @@
+# server/db.py
 import aiosqlite
 from .config import DB_PATH
 
@@ -26,6 +27,7 @@ create index if not exists idx_play_user_ts      on play_event(emby_user_id, eve
 create index if not exists idx_play_item_ts      on play_event(item_id, event_ts);
 create index if not exists idx_library_type      on library_item(type);
 """)
+
         # Add new columns idempotently
         cur = await conn.execute("PRAGMA table_info(library_item)")
         cols = {row["name"] for row in await cur.fetchall()}
@@ -33,6 +35,7 @@ create index if not exists idx_library_type      on library_item(type);
             await conn.execute("alter table library_item add column video_codec text")
         if "video_height" not in cols:
             await conn.execute("alter table library_item add column video_height integer")
+
         await conn.executescript("""
 create index if not exists idx_library_codec   on library_item(video_codec);
 create index if not exists idx_library_height  on library_item(video_height);
