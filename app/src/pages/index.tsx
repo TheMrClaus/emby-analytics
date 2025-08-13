@@ -11,6 +11,7 @@ const API = ""; // was process.env.NEXT_PUBLIC_API_BASE || "http://localhost:808
 type UsageRow = { day: string; user: string; hours: number };
 type TopUser = { user: string; hours: number };
 type TopItem = { item_id: string | null; hours: number };
+type ItemRow = { id: string; name?: string; type?: string; display?: string };
 type RefreshState = { running: boolean; imported: number; total?: number; page: number; error: string | null };
 
 export default function Home(){
@@ -85,7 +86,7 @@ const fmtTooltipTime = (h: number) => {
     if (!ids.length) { setItemNameMap({}); return; }
     fetch(`${API}/items/by-ids?ids=${encodeURIComponent(ids.join(","))}`)
       .then(r=>r.json())
-      .then((rows: Array<{id:string; name:string; type:string}>)=>{
+      .then((rows: ItemRow[])=>{
         const m: Record<string,string> = {};
         rows.forEach(r => { m[r.id] = r.display || r.name || r.type || r.id; });
         setItemNameMap(m);
