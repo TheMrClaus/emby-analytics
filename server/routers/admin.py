@@ -7,13 +7,13 @@ from ..tasks import sync_users_from_emby
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-# Library refresh worker (unchanged behavior)
+# Library refresh worker (now exposes "total" for progress UI)
 async def _refresh_worker(state: dict):
-    state.update({"running": True, "page": 0, "imported": 0, "error": None})
+    state.update({"running": True, "page": 0, "imported": 0, "total": 0, "error": None})
     conn = await db()
     try:
         async with httpx.AsyncClient(timeout=30) as s:
-            page, total, per_page = 0, 0, 200
+            page, total_imported, per_page = 0, 0, 200
             while True:
                 state["page"] = page
                 r = await s.get(
@@ -28,7 +28,16 @@ async def _refresh_worker(state: dict):
                     },
                 )
                 r.raise_for_status()
-                items = (r.json() or {}).get("Items") or []
+                j = r.json() or {}
+                items = j.get("Items") or []
+
+                # capture total once if Emby provides it
+                if not state.get("total"):
+                    try:
+                        state["total"] = int(j.get("TotalRecordCount") or 0)
+                    except Exception:
+                        state["total"] = 0
+
                 if not items:
                     break
 
@@ -50,8 +59,8 @@ async def _refresh_worker(state: dict):
                     )
 
                 await conn.commit()
-                total += len(items)
-                state["imported"] = total
+                total_imported += len(items)
+                state["imported"] = total_imported
                 page += 1
 
         state["running"] = False
@@ -60,12 +69,18 @@ async def _refresh_worker(state: dict):
     finally:
         await conn.close()
 
-_refresh_state = {"running": False, "page": 0, "imported": 0, "error": None}
+_refresh_state = {"running": False, "page": 0, "imported": 0, "total": 0, "error": None}
 
 @router.post("/refresh")
 async def admin_refresh():
     if _refresh_state["running"]:
-        return {"started": False, "running": True, "imported": _refresh_state["imported"], "page": _refresh_state["page"]}
+        return {
+            "started": False,
+            "running": True,
+            "imported": _refresh_state["imported"],
+            "total": _refresh_state["total"],
+            "page": _refresh_state["page"],
+        }
     asyncio.create_task(_refresh_worker(_refresh_state))
     return {"started": True}
 
@@ -90,7 +105,7 @@ async def health_emby():
     except Exception as e:
         return JSONResponse(status_code=502, content={"ok": False, "error": str(e)})
 
-# Manual user sync trigger (optional but handy)
+# Manual user sync trigger
 @router.post("/users/sync", status_code=status.HTTP_202_ACCEPTED)
 async def admin_users_sync():
     asyncio.create_task(sync_users_from_emby())
