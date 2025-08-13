@@ -4,7 +4,9 @@ from ..db import db
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
-def _window_to_sql(window: str) -> str:
+def _window_to_sql(window: str) -> str | None:
+    if (window or "").lower().strip() in ("all", "lifetime", "ever"):
+        return None
     m = re.fullmatch(r'(\d+)\s*([dhwm])', (window or '').lower().strip())
     if not m:
         return "-30 days"
@@ -16,7 +18,7 @@ def _window_to_sql(window: str) -> str:
 async def stats_overview():
     conn = await db()
     try:
-        cur = await conn.execute("select type, count(*) c from library_item group by 1")
+        cur = await conn.execute("SELECT type, count(*) c FROM library_item GROUP BY 1")
         types = {r["type"]: r["c"] for r in await cur.fetchall()}
         return {"types": types}
     finally:
@@ -142,21 +144,21 @@ async def stats_qualities():
     conn = await db()
     try:
         cur = await conn.execute("""
-            with buckets as (
-              select
-                case
-                  when video_height is null or video_height = 0 then 'Unknown'
-                  when video_height >= 2160 then '4K'
-                  when video_height >= 1080 then '1080p'
-                  when video_height >= 720  then '720p'
-                  else 'SD'
-                end as bucket,
-                coalesce(type,'Unknown') as t,
-                count(*) as c
-              from library_item
-              group by 1,2
+            WITH buckets AS (
+              SELECT
+                CASE
+                  WHEN video_height IS NULL OR video_height = 0 THEN 'Unknown'
+                  WHEN video_height >= 2160 THEN '4K'
+                  WHEN video_height >= 1080 THEN '1080p'
+                  WHEN video_height >= 720  THEN '720p'
+                  ELSE 'SD'
+                END AS bucket,
+                COALESCE(type,'Unknown') AS t,
+                COUNT(*) AS c
+              FROM library_item
+              GROUP BY 1,2
             )
-            select bucket, t as type, c from buckets;
+            SELECT bucket, t AS type, c FROM buckets;
         """)
         rows = await cur.fetchall()
         out = {}
@@ -172,20 +174,20 @@ async def stats_codecs(limit: int = 10):
     conn = await db()
     try:
         cur = await conn.execute("""
-            with norm as (
-              select lower(coalesce(nullif(video_codec,''),'unknown')) as codec,
-                     coalesce(type,'Unknown') as t
-              from library_item
+            WITH norm AS (
+              SELECT LOWER(COALESCE(NULLIF(video_codec,''),'unknown')) AS codec,
+                     COALESCE(type,'Unknown') AS t
+              FROM library_item
             ),
-            agg as (
-              select codec, t as type, count(*) c
-              from norm
-              group by 1,2
+            agg AS (
+              SELECT codec, t AS type, COUNT(*) c
+              FROM norm
+              GROUP BY 1,2
             )
-            select codec, type, c
-            from agg
-            order by (select sum(c) from agg a2 where a2.codec=agg.codec) desc, codec asc, type asc
-            limit ?;
+            SELECT codec, type, c
+            FROM agg
+            ORDER BY (SELECT SUM(c) FROM agg a2 WHERE a2.codec=agg.codec) DESC, codec ASC, type ASC
+            LIMIT ?;
         """, (limit * 2,))
         rows = await cur.fetchall()
         out = {}
@@ -196,42 +198,85 @@ async def stats_codecs(limit: int = 10):
     finally:
         await conn.close()
 
-@router.get("/active-users")
-async def stats_active_users(window: str = "30d", limit: int = 5):
-    cap_ms = 5000
-    since = _window_to_sql(window)
+def _format_active_users(rows, limit):
+    # Ensure at least `limit` entries so frontend won't crash
+    out = []
+    for r in rows:
+        ms = int(r["total_ms"] or 0)
+        mins = ms // 60000
+        days = mins // (60 * 24)
+        mins -= days * 60 * 24
+        hours = mins // 60
+        mins -= hours * 60
+        out.append({
+            "user": r["user"] or "Unknown",
+            "days": days,
+            "hours": hours,
+            "minutes": int(mins)
+        })
+    # Pad if fewer than limit
+    while len(out) < limit:
+        out.append({"user": "Unknown", "days": 0, "hours": 0, "minutes": 0})
+    return out
+
+async def _get_active_users(limit: int):
     conn = await db()
     try:
         cur = await conn.execute("""
-            with o as (
-              select datetime(event_ts) ts, emby_user_id uid, item_id iid, position_ms pos,
-                     lag(position_ms) over (partition by emby_user_id,item_id order by datetime(event_ts)) ppos,
-                     lag(datetime(event_ts)) over (partition by emby_user_id,item_id order by datetime(event_ts)) pts
-              from play_event
-              where emby_user_id is not null
-                and datetime(event_ts) >= datetime('now', ?)
-            ),
-            d as (
-              select uid,
-                     cast(max(0, min(coalesce(pos-ppos,0), ?, cast((julianday(ts)-julianday(pts))*86400000 as integer))) as integer) d_ms
-              from o
-              where ppos is not null and pts is not null
-              group by ts, uid, iid
-            )
-            select coalesce(u.name, d.uid) as user,
-                   sum(d_ms) / 60000.0 as minutes
-            from d left join emby_user u on u.id=d.uid
-            group by coalesce(u.name, d.uid)
-            order by minutes desc
-            limit ?;
-        """, (since, cap_ms, limit))
+            SELECT COALESCE(u.name, lw.user_id) AS user,
+                   lw.total_ms
+            FROM lifetime_watch lw
+            LEFT JOIN emby_user u ON u.id = lw.user_id
+            ORDER BY lw.total_ms DESC
+            LIMIT ?
+        """, (limit,))
         rows = await cur.fetchall()
+        return _format_active_users(rows, limit)
+    finally:
+        await conn.close()
+
+@router.get("/active-users")
+async def stats_active_users(limit: int = 5):
+    return await _get_active_users(limit)
+
+@router.get("/active-users-lifetime")
+async def stats_active_users_lifetime(limit: int = 5):
+    return await _get_active_users(limit)
+
+
+        
+@router.get("/active-users-lifetime")
+async def stats_active_users_lifetime(limit: int = 5):
+    """
+    Return most active users of all time using lifetime_watch table.
+    This matches the frontend's expected structure.
+    """
+    conn = await db()
+    try:
+        cur = await conn.execute("""
+            SELECT COALESCE(u.name, lw.user_id) AS user,
+                   lw.total_ms
+            FROM lifetime_watch lw
+            LEFT JOIN emby_user u ON u.id = lw.user_id
+            ORDER BY lw.total_ms DESC
+            LIMIT ?
+        """, (limit,))
+        rows = await cur.fetchall()
+
         out = []
         for r in rows:
-            mins = float(r["minutes"])
-            days = int(mins // (60*24)); mins -= days * 60*24
-            hours = int(mins // 60);     mins -= hours * 60
-            out.append({"user": r["user"], "days": days, "hours": hours, "minutes": int(mins), "total_minutes": int(float(r["minutes"]))})
+            ms = int(r["total_ms"] or 0)
+            mins = ms // 60000
+            days = mins // (60 * 24)
+            mins -= days * 60 * 24
+            hours = mins // 60
+            mins -= hours * 60
+            out.append({
+                "user": r["user"],
+                "days": days,
+                "hours": hours,
+                "minutes": int(mins)
+            })
         return out
     finally:
         await conn.close()
@@ -240,7 +285,7 @@ async def stats_active_users(window: str = "30d", limit: int = 5):
 async def stats_total_users():
     conn = await db()
     try:
-        cur = await conn.execute("select count(*) as c from emby_user")
+        cur = await conn.execute("SELECT count(*) AS c FROM emby_user")
         r = await cur.fetchone()
         return {"total_users": r["c"]}
     finally:

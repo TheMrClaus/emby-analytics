@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 import httpx
 from ..db import db
-from ..config import EMBY_BASE, EMBY_KEY
+from ..config import EMBY_BASE_URL, EMBY_API_KEY
 
 router = APIRouter(prefix="/items", tags=["items"])
 
@@ -29,9 +29,9 @@ async def items_by_ids(ids: str):
     if episode_ids:
         async with httpx.AsyncClient(timeout=20) as s:
             r = await s.get(
-                f"{EMBY_BASE}/emby/Items",
+                f"{EMBY_BASE_URL}/emby/Items",
                 params={
-                    "api_key": EMBY_KEY,
+                    "api_key": EMBY_API_KEY,
                     "Ids": ",".join(episode_ids),
                     "Fields": "SeriesName,ParentIndexNumber,IndexNumber,Name",
                 },

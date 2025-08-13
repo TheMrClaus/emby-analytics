@@ -58,7 +58,7 @@ const fmtTooltipTime = (h: number) => {
     fetch(`${API}/stats/top/items?window=14d&limit=5`).then(r=>r.json()).then(setTopItems);
     fetch(`${API}/stats/qualities`).then(r=>r.json()).then(setQualities);
     fetch(`${API}/stats/codecs?limit=8`).then(r=>r.json()).then(setCodecs);
-    fetch(`${API}/stats/active-users?window=180d&limit=1`).then(r=>r.json()).then(setActiveUsers);
+    fetch(`${API}/stats/active-users-lifetime?limit=1`).then(r=>r.json()).then(setActiveUsers);
     fetch(`${API}/stats/users/total`).then(r=>r.json()).then(d=>setTotalUsers(d.total_users||0));
 
     const es = new EventSource(`${API}/now/stream`);

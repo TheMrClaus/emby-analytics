@@ -6,13 +6,25 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import KEEPALIVE_SEC
 from .db import ensure_schema
-from .tasks import collector_loop, users_sync_loop, sync_users_from_emby
+from .tasks import (
+    collector_loop,
+    users_sync_loop,
+    sync_users_from_emby,
+    backfill_lifetime_watch
+)
 from .routers import stats, admin, images, now, items
 
 app = FastAPI(title="Emby Analytics")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# Routers
+# Allow all origins for the API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+# Register API routers
 app.include_router(stats.router)
 app.include_router(admin.router)
 app.include_router(images.router)
@@ -27,11 +39,18 @@ if WEB_DIR.is_dir():
 
 @app.on_event("startup")
 async def startup():
-    # DB schema / indexes
+    # 1. Ensure DB schema & indexes exist
     await ensure_schema()
-    # Seed users immediately and refresh daily
-    asyncio.create_task(sync_users_from_emby())
-    asyncio.create_task(users_sync_loop(24))
-    # Start live collector; inject publisher from the now router
+
+    # 2. Populate the users table from Emby
+    await sync_users_from_emby()
+
+    # 3. Populate all-time totals from Emby history (lifetime_watch)
+    await backfill_lifetime_watch()
+
+    # 4. Start periodic background tasks
+    asyncio.create_task(users_sync_loop(24))  # refresh users every 24h
+
+    # 5. Start live play-event collector
     from .routers.now import publish_now
     asyncio.create_task(collector_loop(publish_now))

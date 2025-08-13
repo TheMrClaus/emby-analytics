@@ -1,156 +1,216 @@
-import asyncio, httpx
+# server/tasks.py
+import asyncio
+import httpx
 from datetime import datetime
-from .config import EMBY_BASE, EMBY_KEY
-from .db import db
+from server.config import EMBY_BASE_URL, EMBY_API_KEY, KEEPALIVE_SEC
+from server.db import db
+import logging
 
-# --- Helpers (kept private to the collector) ----------------------------
+log = logging.getLogger(__name__)
 
-def _format_title(item: dict) -> str:
-    t = (item or {}).get("Type")
-    if t == "Episode":
-        series = item.get("SeriesName") or item.get("Name") or "—"
-        season = item.get("ParentIndexNumber")
-        ep = item.get("IndexNumber")
-        epname = item.get("Name") or "—"
-        if isinstance(season, int) and isinstance(ep, int):
-            return f"{series} • S{season:02d}E{ep:02d} — {epname}"
-        return f"{series} — {epname}"
-    name = item.get("Name") or "—"
-    year = item.get("ProductionYear")
-    return f"{name} ({year})" if isinstance(year, int) else name
-
-def _poster_url(item: dict) -> str | None:
-    iid = (item or {}).get("Id")
-    return f"/img/primary/{iid}" if iid else None
-
-# --- Daily user sync from Emby ------------------------------------------
-
+# -----------------------------------------------------------------------------
+# Sync users from Emby API
+# -----------------------------------------------------------------------------
 async def sync_users_from_emby():
-    async with httpx.AsyncClient(timeout=15) as s:
-        r = await s.get(f"{EMBY_BASE}/emby/Users", params={"api_key": EMBY_KEY})
-        r.raise_for_status()
-        users = r.json() or []
+    """
+    Pull the list of users from Emby and store/update them in the emby_user table.
+    """
+    url = f"{EMBY_BASE_URL}/Users?api_key={EMBY_API_KEY}"
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+        users = resp.json()
 
     conn = await db()
     try:
-        # upsert current users
-        rows = [(u.get("Id"), u.get("Name")) for u in users if u.get("Id")]
-        if rows:
-            await conn.executemany(
-                "insert or replace into emby_user (id, name) values (?, ?)", rows
-            )
-        # prune users that no longer exist in Emby
-        ids = [r[0] for r in rows]
-        if ids:
-            placeholders = ",".join("?" * len(ids))
+        for user in users:
             await conn.execute(
-                f"delete from emby_user where id not in ({placeholders})", ids
+                "INSERT OR REPLACE INTO emby_user (id, name) VALUES (?, ?)",
+                (user["Id"], user["Name"]),
             )
-        else:
-            # Emby returned no users; treat as authoritative
-            await conn.execute("delete from emby_user")
         await conn.commit()
     finally:
         await conn.close()
 
-async def users_sync_loop(interval_hours: int = 24):
+# -----------------------------------------------------------------------------
+# Backfill lifetime watch time
+# -----------------------------------------------------------------------------
+async def backfill_lifetime_watch():
+    """
+    Pull *all-time* watch totals per user directly from Emby (Movies+Episodes with IsPlayed=true)
+    and store them in lifetime_watch. This makes the app correct on first run.
+    """
+    log.info("Backfilling lifetime totals from Emby history...")
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        # users
+        ur = await client.get(f"{EMBY_BASE_URL}/Users", params={"api_key": EMBY_API_KEY})
+        ur.raise_for_status()
+        users = ur.json() or []
+
+        conn = await db()
+        try:
+            # clear + refill to keep it simple and consistent
+            await conn.execute("DELETE FROM lifetime_watch")
+
+            for u in users:
+                uid = u.get("Id")
+                if not uid:
+                    continue
+
+                total_ms = 0
+                start = 0
+                page = 200
+
+                while True:
+                    r = await client.get(
+                        f"{EMBY_BASE_URL}/Users/{uid}/Items",
+                        params={
+                            "api_key": EMBY_API_KEY,
+                            "IncludeItemTypes": "Movie,Episode",
+                            "Recursive": "true",
+                            "IsPlayed": "true",
+                            "StartIndex": start,
+                            "Limit": page,
+                            "Fields": "RunTimeTicks,UserData"
+                        },
+                    )
+                    r.raise_for_status()
+                    j = r.json() or {}
+                    items = j.get("Items") or []
+                    if not items:
+                        break
+
+                    for it in items:
+                        ticks = int(it.get("RunTimeTicks") or 0)
+                        plays = int(((it.get("UserData") or {}).get("PlayCount")) or 1)
+                        if ticks > 0 and plays > 0:
+                            total_ms += (ticks // 10_000) * plays
+
+                    start += len(items)
+
+                await conn.execute(
+                    "INSERT OR REPLACE INTO lifetime_watch (user_id, total_ms, updated_at) VALUES (?,?,datetime('now'))",
+                    (uid, int(total_ms)),
+                )
+
+            await conn.commit()
+            log.info("Lifetime totals backfill complete.")
+        finally:
+            await conn.close()
+
+# -----------------------------------------------------------------------------
+# Periodic background tasks
+# -----------------------------------------------------------------------------
+async def users_sync_loop(hours: int = 24):
+    """
+    Loop to refresh user list from Emby every X hours.
+    """
     while True:
         try:
             await sync_users_from_emby()
+            log.info("User sync completed.")
         except Exception as e:
-            print("users sync error:", e)
-        await asyncio.sleep(interval_hours * 3600)
+            log.exception(f"User sync failed: {e}")
+        await asyncio.sleep(hours * 3600)
 
-# --- Live collector loop (polls Emby /Sessions) -------------------------
+def _normalize_sessions(sessions: list[dict]) -> list[dict]:
+    out = []
+    for s in sessions or []:
+        item = s.get("NowPlayingItem") or {}
+        ps   = s.get("PlayState") or {}
+        tc   = s.get("TranscodingInfo") or {}
+        streams = (item.get("MediaStreams") or [])
+        video_streams = [st for st in streams if st.get("Type") == "Video"]
+        audio_streams = [st for st in streams if st.get("Type") == "Audio"]
+        sub_streams   = [st for st in streams if st.get("Type") == "Subtitle"]
+
+        vid = video_streams[0] if video_streams else {}
+        aud = audio_streams[0] if audio_streams else {}
+
+        # Build a poster URL if possible
+        poster = None
+        if item.get("Id"):
+            tag = (item.get("ImageTags") or {}).get("Primary", "")
+            poster = (
+                f"{EMBY_BASE_URL}/Items/{item['Id']}/Images/Primary"
+                f"?fillWidth=240&quality=80"
+                f"{'&tag='+tag if tag else ''}"
+                f"&api_key={EMBY_API_KEY}"
+            )
+
+        # Build a human-ish title
+        title = item.get("Name") or ""
+        if item.get("SeriesName"):
+            # e.g. "Series • S02E05 Name"
+            ep = item.get("IndexNumber")
+            season = item.get("ParentIndexNumber")
+            epbits = []
+            if season is not None: epbits.append(f"S{int(season):02d}")
+            if ep     is not None: epbits.append(f"E{int(ep):02d}")
+            epcode = "".join(epbits) or ""
+            if title and epcode:
+                title = f"{item['SeriesName']} • {epcode} {title}"
+            else:
+                title = item["SeriesName"]
+
+        out.append({
+            "user": s.get("UserName") or s.get("UserId") or "",
+            "title": title,
+            "poster": poster,
+            "method": "Transcode" if tc else "Direct",
+            "video": {
+                "codec": tc.get("VideoCodec") or vid.get("Codec"),
+                "height": vid.get("Height"),
+                "bitrate": (tc.get("Bitrate") or vid.get("BitRate")),
+            },
+            "audio": {
+                "codec": tc.get("AudioCodec") or aud.get("Codec"),
+                "channels": aud.get("Channels"),
+            },
+            "subs": {
+                "present": bool(sub_streams)
+            },
+            "positionMs": int((ps.get("PositionTicks") or 0) / 10000),
+            "runTimeMs":  int((item.get("RunTimeTicks") or 0) / 10000),
+            "itemId": item.get("Id"),
+        })
+    return out
 
 async def collector_loop(publish_now):
-    async with httpx.AsyncClient(timeout=10) as s:
+    from server.db import db
+    last_positions = {}
+
+    async with httpx.AsyncClient(timeout=10) as client:
         while True:
             try:
-                resp = await s.get(f"{EMBY_BASE}/emby/Sessions", params={"api_key": EMBY_KEY})
+                resp = await client.get(f"{EMBY_BASE_URL}/Sessions?api_key={EMBY_API_KEY}")
                 resp.raise_for_status()
-                payload = resp.json() or []
+                raw_sessions = resp.json()
 
-                conn = await db()
-                try:
-                    now_list = []
-                    for ses in payload:
-                        uid = ses.get("UserId")
-                        if not uid:
-                            continue
+                # 1) push normalized sessions to the UI
+                await publish_now(_normalize_sessions(raw_sessions))
 
-                        play_state = ses.get("PlayState") or {}
-                        now_item = ses.get("NowPlayingItem") or {}
-                        item_id = now_item.get("Id")
-                        if play_state.get("IsPaused") or not item_id:
-                            continue
-
-                        # upsert user
-                        try:
-                            await conn.execute(
-                                "insert or replace into emby_user (id, name) values (?, ?)",
-                                (uid, ses.get("UserName")),
-                            )
-                        except Exception as e:
-                            print("user upsert error:", e)
-
-                        # persist play tick
-                        try:
-                            await conn.execute(
-                                """
-                                insert into play_event
-                                  (emby_user_id, item_id, event_ts, event_type, position_ms, transcode)
-                                values (?,?,?,?,?,?)
-                                """,
-                                (
-                                    uid,
-                                    item_id,
-                                    datetime.utcnow().isoformat(timespec="seconds"),
-                                    "update",
-                                    (play_state.get("PositionTicks") or 0) // 10_000,
-                                    1 if (ses.get("TranscodingInfo") is not None) else 0,
-                                ),
-                            )
-                        except Exception as e:
-                            print("event save error:", e)
-
-                        # transcode/direct flags + progress
-                        ti = ses.get("TranscodingInfo") or {}
-                        reasons = ti.get("TranscodeReasons") or []
-                        video_direct = ti.get("IsVideoDirect", True)
-                        audio_direct = ti.get("IsAudioDirect", True)
-                        subs_transcoding = bool(
-                            ti.get("SubtitleDeliveryUrl") or
-                            any("Subtitle" in str(r) for r in reasons)
-                        )
-                        npsi = ses.get("NowPlayingStreamInfo") or {}
-                        bitrate_bps = npsi.get("BitRate")
-                        rt_ticks = (now_item.get("RunTimeTicks") or 0)
-                        pos_ticks = (play_state.get("PositionTicks") or 0)
-                        progress_pct = (float(pos_ticks) / rt_ticks * 100) if rt_ticks else 0.0
-
-                        now_list.append({
-                            "item_id": item_id,
-                            "title": _format_title(now_item),
-                            "user": ses.get("UserName"),
-                            "device": ses.get("DeviceName"),
-                            "app": ses.get("Client"),
-                            "play_method": play_state.get("PlayMethod"),
-                            "video": "Direct" if video_direct else "Transcode",
-                            "audio": "Direct" if audio_direct else "Transcode",
-                            "subs": ("Transcode" if subs_transcoding
-                                     else ("None" if play_state.get("SubtitleStreamIndex") in (None, -1) else "Direct")),
-                            "bitrate": bitrate_bps,
-                            "progress_pct": round(max(0.0, min(100.0, progress_pct)), 1),
-                            "poster": _poster_url(now_item),
-                        })
-
-                    await conn.commit()
-                    await publish_now(now_list)
-                finally:
-                    await conn.close()
-
+                # 2) log play events (unchanged)
+                for sess in raw_sessions:
+                    user_id = sess.get("UserId")
+                    item = (sess.get("NowPlayingItem") or {})
+                    item_id = item.get("Id")
+                    pos_ms = sess.get("PlayState", {}).get("PositionTicks")
+                    pos_ms = int(pos_ms / 10000) if pos_ms else None
+                    if user_id and item_id and pos_ms is not None:
+                        last_key = (user_id, item_id)
+                        if last_positions.get(last_key) != pos_ms:
+                            last_positions[last_key] = pos_ms
+                            conn = await db()
+                            await conn.execute("""
+                                INSERT INTO play_event (
+                                    emby_user_id, item_id, event_ts, event_type, position_ms, transcode
+                                )
+                                VALUES (?, ?, datetime('now'), 'playing', ?, 0)
+                            """, (user_id, item_id, pos_ms))
+                            await conn.commit()
+                            await conn.close()
             except Exception as e:
-                print("collector error:", e)
+                log.exception(f"Collector loop error: {e}")
 
-            await asyncio.sleep(2)
+            await asyncio.sleep(KEEPALIVE_SEC)

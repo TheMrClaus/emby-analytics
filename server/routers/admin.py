@@ -2,7 +2,7 @@ import asyncio, httpx
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 from ..db import db
-from ..config import EMBY_BASE, EMBY_KEY
+from ..config import EMBY_BASE_URL, EMBY_API_KEY
 from ..tasks import sync_users_from_emby
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -17,9 +17,9 @@ async def _refresh_worker(state: dict):
             while True:
                 state["page"] = page
                 r = await s.get(
-                    f"{EMBY_BASE}/emby/Items",
+                    f"{EMBY_BASE_URL}/emby/Items",
                     params={
-                        "api_key": EMBY_KEY,
+                        "api_key": EMBY_API_KEY,
                         "IncludeItemTypes": "Movie,Series,Episode",
                         "Recursive": "true",
                         "StartIndex": page * per_page,
@@ -91,6 +91,67 @@ async def _refresh_worker(state: dict):
 
 _refresh_state = {"running": False, "page": 0, "imported": 0, "total": 0, "error": None}
 
+@router.post("/backfill/lifetime")
+async def admin_backfill_lifetime():
+    """
+    Build lifetime totals from Emby played items:
+    sum( RunTimeTicks * PlayCount ) across Movies/Episodes per user.
+    """
+    import math
+    from datetime import datetime
+    async with httpx.AsyncClient(timeout=30) as s:
+        # fetch users (same as user sync)
+        ur = await s.get(f"{EMBY_BASE_URL}/emby/Users", params={"api_key": EMBY_API_KEY})
+        ur.raise_for_status()
+        users = [u for u in (ur.json() or []) if u.get("Id")]
+
+    conn = await db()
+    try:
+        for u in users:
+            uid = u["Id"]
+            # page through played items for this user
+            total_ticks = 0
+            start = 0
+            page_size = 200
+            while True:
+                r = await s.get(
+                    f"{EMBY_BASE_URL}/emby/Users/{uid}/Items",
+                    params={
+                        "api_key": EMBY_API_KEY,
+                        "Filters": "IsPlayed",
+                        "Recursive": "true",
+                        "IncludeItemTypes": "Movie,Episode",
+                        "StartIndex": start,
+                        "Limit": page_size,
+                        "Fields": "RunTimeTicks,UserData,ProductionYear"
+                    },
+                )
+                r.raise_for_status()
+                j = r.json() or {}
+                items = j.get("Items") or []
+                if not items:
+                    break
+                for it in items:
+                    runtime = int(it.get("RunTimeTicks") or 0)
+                    playcount = int(((it.get("UserData") or {}).get("PlayCount")) or 0)
+                    if runtime > 0 and playcount > 0:
+                        total_ticks += runtime * playcount
+                start += len(items)
+                if len(items) < page_size:
+                    break
+
+            # ticks -> ms (Emby ticks = 100ns)
+            total_ms = math.floor(total_ticks / 10_000)
+
+            await conn.execute(
+                "insert or replace into lifetime_watch(user_id, total_ms, computed_at) values (?,?,?)",
+                (uid, total_ms, datetime.utcnow().isoformat(timespec="seconds")),
+            )
+        await conn.commit()
+        return {"ok": True, "users": len(users)}
+    finally:
+        await conn.close()
+
 @router.post("/refresh")
 async def admin_refresh():
     if _refresh_state["running"]:
@@ -144,12 +205,11 @@ async def health_schema():
     finally:
         await conn.close()
 
-
 @router.get("/health/emby")
 async def health_emby():
     try:
         async with httpx.AsyncClient(timeout=5) as s:
-            r = await s.get(f"{EMBY_BASE}/emby/System/Info", params={"api_key": EMBY_KEY})
+            r = await s.get(f"{EMBY_BASE_URL}/emby/System/Info", params={"api_key": EMBY_API_KEY})
             r.raise_for_status()
             j = r.json()
             return {"ok": True, "server_name": j.get("ServerName"), "version": j.get("Version")}
