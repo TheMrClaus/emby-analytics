@@ -11,6 +11,7 @@ const API = ""; // was process.env.NEXT_PUBLIC_API_BASE || "http://localhost:808
 type UsageRow = { day: string; user: string; hours: number };
 type TopUser = { user: string; hours: number };
 type TopItem = { item_id: string | null; hours: number };
+type RefreshState = { running: boolean; imported: number; total?: number; page: number; error: string | null };
 
 export default function Home(){
   const [now, setNow] = useState<any[]>([]);
@@ -18,11 +19,16 @@ export default function Home(){
   const [overview, setOverview] = useState<any>({});
   const [topUsers, setTopUsers] = useState<TopUser[]>([]);
   const [topItems, setTopItems] = useState<TopItem[]>([]);
-  const [refresh, setRefresh] = useState<{running:boolean;imported:number;page:number;error:string|null}>({running:false,imported:0,page:0,error:null});
+  const [refresh, setRefresh] = useState<RefreshState>({running:false, imported:0, total:0, page:0, error:null});
   const [qualities, setQualities] = useState<any>({});
   const [codecs, setCodecs] = useState<any>({});
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
   const [totalUsers, setTotalUsers] = useState<number>(0);
+
+  // niceties
+  const [syncingUsers, setSyncingUsers] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [itemNameMap, setItemNameMap] = useState<Record<string, string>>({});
 
   // initial fetches
   useEffect(()=>{
@@ -52,6 +58,20 @@ export default function Home(){
     return ()=> t && clearTimeout(t);
   },[]);
 
+  // resolve Top Item IDs -> names
+  useEffect(()=>{
+    const ids = Array.from(new Set(topItems.map(t => t.item_id).filter(Boolean))) as string[];
+    if (!ids.length) { setItemNameMap({}); return; }
+    fetch(`${API}/items/by-ids?ids=${encodeURIComponent(ids.join(","))}`)
+      .then(r=>r.json())
+      .then((rows: Array<{id:string; name:string; type:string}>)=>{
+        const m: Record<string,string> = {};
+        rows.forEach(r => { m[r.id] = r.name || r.type || r.id; });
+        setItemNameMap(m);
+      })
+      .catch(()=>{ /* ignore */});
+  }, [topItems]);
+
   // reshape usage -> one line per user
   const days = useMemo(()=>Array.from(new Set(usage.map(u=>u.day))).sort(), [usage]);
   const users = useMemo(()=>Array.from(new Set(usage.map(u=>u.user))), [usage]);
@@ -63,23 +83,83 @@ export default function Home(){
     return row;
   }), [days, users, usage]);
 
+  // Top items with resolved names
+  const topItemsDisplay = useMemo(
+    () => topItems.map(x => ({ item: itemNameMap[x.item_id || ""] || x.item_id || "Unknown", hours: x.hours })),
+    [topItems, itemNameMap]
+  );
+
   const startRefresh = async () => {
     await fetch(`${API}/admin/refresh`, { method:"POST" });
+    setToast("Library refresh started");
+    setTimeout(()=>setToast(null), 2000);
+  };
+
+  const syncUsers = async () => {
+    if (syncingUsers) return;
+    setSyncingUsers(true);
+    try {
+      await fetch(`${API}/admin/users/sync`, { method:"POST" });
+      setToast("User sync started");
+    } catch {
+      setToast("Failed to start user sync");
+    } finally {
+      setTimeout(()=>setToast(null), 2500);
+      setSyncingUsers(false);
+    }
   };
 
   const pct = (n:number)=> Math.max(0, Math.min(100, n||0));
 
   return (
     <div style={{padding:20, fontFamily:"system-ui, sans-serif"}}>
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position:"fixed", top:14, right:14, background:"#333", color:"#fff",
+          padding:"8px 12px", borderRadius:8, boxShadow:"0 2px 12px rgba(0,0,0,.15)", zIndex:9999
+        }}>
+          {toast}
+        </div>
+      )}
+
       <h1>Emby Analytics</h1>
 
       {/* Controls */}
-      <div style={{display:"flex", gap:12, alignItems:"center", marginTop:8}}>
+      <div style={{display:"flex", gap:12, alignItems:"center", flexWrap:"wrap", marginTop:8}}>
         <button onClick={startRefresh} disabled={refresh.running}
           style={{padding:"6px 12px", border:"1px solid #ddd", borderRadius:8, cursor: refresh.running ? "not-allowed":"pointer"}}>
           {refresh.running ? "Importing..." : "Refresh Library"}
         </button>
-        {refresh.running && <span>page {refresh.page} • imported {refresh.imported}</span>}
+
+        <button onClick={syncUsers} disabled={syncingUsers}
+          style={{padding:"6px 12px", border:"1px solid #ddd", borderRadius:8, cursor: syncingUsers ? "not-allowed":"pointer"}}>
+          {syncingUsers ? "Syncing…" : "Sync Users"}
+        </button>
+
+        {refresh.running && (
+          <div style={{minWidth:260}}>
+            <div style={{height:8, background:"#eee", borderRadius:6, overflow:"hidden"}}>
+              <div
+                style={{
+                  height:8,
+                  width: (() => {
+                    const tot = refresh.total || 0;
+                    if (!tot) return "100%"; // indeterminate width if total unknown
+                    const w = (refresh.imported / Math.max(1, tot)) * 100;
+                    return `${Math.max(1, Math.min(100, w))}%`;
+                  })(),
+                  background:"#666",
+                  borderRadius:6,
+                  transition:"width .3s"
+                }}
+              />
+            </div>
+            <div style={{fontSize:12, color:"#555", marginTop:4}}>
+              Imported {refresh.imported}{refresh.total ? ` / ${refresh.total}` : ""} • page {refresh.page}
+            </div>
+          </div>
+        )}
         {refresh.error && <span style={{color:"#c00"}}>Error: {refresh.error}</span>}
       </div>
 
@@ -133,61 +213,60 @@ export default function Home(){
         </ResponsiveContainer>
       </div>
 
-<div style={{display:"grid", gap:16, gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", marginTop:24}}>
-  {/* Media Qualities */}
-  <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12}}>
-    <div style={{fontWeight:700, textAlign:"center"}}>Media Qualities</div>
-    <table style={{width:"100%", marginTop:8}}>
-      <thead><tr><th></th><th>Movies</th><th>Episodes</th></tr></thead>
-      <tbody>
-        {["4K","1080p","720p","SD","Unknown"].map(b=>(
-          <tr key={b}>
-            <td>{b}</td>
-            <td style={{textAlign:"right"}}>{qualities.buckets?.[b]?.Movie || 0}</td>
-            <td style={{textAlign:"right"}}>{qualities.buckets?.[b]?.Episode || 0}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
+      <div style={{display:"grid", gap:16, gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", marginTop:24}}>
+        {/* Media Qualities */}
+        <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12}}>
+          <div style={{fontWeight:700, textAlign:"center"}}>Media Qualities</div>
+          <table style={{width:"100%", marginTop:8}}>
+            <thead><tr><th></th><th>Movies</th><th>Episodes</th></tr></thead>
+            <tbody>
+              {["4K","1080p","720p","SD","Unknown"].map(b=>(
+                <tr key={b}>
+                  <td>{b}</td>
+                  <td style={{textAlign:"right"}}>{qualities.buckets?.[b]?.Movie || 0}</td>
+                  <td style={{textAlign:"right"}}>{qualities.buckets?.[b]?.Episode || 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-  {/* Media Codecs */}
-  <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12}}>
-    <div style={{fontWeight:700, textAlign:"center"}}>Media Codecs</div>
-    <table style={{width:"100%", marginTop:8}}>
-      <thead><tr><th></th><th>Movies</th><th>Episodes</th></tr></thead>
-      <tbody>
-        {(codecs.codecs ? Object.keys(codecs.codecs) : []).map((c:string)=>(
-          <tr key={c}>
-            <td>{c}</td>
-            <td style={{textAlign:"right"}}>{codecs.codecs[c]?.Movie || 0}</td>
-            <td style={{textAlign:"right"}}>{codecs.codecs[c]?.Episode || 0}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
+        {/* Media Codecs */}
+        <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12}}>
+          <div style={{fontWeight:700, textAlign:"center"}}>Media Codecs</div>
+          <table style={{width:"100%", marginTop:8}}>
+            <thead><tr><th></th><th>Movies</th><th>Episodes</th></tr></thead>
+            <tbody>
+              {(codecs.codecs ? Object.keys(codecs.codecs) : []).map((c:string)=>(
+                <tr key={c}>
+                  <td>{c}</td>
+                  <td style={{textAlign:"right"}}>{codecs.codecs[c]?.Movie || 0}</td>
+                  <td style={{textAlign:"right"}}>{codecs.codecs[c]?.Episode || 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-  {/* Most Active Users (single) */}
-  <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12}}>
-    <div style={{fontWeight:700, textAlign:"center"}}>Most Active Users</div>
-    {activeUsers.length === 0 ? <div>—</div> : (
-      <div style={{display:"grid", gridTemplateColumns:"1fr auto auto auto", gap:8, marginTop:8, alignItems:"center"}}>
-        <div>{activeUsers[0].user}</div>
-        <div><b>Days</b><br/>{activeUsers[0].days}</div>
-        <div><b>Hours</b><br/>{activeUsers[0].hours}</div>
-        <div><b>Minutes</b><br/>{activeUsers[0].minutes}</div>
+        {/* Most Active Users (single) */}
+        <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12}}>
+          <div style={{fontWeight:700, textAlign:"center"}}>Most Active Users</div>
+          {activeUsers.length === 0 ? <div>—</div> : (
+            <div style={{display:"grid", gridTemplateColumns:"1fr auto auto auto", gap:8, marginTop:8, alignItems:"center"}}>
+              <div>{activeUsers[0].user}</div>
+              <div><b>Days</b><br/>{activeUsers[0].days}</div>
+              <div><b>Hours</b><br/>{activeUsers[0].hours}</div>
+              <div><b>Minutes</b><br/>{activeUsers[0].minutes}</div>
+            </div>
+          )}
+        </div>
+
+        {/* Total Users */}
+        <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12, display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center"}}>
+          <div style={{fontWeight:700}}>Total Users</div>
+          <div style={{fontSize:28, fontWeight:800}}>{totalUsers}</div>
+        </div>
       </div>
-    )}
-  </div>
-
-  {/* Total Users */}
-  <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12, display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center"}}>
-    <div style={{fontWeight:700}}>Total Users</div>
-    <div style={{fontSize:28, fontWeight:800}}>{totalUsers}</div>
-  </div>
-</div>
-
 
       {/* Top users / items */}
       <div style={{display:"grid", gap:24, gridTemplateColumns:"repeat(auto-fit, minmax(320px, 1fr))", marginTop:24}}>
@@ -206,13 +285,13 @@ export default function Home(){
           <h3>Top items (14d)</h3>
           <div style={{width:"100%", height:260}}>
             <ResponsiveContainer>
-              <BarChart data={topItems.map(x=>({ item: x.item_id || "Unknown", hours: x.hours }))}>
+              <BarChart data={topItemsDisplay}>
                 <XAxis dataKey="item" /><YAxis /><Tooltip />
                 <Bar dataKey="hours" />
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <small style={{color:"#666"}}>Tip: we can resolve IDs → titles next.</small>
+          <small style={{color:"#666"}}>Names resolved via /items/by-ids.</small>
         </div>
       </div>
 
