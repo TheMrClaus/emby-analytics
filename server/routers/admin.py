@@ -24,7 +24,7 @@ async def _refresh_worker(state: dict):
                         "Recursive": "true",
                         "StartIndex": page * per_page,
                         "Limit": per_page,
-                        "Fields": "DateCreated,MediaStreams,ProductionYear",
+                        "Fields": "DateCreated,MediaStreams,MediaSources,ProductionYear",
                     },
                 )
                 r.raise_for_status()
@@ -42,10 +42,30 @@ async def _refresh_worker(state: dict):
                     break
 
                 for i in items:
-                    streams = i.get("MediaStreams") or []
-                    v = next((st for st in streams if (st.get("Type") or "").lower() == "video"), {})
-                    codec = (v.get("Codec") or "").lower() or None
-                    height = v.get("Height") or None
+                    # consider video tracks on the default source AND all MediaSources
+                    candidates = []
+                    for st in i.get("MediaStreams") or []:
+                        if (st.get("Type") or "").lower() == "video":
+                            candidates.append({
+                                "h": st.get("Height"),
+                                "codec": (st.get("Codec") or "").lower() or None,
+                            })
+                    for src in i.get("MediaSources") or []:
+                        for st in src.get("MediaStreams") or []:
+                            if (st.get("Type") or "").lower() == "video":
+                                candidates.append({
+                                    "h": st.get("Height"),
+                                    "codec": (st.get("Codec") or "").lower() or None,
+                                })
+
+                    # pick the highest resolution we found (best match to Emby's display)
+                    best = max(
+                        (c for c in candidates if isinstance(c.get("h"), int) and c["h"] > 0),
+                        key=lambda c: c["h"],
+                        default=None,
+                    )
+                    height = best["h"] if best else None
+                    codec = best["codec"] if best else None
                     await conn.execute(
                         """
                         insert or replace into library_item
