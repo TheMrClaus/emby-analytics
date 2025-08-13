@@ -46,16 +46,18 @@ export default function Home(){
     return ()=> es.close();
   },[]);
 
-  // refresh status poll
+  // refresh status poll (continuous)
   useEffect(()=>{
-    let t: any;
-    const tick = async () => {
-      const s = await fetch(`${API}/admin/refresh/status`).then(r=>r.json()).catch(()=>null);
-      if (s) setRefresh(s);
-      if (s?.running) t = setTimeout(tick, 1500);
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const s = await fetch(`${API}/admin/refresh/status`).then(r=>r.json());
+        if (!cancelled && s) setRefresh(s);
+      } catch (_) {}
     };
-    tick();
-    return ()=> t && clearTimeout(t);
+    const id = setInterval(poll, 1500);
+    poll(); // immediate read
+    return ()=> { cancelled = true; clearInterval(id); };
   },[]);
 
   // resolve Top Item IDs -> names
@@ -90,17 +92,36 @@ export default function Home(){
   );
 
   const startRefresh = async () => {
-    await fetch(`${API}/admin/refresh`, { method:"POST" });
-    setToast("Library refresh started");
-    setTimeout(()=>setToast(null), 2000);
+    try {
+      const res = await fetch(`${API}/admin/refresh`, { method:"POST" }).then(r=>r.json());
+      // optimistic: show running immediately if server accepted
+      if (res?.started || res?.running) setRefresh(prev => ({...prev, running: true}));
+      setToast(res?.started ? "Library refresh started" : "Library refresh already running");
+    } catch {
+      setToast("Failed to start library refresh");
+    } finally {
+      setTimeout(()=>setToast(null), 2000);
+    }
+  };
+
+  // re-fetch total users a few times after sync
+  const refetchTotalUsers = async (tries=6, delayMs=1000) => {
+    for (let i=0; i<tries; i++) {
+      try {
+        const d = await fetch(`${API}/stats/users/total`).then(r=>r.json());
+        setTotalUsers(d.total_users||0);
+      } catch (_){}
+      await new Promise(r=>setTimeout(r, delayMs));
+    }
   };
 
   const syncUsers = async () => {
     if (syncingUsers) return;
     setSyncingUsers(true);
     try {
-      await fetch(`${API}/admin/users/sync`, { method:"POST" });
-      setToast("User sync started");
+      const res = await fetch(`${API}/admin/users/sync`, { method:"POST" }).then(r=>r.json()).catch(()=>null);
+      setToast(res?.started ? "User sync started" : "User sync already running");
+      refetchTotalUsers();
     } catch {
       setToast("Failed to start user sync");
     } finally {
