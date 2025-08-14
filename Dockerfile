@@ -1,35 +1,24 @@
-# --- Build the Next.js static UI ---
-FROM node:20-bullseye AS frontend-builder
-WORKDIR /app
-COPY app/package*.json ./
+# ---------- Stage 0: Build UI (old Next.js app) ----------
+FROM node:20-alpine AS ui
+WORKDIR /ui
+COPY app/ ./app/
+WORKDIR /ui/app
 RUN npm ci
-COPY app/ ./
-RUN npm run build  # will output ./out because of output:'export'
+RUN npm run build && npm run export   # Next.js export mode creates ./out/
 
-# --- API runtime (serves API + static UI) ---
-FROM python:3.12-slim AS api
+# ---------- Stage 1: Build Go backend ----------
+FROM golang:1.22 AS builder
+WORKDIR /src
+COPY . .
+RUN go mod tidy
+RUN CGO_ENABLED=0 go build -o /emby-analytics ./go/cmd/emby-analytics
+
+# ---------- Stage 2: Final rootless distroless (UID:GID 1000:1000) ----------
+FROM gcr.io/distroless/static-debian12
 WORKDIR /app
-# System deps (optional but handy)
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
-
-# Copy server
-COPY server/ ./server/
-# Copy exported UI to the path FastAPI expects: repo_root/app/out
-RUN mkdir -p /app/app/out
-COPY --from=frontend-builder /app/out/ /app/app/out/
-
-# Python deps
-RUN pip install --no-cache-dir -r server/requirements.txt
-
-# Env & data
-ENV EMBY_BASE_URL=http://emby:8096 \
-    SQLITE_PATH=/data/emby.db
+COPY --from=builder /emby-analytics /app/emby-analytics
+COPY --from=ui /ui/app/out /app/web
+VOLUME ["/var/lib/emby-analytics"]
 EXPOSE 8080
-
-# Create data dir for SQLite
-RUN mkdir -p /data
-VOLUME ["/data"]
-
-# Run FastAPI (serves UI + API on :8080)
-CMD ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8080"]
-
+USER 1000:1000
+ENTRYPOINT ["/app/emby-analytics"]
