@@ -15,7 +15,6 @@ type TopUser struct {
 
 func TopUsers(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Parse query params manually (Fiber v3)
 		days := parseQueryInt(c, "days", 30)
 		limit := parseQueryInt(c, "limit", 10)
 
@@ -42,7 +41,7 @@ func TopUsers(db *sql.DB) fiber.Handler {
 		}
 		defer rows.Close()
 
-		var out []TopUser
+		out := []TopUser{} // ensure empty array if no rows
 		for rows.Next() {
 			var u TopUser
 			if err := rows.Scan(&u.UserID, &u.Name, &u.Hours); err != nil {

@@ -43,7 +43,7 @@ func TopItems(db *sql.DB) fiber.Handler {
 		}
 		defer rows.Close()
 
-		var out []TopItem
+		out := []TopItem{} // ensure empty array if no rows
 		for rows.Next() {
 			var ti TopItem
 			if err := rows.Scan(&ti.ItemID, &ti.Name, &ti.Type, &ti.Hours); err != nil {

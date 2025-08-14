@@ -27,7 +27,7 @@ func Usage(db *sql.DB) fiber.Handler {
 		}
 		defer rows.Close()
 
-		var result []UsagePoint
+		result := []UsagePoint{} // ensure empty array if no rows
 		for rows.Next() {
 			var day string
 			var hours float64
