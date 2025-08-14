@@ -4,10 +4,16 @@ node_modules/
 .next/
 out/
 dist/
-.env
 .DS_Store
 __pycache__/
 *.pyc
 compose.yml
-compose.override.yml
 
+# SQLite DB and runtime data
+data/
+
+# Go build artifacts
+go/web/
+
+# Secrets
+.env

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/static"
+	"github.com/joho/godotenv"
 
 	"emby-analytics/internal/config"
 	"emby-analytics/internal/db"
@@ -16,8 +17,13 @@ import (
 )
 
 func main() {
+	// Load .env file if it exists (for binary users)
+	_ = godotenv.Load()
+
+	// Load configuration
 	cfg := config.Load()
 
+	// Init DB
 	sqlDB, err := db.Open(cfg.SQLitePath)
 	if err != nil {
 		log.Fatal(err)
@@ -28,14 +34,13 @@ func main() {
 
 	app := fiber.New()
 
-	// Static UI
-	app.Use("/", static.New("./go/web"))
+	// Serve static UI from WebPath
+	app.Use("/", static.New(cfg.WebPath))
 
-	// Health routes
+	// Routes
 	app.Get("/health", health.Health(sqlDB))
-
-	// API routes
 	app.Get("/stats/overview", stats.Overview(sqlDB))
+	app.Get("/stats/usage", stats.Usage(sqlDB))
 
 	// SSE keepalive
 	app.Get("/now/stream", func(c fiber.Ctx) error {
@@ -59,9 +64,11 @@ func main() {
 		})
 	})
 
+	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
+	log.Printf("[INFO] Starting server on :%s", port)
 	log.Fatal(app.Listen(":" + port))
 }
