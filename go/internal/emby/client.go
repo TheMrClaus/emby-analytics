@@ -119,3 +119,35 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 	}
 	return out.Items, nil
 }
+
+type EmbyUser struct {
+	Id   string `json:"Id"`
+	Name string `json:"Name"`
+}
+
+type EmbySession struct {
+	UserID   string `json:"UserId"`
+	UserName string `json:"UserName"`
+	ItemID   string `json:"NowPlayingItemId"`
+	PosMs    int64  `json:"PositionTicks"`
+}
+
+// GetActiveSessions fetches currently active plays
+func (c *Client) GetActiveSessions() ([]EmbySession, error) {
+	u := fmt.Sprintf("%s/emby/Sessions", c.BaseURL)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var out []EmbySession
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}

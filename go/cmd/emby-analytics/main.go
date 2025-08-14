@@ -20,6 +20,7 @@ import (
 	"emby-analytics/internal/handlers/images"
 	"emby-analytics/internal/handlers/items"
 	"emby-analytics/internal/handlers/stats"
+	"emby-analytics/internal/tasks"
 )
 
 func main() {
@@ -83,6 +84,7 @@ func main() {
 
 	// Item endpoints
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
+	go tasks.StartSyncLoop(sqlDB, em)
 
 	// Image proxy endpoints
 	app.Get("/img/primary/:id", images.Primary(imgOpts))
