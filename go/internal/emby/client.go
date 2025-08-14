@@ -151,3 +151,53 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 	}
 	return out, nil
 }
+
+type playHistoryResp struct {
+	Items []PlayHistoryItem `json:"Items"`
+}
+
+// GetUserPlayHistory returns recent items played by a user (daysBack is how many days to look back)
+func (c *Client) GetUserPlayHistory(userID string, daysBack int) ([]PlayHistoryItem, error) {
+	u := fmt.Sprintf("%s/emby/Users/%s/Items", c.BaseURL, userID)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("SortBy", "DatePlayed")
+	q.Set("SortOrder", "Descending")
+	q.Set("Filters", "IsPlayed")
+	q.Set("Recursive", "true")
+	q.Set("Limit", "100")
+	if daysBack > 0 {
+		from := time.Now().AddDate(0, 0, -daysBack).Format(time.RFC3339)
+		q.Set("MinDatePlayed", from)
+	}
+
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var out struct {
+		Items []PlayHistoryItem `json:"Items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+
+	// Attach userID so downstream logic knows which user played it
+	for i := range out.Items {
+		out.Items[i].UserID = userID
+	}
+	return out.Items, nil
+}
+
+// Struct for history items
+type PlayHistoryItem struct {
+	Id          string `json:"Id"`
+	Name        string `json:"Name"`
+	Type        string `json:"Type"`
+	DatePlayed  string `json:"DatePlayed"` // ISO8601
+	PlaybackPos int64  `json:"PlaybackPositionTicks"`
+	UserID      string `json:"-"`
+}
