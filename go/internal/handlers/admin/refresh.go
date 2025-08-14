@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
@@ -115,19 +114,46 @@ func StreamHandler(rm *RefreshManager) fiber.Handler {
 		for {
 			p := rm.get()
 			data, _ := json.Marshal(p)
-			fmt.Fprintf(c, "event: progress\ndata: %s\n\n", data)
-			if f, ok := c.Response().BodyWriter().(http.Flusher); ok {
-				f.Flush()
+			if _, err := c.Write([]byte(fmt.Sprintf("event: progress\ndata: %s\n\n", data))); err != nil {
+				return nil // client disconnected
 			}
-
+			if f, ok := c.Response().BodyWriter().(interface{ Flush() error }); ok {
+				_ = f.Flush()
+			}
 			if p.Done {
 				return nil
 			}
+			<-ticker.C
+		}
+	}
+}
 
-			// wait for next tick
-			if _, ok := <-ticker.C; !ok {
+func FullHandler(rm *RefreshManager, db *sql.DB, em *emby.Client) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		// Start background job
+		rm.Start(db, em, 200)
+
+		// Then stream until done
+		c.Set("Content-Type", "text/event-stream")
+		c.Set("Cache-Control", "no-cache")
+		c.Set("Connection", "keep-alive")
+
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			p := rm.get()
+			data, _ := json.Marshal(p)
+			if _, err := c.Write([]byte(fmt.Sprintf("event: progress\ndata: %s\n\n", data))); err != nil {
 				return nil
 			}
+			if f, ok := c.Response().BodyWriter().(interface{ Flush() error }); ok {
+				_ = f.Flush()
+			}
+			if p.Done {
+				return nil
+			}
+			<-ticker.C
 		}
 	}
 }

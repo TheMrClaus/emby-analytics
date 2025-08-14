@@ -92,6 +92,7 @@ func main() {
 	rm := admin.NewRefreshManager()
 	app.Get("/admin/refresh/start", admin.StartHandler(rm, sqlDB, em))
 	app.Get("/admin/refresh/stream", admin.StreamHandler(rm))
+	app.Get("/admin/refresh/full", admin.FullHandler(rm, sqlDB, em))
 
 	// ==========================================
 	// Server-Sent Events (SSE) Keepalive
