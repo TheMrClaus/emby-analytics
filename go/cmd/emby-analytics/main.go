@@ -43,6 +43,8 @@ func main() {
 	app.Get("/stats/usage", stats.Usage(sqlDB))
 	app.Get("/stats/top/users", stats.TopUsers(sqlDB))
 	app.Get("/stats/top/items", stats.TopItems(sqlDB))
+	app.Get("/stats/qualities", stats.Qualities(sqlDB))
+	app.Get("/stats/codecs", stats.Codecs(sqlDB))
 
 	// SSE keepalive
 	app.Get("/now/stream", func(c fiber.Ctx) error {
