@@ -15,31 +15,19 @@ type OverviewData struct {
 
 func Overview(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		var data OverviewData
+		data := OverviewData{} // ensure all fields start at 0
 
 		// Count total users
-		err := db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&data.TotalUsers)
-		if err != nil && err != sql.ErrNoRows {
-			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-		}
+		_ = db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&data.TotalUsers)
 
-		// Count total items (library_item table in schema)
-		err = db.QueryRow(`SELECT COUNT(*) FROM library_item`).Scan(&data.TotalItems)
-		if err != nil && err != sql.ErrNoRows {
-			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-		}
+		// Count total items
+		_ = db.QueryRow(`SELECT COUNT(*) FROM library_item`).Scan(&data.TotalItems)
 
 		// Count total plays (events)
-		err = db.QueryRow(`SELECT COUNT(*) FROM play_event`).Scan(&data.TotalPlays)
-		if err != nil && err != sql.ErrNoRows {
-			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-		}
+		_ = db.QueryRow(`SELECT COUNT(*) FROM play_event`).Scan(&data.TotalPlays)
 
 		// Count unique played items
-		err = db.QueryRow(`SELECT COUNT(DISTINCT item_id) FROM play_event`).Scan(&data.UniquePlays)
-		if err != nil && err != sql.ErrNoRows {
-			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-		}
+		_ = db.QueryRow(`SELECT COUNT(DISTINCT item_id) FROM play_event`).Scan(&data.UniquePlays)
 
 		return c.JSON(data)
 	}
