@@ -62,3 +62,60 @@ func (c *Client) ItemsByIDs(ids []string) ([]EmbyItem, error) {
 	}
 	return out.Items, nil
 }
+
+type LibraryItem struct {
+	Id     string `json:"Id"`
+	Name   string `json:"Name"`
+	Type   string `json:"Type"`
+	Height *int   `json:"Height,omitempty"`
+	Codec  string `json:"VideoCodec,omitempty"`
+}
+
+type itemsResp struct {
+	Items []LibraryItem `json:"Items"`
+	Total int           `json:"TotalRecordCount"`
+}
+
+func (c *Client) TotalItems() (int, error) {
+	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("Fields", "Height,VideoCodec")
+	q.Set("Recursive", "true")
+	q.Set("StartIndex", "0")
+	q.Set("Limit", "1")
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	var out itemsResp
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return 0, err
+	}
+	return out.Total, nil
+}
+
+func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
+	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("Fields", "Height,VideoCodec")
+	q.Set("Recursive", "true")
+	q.Set("StartIndex", fmt.Sprintf("%d", page*limit))
+	q.Set("Limit", fmt.Sprintf("%d", limit))
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var out itemsResp
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return out.Items, nil
+}
