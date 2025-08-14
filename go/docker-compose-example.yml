@@ -1,0 +1,16 @@
+services:
+  emby-analytics:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: emby-analytics
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/var/lib/emby-analytics
+    environment:
+      # Change these to match your setup
+      EMBY_BASE_URL: "http://emby:8096"
+      EMBY_API_KEY: "your-emby-api-key"
+      KEEPALIVE_SEC: 15
