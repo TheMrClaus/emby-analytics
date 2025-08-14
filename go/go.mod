@@ -1,10 +1,12 @@
 module emby-analytics
 
-go 1.24.0
+go 1.25
 
-toolchain go1.24.6
-
-require github.com/gofiber/fiber/v3 v3.0.0-beta.5
+require (
+	github.com/gofiber/fiber/v3 v3.0.0-beta.5
+	github.com/joho/godotenv v1.5.1
+	modernc.org/sqlite v1.38.2
+)
 
 require (
 	github.com/andybalholm/brotli v1.2.0 // indirect
@@ -29,5 +31,4 @@ require (
 	modernc.org/libc v1.66.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.38.2 // indirect
 )
