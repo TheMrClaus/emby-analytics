@@ -46,6 +46,8 @@ func main() {
 	app.Get("/stats/qualities", stats.Qualities(sqlDB))
 	app.Get("/stats/codecs", stats.Codecs(sqlDB))
 	app.Get("/stats/activity", stats.Activity(sqlDB))
+	app.Get("/stats/users/:id", stats.UserDetailHandler(sqlDB))
+
 	// SSE keepalive
 	app.Get("/now/stream", func(c fiber.Ctx) error {
 		c.Set("Content-Type", "text/event-stream")
