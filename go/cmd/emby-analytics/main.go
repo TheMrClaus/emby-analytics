@@ -14,6 +14,7 @@ import (
 	"emby-analytics/internal/db"
 	"emby-analytics/internal/emby"
 	"emby-analytics/internal/handlers/health"
+	"emby-analytics/internal/handlers/images"
 	"emby-analytics/internal/handlers/items"
 	"emby-analytics/internal/handlers/stats"
 )
@@ -25,6 +26,7 @@ func main() {
 	// Load configuration
 	cfg := config.Load()
 	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
+	imgOpts := images.NewOpts(cfg)
 
 	// Init DB
 	sqlDB, err := db.Open(cfg.SQLitePath)
@@ -51,6 +53,8 @@ func main() {
 	app.Get("/stats/activity", stats.Activity(sqlDB))
 	app.Get("/stats/users/:id", stats.UserDetailHandler(sqlDB))
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
+	app.Get("/img/primary/:id", images.Primary(imgOpts))
+	app.Get("/img/backdrop/:id", images.Backdrop(imgOpts))
 
 	// SSE keepalive
 	app.Get("/now/stream", func(c fiber.Ctx) error {
