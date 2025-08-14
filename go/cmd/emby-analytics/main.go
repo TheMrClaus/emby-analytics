@@ -12,7 +12,9 @@ import (
 
 	"emby-analytics/internal/config"
 	"emby-analytics/internal/db"
+	"emby-analytics/internal/emby"
 	"emby-analytics/internal/handlers/health"
+	"emby-analytics/internal/handlers/items"
 	"emby-analytics/internal/handlers/stats"
 )
 
@@ -22,6 +24,7 @@ func main() {
 
 	// Load configuration
 	cfg := config.Load()
+	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
 
 	// Init DB
 	sqlDB, err := db.Open(cfg.SQLitePath)
@@ -47,6 +50,7 @@ func main() {
 	app.Get("/stats/codecs", stats.Codecs(sqlDB))
 	app.Get("/stats/activity", stats.Activity(sqlDB))
 	app.Get("/stats/users/:id", stats.UserDetailHandler(sqlDB))
+	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
 
 	// SSE keepalive
 	app.Get("/now/stream", func(c fiber.Ctx) error {
