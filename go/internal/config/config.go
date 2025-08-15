@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -28,6 +29,10 @@ type Config struct {
 
 	// Admin refresh
 	RefreshChunkSize int // e.g. 200
+
+	// Debug / trace
+	NowSseDebug     bool // LOG: /now/stream events
+	RefreshSseDebug bool // LOG: /admin/refresh/* SSE
 }
 
 func Load() Config {
@@ -53,6 +58,8 @@ func Load() Config {
 		ImgPrimaryMaxWidth:  envInt("IMG_PRIMARY_MAX_WIDTH", 300),
 		ImgBackdropMaxWidth: envInt("IMG_BACKDROP_MAX_WIDTH", 1280),
 		RefreshChunkSize:    envInt("REFRESH_CHUNK_SIZE", 200),
+		NowSseDebug:         envBool("NOW_SSE_DEBUG", false),
+		RefreshSseDebug:     envBool("REFRESH_SSE_DEBUG", false),
 	}
 
 	fmt.Printf("[INFO] Using SQLite DB at: %s\n", dbPath)
@@ -78,4 +85,17 @@ func envInt(key string, def int) int {
 		}
 	}
 	return def
+}
+
+func envBool(key string, def bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	switch strings.ToLower(v) {
+	case "1", "true", "t", "yes", "y", "on":
+		return true
+	default:
+		return false
+	}
 }
