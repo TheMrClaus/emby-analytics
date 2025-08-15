@@ -46,7 +46,7 @@ func (rm *RefreshManager) get() Progress {
 
 // Start a background refresh
 func (rm *RefreshManager) Start(db *sql.DB, em *emby.Client, chunkSize int) {
-	rm.set(Progress{Message: "Starting refresh..."})
+	rm.set(Progress{Message: "Starting refresh...", Running: true})
 	go rm.refreshWorker(db, em, chunkSize)
 }
 
@@ -61,7 +61,7 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 		return
 	}
 	total = count
-	rm.set(Progress{Total: total, Message: "Fetching items..."})
+	rm.set(Progress{Total: total, Message: "Fetching items...", Running: true})
 
 	// Step 2: Fetch in chunks
 	page := 0
@@ -83,17 +83,18 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 					codec=excluded.codec
 			`, it.Id, it.Name, it.Type, it.Height, it.Codec)
 		}
-		processed += len(items)
 		rm.set(Progress{
 			Total:     total,
 			Processed: processed,
 			Message:   fmt.Sprintf("Processed %d / %d", processed, total),
+			Page:      page,
+			Running:   true,
 		})
 		page++
 		time.Sleep(100 * time.Millisecond) // avoid hammering API
 	}
 
-	rm.set(Progress{Total: total, Processed: processed, Done: true, Message: "Refresh complete"})
+	rm.set(Progress{Total: total, Processed: processed, Done: true, Message: "Refresh complete", Running: false})
 }
 
 // StartHandler kicks off a background refresh using the provided chunk size.
