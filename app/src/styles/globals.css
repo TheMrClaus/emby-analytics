@@ -1,6 +1,5 @@
 @import "tailwindcss";
 
-/* Optional: a tiny base feel so it looks good out of the box */
-:root { color-scheme: dark light; }
-html, body { height: 100%; }
-body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"; }
+/* minimal base so it doesn't look broken if content has no classes yet */
+html, body, #__next { height: 100%; }
+body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial; }
