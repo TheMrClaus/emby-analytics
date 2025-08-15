@@ -125,14 +125,30 @@ type EmbyUser struct {
 	Name string `json:"Name"`
 }
 
+// Flattened shape consumed by handlers (now.go expects ItemName/ItemType)
 type EmbySession struct {
 	UserID   string `json:"UserId"`
 	UserName string `json:"UserName"`
 	ItemID   string `json:"NowPlayingItemId"`
-	PosMs    int64  `json:"PositionTicks"`
+	ItemName string `json:"NowPlayingItemName,omitempty"`
+	ItemType string `json:"NowPlayingItemType,omitempty"`
+	PosMs    int64  `json:"PositionTicks"` // ticks from Emby; handlers convert to ms
 }
 
-// GetActiveSessions fetches currently active plays
+type rawSession struct {
+	UserID   string `json:"UserId"`
+	UserName string `json:"UserName"`
+	// Emby nests the item + play state
+	NowPlayingItem *struct {
+		Id   string `json:"Id"`
+		Name string `json:"Name"`
+		Type string `json:"Type"`
+	} `json:"NowPlayingItem"`
+	PlayState *struct {
+		PositionTicks int64 `json:"PositionTicks"`
+	} `json:"PlayState"`
+}
+
 func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 	u := fmt.Sprintf("%s/emby/Sessions", c.BaseURL)
 	q := url.Values{}
@@ -145,9 +161,26 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 	}
 	defer resp.Body.Close()
 
-	var out []EmbySession
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	var raw []rawSession
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, err
+	}
+
+	out := make([]EmbySession, 0, len(raw))
+	for _, rs := range raw {
+		es := EmbySession{
+			UserID:   rs.UserID,
+			UserName: rs.UserName,
+		}
+		if rs.NowPlayingItem != nil {
+			es.ItemID = rs.NowPlayingItem.Id
+			es.ItemName = rs.NowPlayingItem.Name
+			es.ItemType = rs.NowPlayingItem.Type
+		}
+		if rs.PlayState != nil {
+			es.PosMs = rs.PlayState.PositionTicks // still ticks; handler divides by 10_000
+		}
+		out = append(out, es)
 	}
 	return out, nil
 }
