@@ -5,8 +5,8 @@ import {
   BarChart, Bar
 } from "recharts";
 
-// Use relative API when UI is served by FastAPI
-const API = ""; // was process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080"
+// Use relative API when UI is served by Go server
+const API = ""; // process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080"
 
 type UsageRow = { day: string; user: string; hours: number };
 type TopUser = { user: string; hours: number };
@@ -32,23 +32,23 @@ export default function Home(){
   const [itemNameMap, setItemNameMap] = useState<Record<string, string>>({});
 
   // Pretty time: keep data as hours, render h/m/s nicely
-const fmtAxisTime = (h: number) => {
-  if (!isFinite(h) || h <= 0) return "0m";
-  if (h < 1/60) return `${Math.round(h * 3600)}s`;      // < 1 min
-  if (h < 1)     return `${Math.round(h * 60)}m`;       // < 1 hour
-  if (h < 10)    return `${h.toFixed(1)}h`;             // 1–10h
-  return `${Math.round(h)}h`;                           // 10h+
-};
+  const fmtAxisTime = (h: number) => {
+    if (!isFinite(h) || h <= 0) return "0m";
+    if (h < 1/60) return `${Math.round(h * 3600)}s`;      // < 1 min
+    if (h < 1)     return `${Math.round(h * 60)}m`;       // < 1 hour
+    if (h < 10)    return `${h.toFixed(1)}h`;             // 1–10h
+    return `${Math.round(h)}h`;                           // 10h+
+  };
 
-const fmtTooltipTime = (h: number) => {
-  if (!isFinite(h) || h <= 0) return "0m";
-  const totalMin = Math.round(h * 60);
-  if (totalMin < 1) return `${Math.round(h * 3600)}s`;
-  if (totalMin < 60) return `${totalMin}m`;
-  const hr = Math.floor(totalMin / 60);
-  const min = totalMin % 60;
-  return min ? `${hr}h ${min}m` : `${hr}h`;
-};
+  const fmtTooltipTime = (h: number) => {
+    if (!isFinite(h) || h <= 0) return "0m";
+    const totalMin = Math.round(h * 60);
+    if (totalMin < 1) return `${Math.round(h * 3600)}s`;
+    if (totalMin < 60) return `${totalMin}m`;
+    const hr = Math.floor(totalMin / 60);
+    const min = totalMin % 60;
+    return min ? `${hr}h ${min}m` : `${hr}h`;
+  };
 
   // initial fetches
   useEffect(()=>{
@@ -114,7 +114,6 @@ const fmtTooltipTime = (h: number) => {
   const startRefresh = async () => {
     try {
       const res = await fetch(`${API}/admin/refresh`, { method:"POST" }).then(r=>r.json());
-      // optimistic: show running immediately if server accepted
       if (res?.started || res?.running) setRefresh(prev => ({...prev, running: true}));
       setToast(res?.started ? "Library refresh started" : "Library refresh already running");
     } catch {
@@ -153,197 +152,215 @@ const fmtTooltipTime = (h: number) => {
   const pct = (n:number)=> Math.max(0, Math.min(100, n||0));
 
   return (
-    <div style={{padding:20, fontFamily:"system-ui, sans-serif"}}>
-      {/* Toast */}
-      {toast && (
-        <div style={{
-          position:"fixed", top:14, right:14, background:"#333", color:"#fff",
-          padding:"8px 12px", borderRadius:8, boxShadow:"0 2px 12px rgba(0,0,0,.15)", zIndex:9999
-        }}>
-          {toast}
+    <div className="min-h-dvh">
+      {/* Top nav */}
+      <header className="sticky top-0 z-40 backdrop-blur border-b border-white/10 bg-black/20">
+        <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-7 rounded-lg bg-green-500/20 ring-1 ring-green-500/30" />
+            <span className="font-semibold tracking-tight">Emby Analytics</span>
+          </div>
+          <div className="text-sm text-[color:var(--muted)]">live telemetry & insights</div>
         </div>
-      )}
+      </header>
 
-      <h1>Emby Analytics</h1>
+      {/* Page content */}
+      <main className="mx-auto max-w-7xl px-4 py-6 space-y-6">
 
-      {/* Controls */}
-      <div style={{display:"flex", gap:12, alignItems:"center", flexWrap:"wrap", marginTop:8}}>
-        <button onClick={startRefresh} disabled={refresh.running}
-          style={{padding:"6px 12px", border:"1px solid #ddd", borderRadius:8, cursor: refresh.running ? "not-allowed":"pointer"}}>
-          {refresh.running ? "Importing..." : "Refresh Library"}
-        </button>
-
-        <button onClick={syncUsers} disabled={syncingUsers}
-          style={{padding:"6px 12px", border:"1px solid #ddd", borderRadius:8, cursor: syncingUsers ? "not-allowed":"pointer"}}>
-          {syncingUsers ? "Syncing…" : "Sync Users"}
-        </button>
-
-        {refresh.running && (
-          <div style={{minWidth:260}}>
-            <div style={{height:8, background:"#eee", borderRadius:6, overflow:"hidden"}}>
-              <div
-                style={{
-                  height:8,
-                  width: (() => {
-                    const tot = refresh.total || 0;
-                    if (!tot) return "100%"; // indeterminate width if total unknown
-                    const w = (refresh.imported / Math.max(1, tot)) * 100;
-                    return `${Math.max(1, Math.min(100, w))}%`;
-                  })(),
-                  background:"#666",
-                  borderRadius:6,
-                  transition:"width .3s"
-                }}
-              />
-            </div>
-            <div style={{fontSize:12, color:"#555", marginTop:4}}>
-              Imported {refresh.imported}{refresh.total ? ` / ${refresh.total}` : ""} • page {refresh.page}
-            </div>
+        {/* Toast */}
+        {toast && (
+          <div className="fixed top-3 right-3 z-[9999] rounded-lg bg-black/80 text-white px-3 py-2 shadow-lg">
+            {toast}
           </div>
         )}
-        {refresh.error && <span style={{color:"#c00"}}>Error: {refresh.error}</span>}
-      </div>
 
-      {/* Now Playing */}
-      <h2 style={{marginTop:16}}>Now Playing</h2>
-      <div style={{display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fill, minmax(320px, 1fr))"}}>
-        {now.length===0 && <div>Nothing playing.</div>}
-        {now.map((s:any,i:number)=>(
-          <div key={i} style={{border:"1px solid #ddd", borderRadius:12, padding:12, display:"flex", gap:12}}>
-            {s.poster
-              ? <img src={s.poster} alt="" width={90} height={135} style={{objectFit:"cover", borderRadius:8}}/>
-              : <div style={{width:90,height:135,background:"#eee",borderRadius:8}}/>
-            }
-            <div style={{flex:1, minWidth:0}}>
-              <div style={{fontWeight:700, overflow:"hidden", textOverflow:"ellipsis"}} title={s.title}>{s.title || "—"}</div>
-              <div style={{color:"#555"}}>{s.user} • {s.app}{s.device ? ` • ${s.device}` : ""}</div>
+        <h1 className="sr-only">Emby Analytics</h1>
 
-              <div style={{marginTop:6, display:"flex", gap:6, flexWrap:"wrap", fontSize:12}}>
-                <span style={{padding:"2px 6px", border:"1px solid #ddd", borderRadius:8}}>
-                  {s.play_method || (s.video==="Transcode" || s.audio==="Transcode" ? "Transcode" : "Direct")}
-                </span>
-                <span style={{padding:"2px 6px", border:"1px solid #ddd", borderRadius:8}}>Video: {s.video}</span>
-                <span style={{padding:"2px 6px", border:"1px solid #ddd", borderRadius:8}}>Audio: {s.audio}</span>
-                <span style={{padding:"2px 6px", border:"1px solid #ddd", borderRadius:8}}>Subs: {s.subs}</span>
-                {typeof s.bitrate === "number" && (
-                  <span style={{padding:"2px 6px", border:"1px solid #ddd", borderRadius:8}}>
-                    { (s.bitrate/1000000).toFixed(2) } Mbps
-                  </span>
-                )}
+        {/* Controls */}
+        <div className="flex flex-wrap items-center gap-3 mt-2">
+          <button
+            onClick={startRefresh}
+            disabled={refresh.running}
+            className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-50"
+          >
+            {refresh.running ? "Importing..." : "Refresh Library"}
+          </button>
+
+          <button
+            onClick={syncUsers}
+            disabled={syncingUsers}
+            className="px-3 py-1.5 rounded-xl border border-white/10 bg-transparent hover:bg-white/5 disabled:opacity-50"
+          >
+            {syncingUsers ? "Syncing…" : "Sync Users"}
+          </button>
+
+          {refresh.running && (
+            <div className="min-w-[260px]">
+              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-white/60 transition-[width] duration-300"
+                  style={{
+                    width: (() => {
+                      const tot = refresh.total || 0;
+                      if (!tot) return "100%"; // indeterminate if total unknown
+                      const w = (refresh.imported / Math.max(1, tot)) * 100;
+                      return `${Math.max(1, Math.min(100, w))}%`;
+                    })(),
+                  }}
+                />
               </div>
-
-              <div style={{marginTop:8, height:8, background:"#eee", borderRadius:6}}>
-                <div style={{height:8, width:`${pct(s.progress_pct)}%`, background:"#666", borderRadius:6}}/>
+              <div className="text-xs text-white/70 mt-1">
+                Imported {refresh.imported}{refresh.total ? ` / ${refresh.total}` : ""} • page {refresh.page}
               </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Usage line chart */}
-      <h2 style={{marginTop:24}}>Usage (last 14 days)</h2>
-      <div style={{width:"100%", height:320}}>
-        <ResponsiveContainer>
-          <LineChart data={series}>
-            <XAxis dataKey="day" />
-            <YAxis tickFormatter={fmtAxisTime} />
-            <Tooltip formatter={(v: any, name: string) => [fmtTooltipTime(Number(v)), name]} />
-            <Legend />
-            {users.map(u => <Line key={u} type="monotone" dataKey={u} dot={false} />)}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div style={{display:"grid", gap:16, gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", marginTop:24}}>
-        {/* Media Qualities */}
-        <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12}}>
-          <div style={{fontWeight:700, textAlign:"center"}}>Media Qualities</div>
-          <table style={{width:"100%", marginTop:8}}>
-            <thead><tr><th></th><th>Movies</th><th>Episodes</th></tr></thead>
-            <tbody>
-              {["4K","1080p","720p","SD","Unknown"].map(b=>(
-                <tr key={b}>
-                  <td>{b}</td>
-                  <td style={{textAlign:"right"}}>{qualities.buckets?.[b]?.Movie || 0}</td>
-                  <td style={{textAlign:"right"}}>{qualities.buckets?.[b]?.Episode || 0}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Media Codecs */}
-        <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12}}>
-          <div style={{fontWeight:700, textAlign:"center"}}>Media Codecs</div>
-          <table style={{width:"100%", marginTop:8}}>
-            <thead><tr><th></th><th>Movies</th><th>Episodes</th></tr></thead>
-            <tbody>
-              {(codecs.codecs ? Object.keys(codecs.codecs) : []).map((c:string)=>(
-                <tr key={c}>
-                  <td>{c}</td>
-                  <td style={{textAlign:"right"}}>{codecs.codecs[c]?.Movie || 0}</td>
-                  <td style={{textAlign:"right"}}>{codecs.codecs[c]?.Episode || 0}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Most Active Users (single) */}
-        <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12}}>
-          <div style={{fontWeight:700, textAlign:"center"}}>Most Active Users</div>
-          {activeUsers.length === 0 ? <div>—</div> : (
-            <div style={{display:"grid", gridTemplateColumns:"1fr auto auto auto", gap:8, marginTop:8, alignItems:"center"}}>
-              <div>{activeUsers[0].user}</div>
-              <div><b>Days</b><br/>{activeUsers[0].days}</div>
-              <div><b>Hours</b><br/>{activeUsers[0].hours}</div>
-              <div><b>Minutes</b><br/>{activeUsers[0].minutes}</div>
             </div>
           )}
+          {refresh.error && <span className="text-red-400">Error: {refresh.error}</span>}
         </div>
 
-        {/* Total Users */}
-        <div style={{background:"#3aaa35", color:"#fff", borderRadius:10, padding:12, display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center"}}>
-          <div style={{fontWeight:700}}>Total Users</div>
-          <div style={{fontSize:28, fontWeight:800}}>{totalUsers}</div>
-        </div>
-      </div>
+        {/* Now Playing */}
+        <h2 className="h2 mt-4">Now Playing</h2>
+        <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {now.length===0 && <div className="text-white/70">Nothing playing.</div>}
+          {now.map((s:any,i:number)=>(
+            <div key={i} className="card p-3 flex gap-3">
+              {s.poster
+                ? <img src={s.poster} alt="" width={90} height={135} className="w-[90px] h-[135px] object-cover rounded-xl ring-1 ring-white/10"/>
+                : <div className="w-[90px] h-[135px] rounded-xl bg-white/5 ring-1 ring-white/10"/>
+              }
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold truncate" title={s.title}>{s.title || "—"}</div>
+                <div className="text-xs text-white/60">{s.user} • {s.app}{s.device ? ` • ${s.device}` : ""}</div>
 
-      {/* Top users / items */}
-      <div style={{display:"grid", gap:24, gridTemplateColumns:"repeat(auto-fit, minmax(320px, 1fr))", marginTop:24}}>
-        <div>
-          <h3>Top users (14d)</h3>
-          <div style={{width:"100%", height:260}}>
-            <ResponsiveContainer>
-              <BarChart data={topUsers.map(x=>({ user: x.user, hours: x.hours }))}>
-                <XAxis dataKey="user" />
-                <YAxis tickFormatter={fmtAxisTime} />
-                <Tooltip formatter={(v)=>[fmtTooltipTime(v as number), "time"]} />
-                <Bar dataKey="hours" />
-              </BarChart>
-            </ResponsiveContainer>
+                <div className="mt-2 flex flex-wrap gap-1 text-xs">
+                  <span className="badge">
+                    {s.play_method || (s.video==="Transcode" || s.audio==="Transcode" ? "Transcode" : "Direct")}
+                  </span>
+                  <span className="badge">Video: {s.video}</span>
+                  <span className="badge">Audio: {s.audio}</span>
+                  <span className="badge">Subs: {s.subs}</span>
+                  {typeof s.bitrate === "number" && (
+                    <span className="badge">{ (s.bitrate/1000000).toFixed(2) } Mbps</span>
+                  )}
+                </div>
+
+                <div className="mt-2 h-2 bg-white/10 rounded-full">
+                  <div className="h-full bg-white/60 rounded-full" style={{ width:`${pct(s.progress_pct)}%` }}/>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Usage line chart */}
+        <h2 className="h2 mt-6">Usage (last 14 days)</h2>
+        <div className="card p-4 h-80">
+          <ResponsiveContainer>
+            <LineChart data={series}>
+              <XAxis dataKey="day" />
+              <YAxis tickFormatter={fmtAxisTime} />
+              <Tooltip formatter={(v: any, name: string) => [fmtTooltipTime(Number(v)), name]} />
+              <Legend />
+              {users.map(u => <Line key={u} type="monotone" dataKey={u} dot={false} />)}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Quick stats grid */}
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Media Qualities */}
+          <div className="card p-4">
+            <div className="h3 text-center">Media Qualities</div>
+            <table className="w-full mt-2 text-sm">
+              <thead className="text-white/60">
+                <tr><th className="text-left font-medium"> </th><th className="text-right font-medium">Movies</th><th className="text-right font-medium">Episodes</th></tr>
+              </thead>
+              <tbody>
+                {["4K","1080p","720p","SD","Unknown"].map(b=>(
+                  <tr key={b} className="border-t border-white/5">
+                    <td className="py-1">{b}</td>
+                    <td className="text-right">{qualities.buckets?.[b]?.Movie || 0}</td>
+                    <td className="text-right">{qualities.buckets?.[b]?.Episode || 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Media Codecs */}
+          <div className="card p-4">
+            <div className="h3 text-center">Media Codecs</div>
+            <table className="w-full mt-2 text-sm">
+              <thead className="text-white/60">
+                <tr><th className="text-left font-medium"> </th><th className="text-right font-medium">Movies</th><th className="text-right font-medium">Episodes</th></tr>
+              </thead>
+              <tbody>
+                {(codecs.codecs ? Object.keys(codecs.codecs) : []).map((c:string)=>(
+                  <tr key={c} className="border-t border-white/5">
+                    <td className="py-1">{c}</td>
+                    <td className="text-right">{codecs.codecs[c]?.Movie || 0}</td>
+                    <td className="text-right">{codecs.codecs[c]?.Episode || 0}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Most Active Users (single) */}
+          <div className="card p-4">
+            <div className="h3 text-center">Most Active Users</div>
+            {activeUsers.length === 0 ? <div className="text-center text-white/60 mt-2">—</div> : (
+              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 mt-3 items-center text-sm">
+                <div>{activeUsers[0].user}</div>
+                <div><b>Days</b><br/>{activeUsers[0].days}</div>
+                <div><b>Hours</b><br/>{activeUsers[0].hours}</div>
+                <div><b>Minutes</b><br/>{activeUsers[0].minutes}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Total Users */}
+          <div className="card p-4 flex flex-col items-center justify-center">
+            <div className="font-semibold">Total Users</div>
+            <div className="text-3xl font-extrabold mt-1">{totalUsers}</div>
           </div>
         </div>
-        <div>
-          <h3>Top items (14d)</h3>
-          <div style={{width:"100%", height:260}}>
-            <ResponsiveContainer>
-              <BarChart data={topItemsDisplay}>
-                <XAxis dataKey="item" />
-                <YAxis tickFormatter={fmtAxisTime} />
-                <Tooltip formatter={(v)=>[fmtTooltipTime(v as number), "time"]} />
-                <Bar dataKey="hours" />
-              </BarChart>
-            </ResponsiveContainer>
+
+        {/* Top users / items */}
+        <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+          <div className="card p-4">
+            <div className="h3 mb-2">Top users (14d)</div>
+            <div className="h-64">
+              <ResponsiveContainer>
+                <BarChart data={topUsers.map(x=>({ user: x.user, hours: x.hours }))}>
+                  <XAxis dataKey="user" />
+                  <YAxis tickFormatter={fmtAxisTime} />
+                  <Tooltip formatter={(v)=>[fmtTooltipTime(v as number), "time"]} />
+                  <Bar dataKey="hours" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="card p-4">
+            <div className="h3 mb-2">Top items (14d)</div>
+            <div className="h-64">
+              <ResponsiveContainer>
+                <BarChart data={topItemsDisplay}>
+                  <XAxis dataKey="item" />
+                  <YAxis tickFormatter={fmtAxisTime} />
+                  <Tooltip formatter={(v)=>[fmtTooltipTime(v as number), "time"]} />
+                  <Bar dataKey="hours" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Library overview */}
-      <h2 style={{marginTop:24}}>Library overview</h2>
-      <pre style={{whiteSpace:"pre-wrap", background:"#fafafa", border:"1px solid #eee", borderRadius:8, padding:12}}>
-        {JSON.stringify(overview, null, 2)}
-      </pre>
+        {/* Library overview */}
+        <h2 className="h2 mt-6">Library overview</h2>
+        <pre className="card p-4 text-sm whitespace-pre-wrap overflow-auto">
+          {JSON.stringify(overview, null, 2)}
+        </pre>
+      </main>
     </div>
   );
 }
