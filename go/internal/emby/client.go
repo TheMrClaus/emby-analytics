@@ -225,6 +225,31 @@ func (c *Client) GetUserPlayHistory(userID string, daysBack int) ([]PlayHistoryI
 	return out.Items, nil
 }
 
+type usersResp struct {
+	Items []EmbyUser `json:"Items"`
+}
+
+// GetUsers fetches minimal user data (Id, Name) from Emby server
+func (c *Client) GetUsers() ([]EmbyUser, error) {
+	u := fmt.Sprintf("%s/emby/Users", c.BaseURL)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("Fields", "") // minimal fields
+
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var out usersResp
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return out.Items, nil
+}
+
 // Struct for history items
 type PlayHistoryItem struct {
 	Id          string `json:"Id"`
