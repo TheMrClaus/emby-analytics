@@ -10,13 +10,13 @@
     "next": "^14.2.31",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "recharts": "2.12.7",
-    "tailwindcss": "^4.1.12"
+    "recharts": "2.12.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.12",
     "@types/node": "^24.2.1",
     "@types/react": "19.1.9",
+    "tailwindcss": "^4.1.12",
     "typescript": "5.9.2"
   }
 }
