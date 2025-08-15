@@ -292,11 +292,17 @@ func (c *Client) GetUsers() ([]EmbyUser, error) {
 		return nil, err
 	}
 
-	var out usersResp
-	if err := readJSON(resp, &out); err != nil {
-		return nil, err
+	// Try to parse as direct array first
+	var users []EmbyUser
+	if err := readJSON(resp, &users); err != nil {
+		// If that fails, try the wrapped format
+		var out usersResp
+		if err := readJSON(resp, &out); err != nil {
+			return nil, err
+		}
+		return out.Items, nil
 	}
-	return out.Items, nil
+	return users, nil
 }
 
 // Struct for history items

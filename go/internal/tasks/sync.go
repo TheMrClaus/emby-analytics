@@ -3,6 +3,7 @@ package tasks
 import (
 	"database/sql"
 	"log"
+	"strings"
 	"time"
 
 	"emby-analytics/internal/config"
@@ -48,6 +49,13 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 		if err := rows.Scan(&uid, &uname); err != nil {
 			continue
 		}
+
+		// Skip empty user IDs to prevent API errors
+		if strings.TrimSpace(uid) == "" {
+			log.Printf("skipping empty user ID for user: %s", uname)
+			continue
+		}
+
 		history, err := em.GetUserPlayHistory(uid, cfg.HistoryDays)
 		if err != nil {
 			log.Printf("history error for %s: %v\n", uid, err)
