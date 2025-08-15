@@ -1,24 +1,6 @@
-/* Tailwind v4.1 — single import */
 @import "tailwindcss";
 
-/* Premium polish */
-:root {
-  --bg: #0b0e13;
-  --panel: #121722;
-  --muted: #9aa4b2;
-  --hi: #e6f6ec;
-}
-html, body, #__next { height: 100%; }
-body {
-  background:
-    radial-gradient(1200px 800px at 20% -10%, rgba(58,170,53,.15), transparent),
-    radial-gradient(1000px 600px at 90% 10%, rgba(58,170,53,.10), transparent),
-    var(--bg);
-  color: white;
-}
-
-/* Handy utilities used in the premium shell */
-.card { @apply rounded-2xl border border-white/5 shadow-[0_8px_24px_rgba(0,0,0,.08)] bg-[color:var(--panel)]; }
-.badge { @apply inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-xs text-[color:var(--hi)]/90; }
-.h2   { @apply text-2xl font-semibold tracking-tight; }
-.h3   { @apply text-lg font-semibold tracking-tight; }
+/* Optional: a tiny base feel so it looks good out of the box */
+:root { color-scheme: dark light; }
+html, body { height: 100%; }
+body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"; }
