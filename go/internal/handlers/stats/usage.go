@@ -7,58 +7,46 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-type UsagePoint struct {
-	Date  string  `json:"date"`
+type UsageRow struct {
+	Day   string  `json:"day"`
+	User  string  `json:"user"`
 	Hours float64 `json:"hours"`
 }
 
+// GET /stats/usage?days=14  (also supports window=14d/4w)
 func Usage(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		// support either ?window=14d or ?days=14
+		days := parseWindowDays(c.Query("window", ""), parseQueryInt(c, "days", 14))
+		if days <= 0 {
+			days = 14
+		}
+		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
+
 		rows, err := db.Query(`
 			SELECT
-				strftime('%Y-%m-%d', datetime(ts / 1000, 'unixepoch')) as day,
-				SUM(pos_ms) / 1000.0 / 60.0 / 60.0 as hours
-			FROM play_event
-			GROUP BY day
-			ORDER BY day ASC
-		`)
+			  strftime('%Y-%m-%d', datetime(pe.ts / 1000, 'unixepoch')) AS day,
+			  COALESCE(u.name, pe.user_id) AS user,
+			  SUM(pe.pos_ms) / 3600000.0 AS hours
+			FROM play_event pe
+			LEFT JOIN emby_user u ON u.id = pe.user_id
+			WHERE pe.ts >= ?
+			GROUP BY day, user
+			ORDER BY day ASC, user ASC;
+		`, fromMs)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
 		defer rows.Close()
 
-		result := []UsagePoint{} // ensure empty array if no rows
+		out := []UsageRow{}
 		for rows.Next() {
-			var day string
-			var hours float64
-			if err := rows.Scan(&day, &hours); err != nil {
+			var r UsageRow
+			if err := rows.Scan(&r.Day, &r.User, &r.Hours); err != nil {
 				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 			}
-			result = append(result, UsagePoint{
-				Date:  day,
-				Hours: hours,
-			})
+			out = append(out, r)
 		}
-
-		// Fill in missing dates
-		if len(result) > 0 {
-			var filled []UsagePoint
-			start, _ := time.Parse("2006-01-02", result[0].Date)
-			end, _ := time.Parse("2006-01-02", result[len(result)-1].Date)
-			dateMap := make(map[string]float64)
-			for _, p := range result {
-				dateMap[p.Date] = p.Hours
-			}
-			for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-				ds := d.Format("2006-01-02")
-				filled = append(filled, UsagePoint{
-					Date:  ds,
-					Hours: dateMap[ds],
-				})
-			}
-			result = filled
-		}
-
-		return c.JSON(result)
+		return c.JSON(out)
 	}
 }
