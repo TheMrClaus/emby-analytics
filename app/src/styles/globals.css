@@ -1,16 +1,14 @@
 /* Tailwind v4.1 — single import */
 @import "tailwindcss";
 
-/* Premium polish tokens & utilities */
+/* Premium polish */
 :root {
   --bg: #0b0e13;
   --panel: #121722;
   --muted: #9aa4b2;
   --hi: #e6f6ec;
 }
-
 html, body, #__next { height: 100%; }
-
 body {
   background:
     radial-gradient(1200px 800px at 20% -10%, rgba(58,170,53,.15), transparent),
