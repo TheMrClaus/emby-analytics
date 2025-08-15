@@ -43,6 +43,10 @@ func main() {
 	if err := db.EnsureSchema(sqlDB); err != nil {
 		log.Fatal(err)
 	}
+	// ==========================================
+	// Background Tasks Setup
+	// ==========================================
+	go tasks.StartUserSyncLoop(sqlDB, em, cfg)
 
 	// ==========================================
 	// Web Server Setup
