@@ -62,6 +62,7 @@ func main() {
 	// ==========================================
 	// Health
 	app.Get("/health", health.Health(sqlDB))
+	app.Get("/health/emby", health.Emby(em))
 
 	// Stats
 	app.Get("/stats/overview", stats.Overview(sqlDB))
@@ -72,6 +73,8 @@ func main() {
 	app.Get("/stats/codecs", stats.Codecs(sqlDB))
 	app.Get("/stats/activity", stats.Activity(sqlDB))
 	app.Get("/stats/users/:id", stats.UserDetailHandler(sqlDB))
+	app.Get("/stats/active-users-lifetime", stats.ActiveUsersLifetime(sqlDB))
+	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))
 
 	// Items
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
@@ -83,11 +86,20 @@ func main() {
 	app.Get("/img/primary/:id", images.Primary(imgOpts))
 	app.Get("/img/backdrop/:id", images.Backdrop(imgOpts))
 
-	// Admin refresh
+	// Admin refresh (both legacy SSE and FastAPI-compatible endpoints)
 	rm := admin.NewRefreshManager()
+
+	// Legacy SSE/GET endpoints (kept)
 	app.Get("/admin/refresh/start", admin.StartHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
 	app.Get("/admin/refresh/stream", admin.StreamHandler(rm))
 	app.Get("/admin/refresh/full", admin.FullHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
+
+	// FastAPI-compatible endpoints used by the UI
+	app.Post("/admin/refresh", admin.StartPostHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
+	app.Get("/admin/refresh/status", admin.StatusHandler(rm))
+
+	// Users sync trigger
+	app.Post("/admin/users/sync", admin.UsersSyncHandler(sqlDB, em, cfg))
 
 	// ==========================================
 	// Start Server
