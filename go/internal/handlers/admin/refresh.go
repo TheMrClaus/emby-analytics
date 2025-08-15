@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -105,6 +106,8 @@ func StartHandler(rm *RefreshManager, db *sql.DB, em *emby.Client, chunkSize int
 // StreamHandler sends progress events over SSE until Done=true.
 func StreamHandler(rm *RefreshManager) fiber.Handler {
 	return func(c fiber.Ctx) error {
+		log.Println("[admin/refresh] SSE subscriber connected")
+		defer log.Println("[admin/refresh] SSE subscriber disconnected")
 		c.Set("Content-Type", "text/event-stream")
 		c.Set("Cache-Control", "no-cache")
 		c.Set("Connection", "keep-alive")
