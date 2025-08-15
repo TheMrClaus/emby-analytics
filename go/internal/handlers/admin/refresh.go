@@ -183,3 +183,32 @@ func FullHandler(rm *RefreshManager, db *sql.DB, em *emby.Client, chunkSize int)
 		}
 	}
 }
+
+// POST /admin/refresh  -> { started: true }
+func StartPostHandler(rm *RefreshManager, db *sql.DB, em *emby.Client, chunkSize int) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		rm.Start(db, em, chunkSize)
+		return c.JSON(fiber.Map{"started": true})
+	}
+}
+
+// GET /admin/refresh/status -> { running, imported, total, page, error }
+func StatusHandler(rm *RefreshManager) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		p := rm.get()
+		return c.JSON(fiber.Map{
+			"running":  p.Running && !p.Done,
+			"imported": p.Processed,
+			"total":    p.Total,
+			"page":     p.Page,
+			"error":    ifEmptyNil(p.Error),
+		})
+	}
+}
+
+func ifEmptyNil(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
