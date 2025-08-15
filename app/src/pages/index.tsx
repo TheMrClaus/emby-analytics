@@ -160,7 +160,7 @@ export default function Home(){
             <div className="size-7 rounded-lg bg-green-500/20 ring-1 ring-green-500/30" />
             <span className="font-semibold tracking-tight">Emby Analytics</span>
           </div>
-          <div className="text-sm text-[color:var(--muted)]">live telemetry & insights</div>
+          <div className="ty-muted">live telemetry & insights</div>
         </div>
       </header>
 
@@ -218,7 +218,7 @@ export default function Home(){
         </div>
 
         {/* Now Playing */}
-        <h2 className="h2 mt-4">Now Playing</h2>
+        <h2 className="ty-title mt-4">Now Playing</h2>
         <div className="grid gap-3 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {now.length===0 && <div className="text-white/70">Nothing playing.</div>}
           {now.map((s:any,i:number)=>(
@@ -252,7 +252,7 @@ export default function Home(){
         </div>
 
         {/* Usage line chart */}
-        <h2 className="h2 mt-6">Usage (last 14 days)</h2>
+        <h2 className="ty-title mt-6">Usage (last 14 days)</h2>
         <div className="card p-4 h-80">
           <ResponsiveContainer>
             <LineChart data={series}>
@@ -269,9 +269,9 @@ export default function Home(){
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
           {/* Media Qualities */}
           <div className="card p-4">
-            <div className="h3 text-center">Media Qualities</div>
-            <table className="w-full mt-2 text-sm">
-              <thead className="text-white/60">
+            <div className="ty-h3 text-center">Media Qualities</div>
+            <table className="table-dark mt-2">
+              <thead>
                 <tr><th className="text-left font-medium"> </th><th className="text-right font-medium">Movies</th><th className="text-right font-medium">Episodes</th></tr>
               </thead>
               <tbody>
@@ -288,9 +288,9 @@ export default function Home(){
 
           {/* Media Codecs */}
           <div className="card p-4">
-            <div className="h3 text-center">Media Codecs</div>
-            <table className="w-full mt-2 text-sm">
-              <thead className="text-white/60">
+            <div className="ty-h3 text-center">Media Codecs</div>
+            <table className="table-dark mt-2">
+              <thead>
                 <tr><th className="text-left font-medium"> </th><th className="text-right font-medium">Movies</th><th className="text-right font-medium">Episodes</th></tr>
               </thead>
               <tbody>
@@ -307,7 +307,7 @@ export default function Home(){
 
           {/* Most Active Users (single) */}
           <div className="card p-4">
-            <div className="h3 text-center">Most Active Users</div>
+            <div className="ty-h3 text-center">Most Active Users</div>
             {activeUsers.length === 0 ? <div className="text-center text-white/60 mt-2">—</div> : (
               <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 mt-3 items-center text-sm">
                 <div>{activeUsers[0].user}</div>
@@ -328,7 +328,7 @@ export default function Home(){
         {/* Top users / items */}
         <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
           <div className="card p-4">
-            <div className="h3 mb-2">Top users (14d)</div>
+            <div className="ty-h3 mb-2">Top users (14d)</div>
             <div className="h-64">
               <ResponsiveContainer>
                 <BarChart data={topUsers.map(x=>({ user: x.user, hours: x.hours }))}>
@@ -341,7 +341,7 @@ export default function Home(){
             </div>
           </div>
           <div className="card p-4">
-            <div className="h3 mb-2">Top items (14d)</div>
+            <div className="ty-h3 mb-2">Top items (14d)</div>
             <div className="h-64">
               <ResponsiveContainer>
                 <BarChart data={topItemsDisplay}>
@@ -356,7 +356,7 @@ export default function Home(){
         </div>
 
         {/* Library overview */}
-        <h2 className="h2 mt-6">Library overview</h2>
+        <h2 className="ty-title mt-6">Library overview</h2>
         <pre className="card p-4 text-sm whitespace-pre-wrap overflow-auto">
           {JSON.stringify(overview, null, 2)}
         </pre>
