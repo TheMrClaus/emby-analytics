@@ -94,3 +94,8 @@ func upsertUserAndItem(db *sql.DB, userID, userName, itemID, itemName, itemType 
 	                    type=COALESCE(excluded.type, library_item.type)`,
 		itemID, itemName, itemType)
 }
+
+// RunOnce triggers a single sync cycle immediately.
+func RunOnce(db *sql.DB, em *emby.Client, cfg config.Config) {
+	runSync(db, em, cfg)
+}
