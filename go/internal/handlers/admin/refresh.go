@@ -93,33 +93,45 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 	rm.set(Progress{Total: total, Processed: processed, Done: true, Message: "Refresh complete"})
 }
 
-// HTTP handler to start refresh
-func StartHandler(rm *RefreshManager, db *sql.DB, em *emby.Client) fiber.Handler {
+// StartHandler kicks off a background refresh using the provided chunk size.
+func StartHandler(rm *RefreshManager, db *sql.DB, em *emby.Client, chunkSize int) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		rm.Start(db, em, 200)
+		// Fire-and-forget
+		rm.Start(db, em, chunkSize)
 		return c.JSON(fiber.Map{"status": "started"})
 	}
 }
 
-// SSE stream
+// StreamHandler sends progress events over SSE until Done=true.
 func StreamHandler(rm *RefreshManager) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		c.Set("Content-Type", "text/event-stream")
 		c.Set("Cache-Control", "no-cache")
 		c.Set("Connection", "keep-alive")
 
+		// Send an initial hello so clients can attach listeners
+		if _, err := c.Write([]byte("event: hello\ndata: {}\n\n")); err != nil {
+			return nil
+		}
+		if f, ok := c.Response().BodyWriter().(interface{ Flush() error }); ok {
+			_ = f.Flush()
+		}
+
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 
 		for {
 			p := rm.get()
-			data, _ := json.Marshal(p)
-			if _, err := c.Write([]byte(fmt.Sprintf("event: progress\ndata: %s\n\n", data))); err != nil {
-				return nil // client disconnected
+			payload, _ := json.Marshal(p)
+			if _, err := c.Write([]byte("event: progress\ndata: " + string(payload) + "\n\n")); err != nil {
+				// client disconnected
+				return nil
 			}
+			// best-effort flush (works under Fiber v3’s HTTP server)
 			if f, ok := c.Response().BodyWriter().(interface{ Flush() error }); ok {
 				_ = f.Flush()
 			}
+
 			if p.Done {
 				return nil
 			}
@@ -128,23 +140,31 @@ func StreamHandler(rm *RefreshManager) fiber.Handler {
 	}
 }
 
-func FullHandler(rm *RefreshManager, db *sql.DB, em *emby.Client) fiber.Handler {
+// FullHandler starts a refresh and streams progress in the same request.
+func FullHandler(rm *RefreshManager, db *sql.DB, em *emby.Client, chunkSize int) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Start background job
-		rm.Start(db, em, 200)
+		// Start the job
+		rm.Start(db, em, chunkSize)
 
-		// Then stream until done
+		// Then stream like StreamHandler
 		c.Set("Content-Type", "text/event-stream")
 		c.Set("Cache-Control", "no-cache")
 		c.Set("Connection", "keep-alive")
+
+		if _, err := c.Write([]byte("event: hello\ndata: {}\n\n")); err != nil {
+			return nil
+		}
+		if f, ok := c.Response().BodyWriter().(interface{ Flush() error }); ok {
+			_ = f.Flush()
+		}
 
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 
 		for {
 			p := rm.get()
-			data, _ := json.Marshal(p)
-			if _, err := c.Write([]byte(fmt.Sprintf("event: progress\ndata: %s\n\n", data))); err != nil {
+			b, _ := json.Marshal(p)
+			if _, err := c.Write([]byte("event: progress\ndata: " + string(b) + "\n\n")); err != nil {
 				return nil
 			}
 			if f, ok := c.Response().BodyWriter().(interface{ Flush() error }); ok {

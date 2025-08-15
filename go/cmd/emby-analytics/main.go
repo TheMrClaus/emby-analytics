@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"os"
-	"strconv"
 
 	// Third-party packages
 	"github.com/gofiber/fiber/v3"
@@ -18,6 +17,7 @@ import (
 	"emby-analytics/internal/handlers/health"
 	"emby-analytics/internal/handlers/images"
 	"emby-analytics/internal/handlers/items"
+	nown "emby-analytics/internal/handlers/now"
 	"emby-analytics/internal/handlers/stats"
 	"emby-analytics/internal/tasks"
 )
@@ -53,12 +53,9 @@ func main() {
 	app.Use("/", static.New(cfg.WebPath))
 
 	// Now-playing routes
-	pollSec := 5
-	if v := os.Getenv("NOW_POLL_SEC"); v != "" {
-		if i, err := strconv.Atoi(v); err == nil && i > 0 {
-			pollSec = i
-		}
-	}
+	// Now-playing routes
+	app.Get("/now", nown.Snapshot(sqlDB, em))
+	app.Get("/now/stream", nown.Stream(sqlDB, em, cfg.NowPollSec))
 
 	// ==========================================
 	// API Routes
@@ -80,7 +77,7 @@ func main() {
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
 
 	// Background sync (sessions + history backfill)
-	go tasks.StartSyncLoop(sqlDB, em)
+	go tasks.StartSyncLoop(sqlDB, em, cfg)
 
 	// Images
 	app.Get("/img/primary/:id", images.Primary(imgOpts))
@@ -88,9 +85,9 @@ func main() {
 
 	// Admin refresh
 	rm := admin.NewRefreshManager()
-	app.Get("/admin/refresh/start", admin.StartHandler(rm, sqlDB, em))
+	app.Get("/admin/refresh/start", admin.StartHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
 	app.Get("/admin/refresh/stream", admin.StreamHandler(rm))
-	app.Get("/admin/refresh/full", admin.FullHandler(rm, sqlDB, em))
+	app.Get("/admin/refresh/full", admin.FullHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
 
 	// ==========================================
 	// Start Server

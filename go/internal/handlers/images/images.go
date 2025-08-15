@@ -18,38 +18,20 @@ import (
 type Opts struct {
 	BaseURL          string
 	APIKey           string
-	Quality          int // e.g. 90
-	PrimaryMaxWidth  int // e.g. 300
-	BackdropMaxWidth int // e.g. 1280
+	Quality          int
+	PrimaryMaxWidth  int
+	BackdropMaxWidth int
 	HTTPClient       *http.Client
 }
 
 func NewOpts(cfg config.Config) Opts {
-	// sensible defaults if env not set
-	quality := 90
-	if q := getenvInt("IMG_QUALITY", 90); q > 0 {
-		quality = q
-	}
-
-	pmw := 300
-	if v := getenvInt("IMG_PRIMARY_MAX_WIDTH", 300); v > 0 {
-		pmw = v
-	}
-
-	bmw := 1280
-	if v := getenvInt("IMG_BACKDROP_MAX_WIDTH", 1280); v > 0 {
-		bmw = v
-	}
-
 	return Opts{
 		BaseURL:          cfg.EmbyBaseURL,
 		APIKey:           cfg.EmbyAPIKey,
-		Quality:          quality,
-		PrimaryMaxWidth:  pmw,
-		BackdropMaxWidth: bmw,
-		HTTPClient: &http.Client{
-			Timeout: 20 * time.Second,
-		},
+		Quality:          cfg.ImgQuality,
+		PrimaryMaxWidth:  cfg.ImgPrimaryMaxWidth,
+		BackdropMaxWidth: cfg.ImgBackdropMaxWidth,
+		HTTPClient:       &http.Client{Timeout: 20 * time.Second},
 	}
 }
 

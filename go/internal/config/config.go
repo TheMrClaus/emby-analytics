@@ -8,12 +8,26 @@ import (
 )
 
 type Config struct {
-	EmbyBaseURL  string
-	EmbyAPIKey   string
-	SQLitePath   string
-	WebPath      string
+	EmbyBaseURL string
+	EmbyAPIKey  string
+	SQLitePath  string
+	WebPath     string
+
+	// Streaming / polling
 	KeepAliveSec int
-	NowPollSec   int // NEW
+	NowPollSec   int
+
+	// Background sync
+	SyncIntervalSec int // e.g. 60
+	HistoryDays     int // e.g. 2
+
+	// Images
+	ImgQuality          int // e.g. 90
+	ImgPrimaryMaxWidth  int // e.g. 300
+	ImgBackdropMaxWidth int // e.g. 1280
+
+	// Admin refresh
+	RefreshChunkSize int // e.g. 200
 }
 
 func Load() Config {
@@ -26,21 +40,28 @@ func Load() Config {
 	embyBase := env("EMBY_BASE_URL", "http://emby:8096")
 	embyKey := env("EMBY_API_KEY", "")
 
+	cfg := Config{
+		EmbyBaseURL:         embyBase,
+		EmbyAPIKey:          embyKey,
+		SQLitePath:          dbPath,
+		WebPath:             webPath,
+		KeepAliveSec:        envInt("KEEPALIVE_SEC", 15),
+		NowPollSec:          envInt("NOW_POLL_SEC", 5),
+		SyncIntervalSec:     envInt("SYNC_INTERVAL", 60),
+		HistoryDays:         envInt("HISTORY_DAYS", 2),
+		ImgQuality:          envInt("IMG_QUALITY", 90),
+		ImgPrimaryMaxWidth:  envInt("IMG_PRIMARY_MAX_WIDTH", 300),
+		ImgBackdropMaxWidth: envInt("IMG_BACKDROP_MAX_WIDTH", 1280),
+		RefreshChunkSize:    envInt("REFRESH_CHUNK_SIZE", 200),
+	}
+
 	fmt.Printf("[INFO] Using SQLite DB at: %s\n", dbPath)
 	fmt.Printf("[INFO] Serving static UI from: %s\n", webPath)
 	fmt.Printf("[INFO] Emby Base URL: %s\n", embyBase)
 	if embyKey == "" {
 		fmt.Println("[WARN] EMBY_API_KEY is not set! API calls to Emby will fail.")
 	}
-
-	return Config{
-		EmbyBaseURL:  embyBase,
-		EmbyAPIKey:   embyKey,
-		SQLitePath:   dbPath,
-		WebPath:      webPath,
-		KeepAliveSec: envInt("KEEPALIVE_SEC", 15),
-		NowPollSec:   envInt("NOW_POLL_SEC", 5), // NEW
-	}
+	return cfg
 }
 
 func env(key, def string) string {

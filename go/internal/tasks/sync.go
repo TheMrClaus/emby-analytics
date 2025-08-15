@@ -3,38 +3,26 @@ package tasks
 import (
 	"database/sql"
 	"log"
-	"os"
-	"strconv"
 	"time"
 
+	"emby-analytics/internal/config"
 	"emby-analytics/internal/emby"
 )
 
-func getEnvInt(key string, def int) int {
-	if v := os.Getenv(key); v != "" {
-		if i, err := strconv.Atoi(v); err == nil {
-			return i
-		}
-	}
-	return def
-}
-
-func StartSyncLoop(db *sql.DB, em *emby.Client) {
-	interval := getEnvInt("SYNC_INTERVAL", 60) // seconds
-
-	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+func StartSyncLoop(db *sql.DB, em *emby.Client, cfg config.Config) {
+	ticker := time.NewTicker(time.Duration(cfg.SyncIntervalSec) * time.Second)
 	defer ticker.Stop()
 
 	for {
-		runSync(db, em)
+		runSync(db, em, cfg)
 		<-ticker.C
 	}
 }
 
-func runSync(db *sql.DB, em *emby.Client) {
+func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 	insertedEvents := 0
 
-	// Step 1: sync active sessions
+	// Step 1: active sessions
 	sessions, err := em.GetActiveSessions()
 	if err != nil {
 		log.Println("sync error:", err)
@@ -47,7 +35,7 @@ func runSync(db *sql.DB, em *emby.Client) {
 		}
 	}
 
-	// Step 2: backfill from history for each known user
+	// Step 2: backfill from history
 	rows, err := db.Query(`SELECT id, name FROM emby_user`)
 	if err != nil {
 		log.Println("sync user list error:", err)
@@ -60,14 +48,14 @@ func runSync(db *sql.DB, em *emby.Client) {
 		if err := rows.Scan(&uid, &uname); err != nil {
 			continue
 		}
-		history, err := em.GetUserPlayHistory(uid, getEnvInt("HISTORY_DAYS", 2))
+		history, err := em.GetUserPlayHistory(uid, cfg.HistoryDays)
 		if err != nil {
 			log.Printf("history error for %s: %v\n", uid, err)
 			continue
 		}
 		for _, h := range history {
 			upsertUserAndItem(db, uid, uname, h.Id, h.Name, h.Type)
-			posMs := h.PlaybackPos / 10000 // ticks to ms
+			posMs := h.PlaybackPos / 10000
 			if insertPlayEvent(db, uid, h.Id, posMs) {
 				insertedEvents++
 			}
