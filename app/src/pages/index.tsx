@@ -300,14 +300,18 @@ export default function Home(){
             <div className="ty-h3 text-center">Media Codecs</div>
             <table className="table-dark mt-2">
               <thead>
-                <tr><th className="text-left font-medium"> </th><th className="text-right font-medium">Movies</th><th className="text-right font-medium">Episodes</th></tr>
+                <tr>
+                  <th> </th>
+                  <th className="num">Movies</th>
+                  <th className="num">Episodes</th>
+                </tr>
               </thead>
               <tbody>
                 {(codecs.codecs ? Object.keys(codecs.codecs) : []).map((c:string)=>(
-                  <tr key={c} className="border-t border-white/5">
-                    <td className="py-1">{c}</td>
-                    <td className="text-right">{codecs.codecs[c]?.Movie || 0}</td>
-                    <td className="text-right">{codecs.codecs[c]?.Episode || 0}</td>
+                  <tr key={c}>
+                    <td>{c}</td>
+                    <td className="num">{fmtInt(codecs.codecs[c]?.Movie || 0)}</td>
+                    <td className="num">{fmtInt(codecs.codecs[c]?.Episode || 0)}</td>
                   </tr>
                 ))}
               </tbody>
