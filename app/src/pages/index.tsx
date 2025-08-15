@@ -153,7 +153,21 @@ const fmtTooltipTime = (h: number) => {
   const pct = (n:number)=> Math.max(0, Math.min(100, n||0));
 
   return (
-    <div style={{padding:20, fontFamily:"system-ui, sans-serif"}}>
+    <div className="min-h-dvh">
+      {/* Top nav */}
+      <header className="sticky top-0 z-40 backdrop-blur border-b border-white/10 bg-black/20">
+        <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-7 rounded-lg bg-green-500/20 ring-1 ring-green-500/30" />
+            <span className="font-semibold tracking-tight">Emby Analytics</span>
+          </div>
+          <div className="text-sm text-[color:var(--muted)]">live telemetry & insights</div>
+        </div>
+      </header>
+
+      {/* Page content */}
+      <main className="mx-auto max-w-7xl px-4 py-6 space-y-6">
+
       {/* Toast */}
       {toast && (
         <div style={{
@@ -344,6 +358,7 @@ const fmtTooltipTime = (h: number) => {
       <pre style={{whiteSpace:"pre-wrap", background:"#fafafa", border:"1px solid #eee", borderRadius:8, padding:12}}>
         {JSON.stringify(overview, null, 2)}
       </pre>
-    </div>
-  );
+    </main>
+  </div>
+);
 }
