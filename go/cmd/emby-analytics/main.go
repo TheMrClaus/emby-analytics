@@ -18,7 +18,6 @@ import (
 	"emby-analytics/internal/handlers/health"
 	"emby-analytics/internal/handlers/images"
 	"emby-analytics/internal/handlers/items"
-	nown "emby-analytics/internal/handlers/now"
 	"emby-analytics/internal/handlers/stats"
 	"emby-analytics/internal/tasks"
 )
@@ -60,8 +59,6 @@ func main() {
 			pollSec = i
 		}
 	}
-	app.Get("/now", nown.Snapshot(sqlDB, em))
-	app.Get("/now/stream", nown.Stream(sqlDB, em, pollSec))
 
 	// ==========================================
 	// API Routes
