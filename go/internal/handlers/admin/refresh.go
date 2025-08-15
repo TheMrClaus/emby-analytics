@@ -19,6 +19,8 @@ type Progress struct {
 	Message   string `json:"message"`
 	Done      bool   `json:"done"`
 	Error     string `json:"error,omitempty"`
+	Page      int    `json:"page"`
+	Running   bool   `json:"running"`
 }
 
 type RefreshManager struct {
