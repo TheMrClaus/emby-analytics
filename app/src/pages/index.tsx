@@ -50,6 +50,11 @@ export default function Home(){
     return min ? `${hr}h ${min}m` : `${hr}h`;
   };
 
+  const fmtInt = (n: number) => {
+    if (!Number.isFinite(n)) return "0";
+    return Math.trunc(n).toLocaleString();
+  };
+
   // initial fetches
   useEffect(()=>{
     fetch(`${API}/stats/usage?days=14`).then(r=>r.json()).then(setUsage);
