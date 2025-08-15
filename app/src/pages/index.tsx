@@ -277,14 +277,18 @@ export default function Home(){
             <div className="ty-h3 text-center">Media Qualities</div>
             <table className="table-dark mt-2">
               <thead>
-                <tr><th className="text-left font-medium"> </th><th className="text-right font-medium">Movies</th><th className="text-right font-medium">Episodes</th></tr>
+                <tr>
+                  <th> </th>
+                  <th className="num">Movies</th>
+                  <th className="num">Episodes</th>
+                </tr>
               </thead>
               <tbody>
                 {["4K","1080p","720p","SD","Unknown"].map(b=>(
-                  <tr key={b} className="border-t border-white/5">
-                    <td className="py-1">{b}</td>
-                    <td className="text-right">{qualities.buckets?.[b]?.Movie || 0}</td>
-                    <td className="text-right">{qualities.buckets?.[b]?.Episode || 0}</td>
+                  <tr key={b}>
+                    <td>{b}</td>
+                    <td className="num">{fmtInt(qualities.buckets?.[b]?.Movie || 0)}</td>
+                    <td className="num">{fmtInt(qualities.buckets?.[b]?.Episode || 0)}</td>
                   </tr>
                 ))}
               </tbody>
