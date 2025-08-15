@@ -24,3 +24,22 @@ body {
 .badge { @apply inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-xs text-[color:var(--hi)]/90; }
 .h2   { @apply text-2xl font-semibold tracking-tight; }
 .h3   { @apply text-lg font-semibold tracking-tight; }
+
+/* ------------------ */
+/* Typographic system */
+/* ------------------ */
+.ty-display { @apply text-3xl/tight sm:text-4xl/tight font-extrabold tracking-tight; }
+.ty-title   { @apply text-2xl font-semibold tracking-tight; } /* section titles */
+.ty-h3      { @apply text-lg font-semibold tracking-tight; }  /* card titles */
+.ty-muted   { @apply text-sm text-white/70; }
+.ty-caption { @apply text-xs text-white/50; }
+
+/* -------------- */
+/* Dark table kit */
+/* -------------- */
+.table-dark { @apply w-full text-sm; }
+.table-dark thead th { @apply text-white/70 font-medium text-left; }
+.table-dark tbody tr { @apply border-t border-white/5; }
+.table-dark td, .table-dark th { @apply py-2; }
+.table-dark tbody tr:hover { @apply bg-white/5; }
+.table-dark .num { @apply text-right; } /* add className="num" to numeric columns */
