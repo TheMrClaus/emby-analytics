@@ -22,6 +22,9 @@ type Config struct {
 	SyncIntervalSec int // e.g. 60
 	HistoryDays     int // e.g. 2
 
+	// User sync
+	UserSyncIntervalSec int // e.g. 3600
+
 	// Images
 	ImgQuality          int // e.g. 90
 	ImgPrimaryMaxWidth  int // e.g. 300
@@ -60,6 +63,7 @@ func Load() Config {
 		RefreshChunkSize:    envInt("REFRESH_CHUNK_SIZE", 200),
 		NowSseDebug:         envBool("NOW_SSE_DEBUG", false),
 		RefreshSseDebug:     envBool("REFRESH_SSE_DEBUG", false),
+		UserSyncIntervalSec: envInt("USERSYNC_INTERVAL", 3600),
 	}
 
 	fmt.Printf("[INFO] Using SQLite DB at: %s\n", dbPath)
