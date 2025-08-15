@@ -17,7 +17,8 @@ type TopItem struct {
 // /stats/top/items?days=30&limit=10
 func TopItems(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		days := parseQueryInt(c, "days", 30)
+		// accept window=14d|4w, else days=30 as fallback
+		days := parseWindowDays(c.Query("window", ""), parseQueryInt(c, "days", 30))
 		limit := parseQueryInt(c, "limit", 10)
 
 		if days <= 0 {
@@ -43,7 +44,7 @@ func TopItems(db *sql.DB) fiber.Handler {
 		}
 		defer rows.Close()
 
-		out := []TopItem{} // ensure empty array if no rows
+		out := []TopItem{}
 		for rows.Next() {
 			var ti TopItem
 			if err := rows.Scan(&ti.ItemID, &ti.Name, &ti.Type, &ti.Hours); err != nil {
