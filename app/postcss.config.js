@@ -1,4 +1,4 @@
-// CommonJS format so Next picks it up in this repo
+// CommonJS so Next's postcss-loader can load it in this repo
 module.exports = {
   plugins: {
     "@tailwindcss/postcss": {},
