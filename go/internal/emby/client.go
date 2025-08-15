@@ -3,11 +3,52 @@ package emby
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 )
+
+// --- add: robust helpers for JSON responses ---
+
+type httpDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// readJSON enforces 200 OK and JSON-decodes into dst.
+// On failure, it returns an error that includes status and a short body snippet.
+func readJSON(resp *http.Response, dst any) error {
+	defer resp.Body.Close()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		snippet := string(b)
+		if len(snippet) > 240 {
+			snippet = snippet[:240] + "…"
+		}
+		return fmt.Errorf("http %d from %s: %s", resp.StatusCode, resp.Request.URL.String(), snippet)
+	}
+
+	// Optional: check content-type is JSON-ish (don’t be too strict)
+	ct := resp.Header.Get("Content-Type")
+	if ct != "" && !strings.Contains(strings.ToLower(ct), "application/json") {
+		// still try to decode, but if it fails we’ll show a snippet
+	}
+
+	if err := json.Unmarshal(b, dst); err != nil {
+		snippet := string(b)
+		if len(snippet) > 240 {
+			snippet = snippet[:240] + "…"
+		}
+		return fmt.Errorf("decode json from %s: %w; body: %q", resp.Request.URL.String(), err, snippet)
+	}
+	return nil
+}
 
 type Client struct {
 	BaseURL string
