@@ -34,10 +34,10 @@ func readJSON(resp *http.Response, dst any) error {
 		return fmt.Errorf("http %d from %s: %s", resp.StatusCode, resp.Request.URL.String(), snippet)
 	}
 
-	// Optional: check content-type is JSON-ish (don’t be too strict)
+	// Optional: check content-type is JSON-ish (don't be too strict)
 	ct := resp.Header.Get("Content-Type")
 	if ct != "" && !strings.Contains(strings.ToLower(ct), "application/json") {
-		// still try to decode, but if it fails we’ll show a snippet
+		// still try to decode, but if it fails we'll show a snippet
 	}
 
 	if err := json.Unmarshal(b, dst); err != nil {
@@ -113,6 +113,20 @@ type LibraryItem struct {
 	Codec  string `json:"VideoCodec,omitempty"`
 }
 
+// Detailed struct for fetching media info with codec data
+type DetailedLibraryItem struct {
+	Id           string `json:"Id"`
+	Name         string `json:"Name"`
+	Type         string `json:"Type"`
+	MediaSources []struct {
+		MediaStreams []struct {
+			Type   string `json:"Type"`
+			Codec  string `json:"Codec"`
+			Height *int   `json:"Height"`
+		} `json:"MediaStreams"`
+	} `json:"MediaSources"`
+}
+
 type itemsResp struct {
 	Items []LibraryItem `json:"Items"`
 	Total int           `json:"TotalRecordCount"`
@@ -122,7 +136,7 @@ func (c *Client) TotalItems() (int, error) {
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-	q.Set("Fields", "Height,VideoCodec")
+	q.Set("IncludeItemTypes", "Movie,Episode") // Only count video items
 	q.Set("Recursive", "true")
 	q.Set("StartIndex", "0")
 	q.Set("Limit", "1")
@@ -142,14 +156,16 @@ func (c *Client) TotalItems() (int, error) {
 	return out.Total, nil
 }
 
+// Enhanced GetItemsChunk that extracts codec data from MediaStreams
 func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-	q.Set("Fields", "Height,VideoCodec")
+	q.Set("Fields", "MediaSources,MediaStreams")
 	q.Set("Recursive", "true")
 	q.Set("StartIndex", fmt.Sprintf("%d", page*limit))
 	q.Set("Limit", fmt.Sprintf("%d", limit))
+	q.Set("IncludeItemTypes", "Movie,Episode") // Only get video items
 
 	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
 	req.Header.Set("X-Emby-Token", c.APIKey)
@@ -159,11 +175,45 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 		return nil, err
 	}
 
-	var out itemsResp
+	var out struct {
+		Items []DetailedLibraryItem `json:"Items"`
+	}
 	if err := readJSON(resp, &out); err != nil {
 		return nil, err
 	}
-	return out.Items, nil
+
+	// Convert to LibraryItem format, extracting codec from MediaStreams
+	result := make([]LibraryItem, len(out.Items))
+	for i, item := range out.Items {
+		result[i] = LibraryItem{
+			Id:   item.Id,
+			Name: item.Name,
+			Type: item.Type,
+		}
+
+		// Extract codec and height from first video stream
+		for _, source := range item.MediaSources {
+			for _, stream := range source.MediaStreams {
+				if stream.Type == "Video" {
+					result[i].Codec = stream.Codec
+					if stream.Height != nil {
+						result[i].Height = stream.Height
+					}
+					break
+				}
+			}
+			if result[i].Codec != "" {
+				break
+			}
+		}
+
+		// Default to "Unknown" if no codec found
+		if result[i].Codec == "" {
+			result[i].Codec = "Unknown"
+		}
+	}
+
+	return result, nil
 }
 
 type EmbyUser struct {
