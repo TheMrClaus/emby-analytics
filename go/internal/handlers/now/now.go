@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
@@ -13,13 +14,23 @@ import (
 )
 
 type NowEntry struct {
-	Timestamp int64   `json:"timestamp"`
-	UserID    string  `json:"user_id"`
-	UserName  string  `json:"user_name"`
-	ItemID    string  `json:"item_id"`
-	ItemName  string  `json:"item_name,omitempty"`
-	ItemType  string  `json:"item_type,omitempty"`
-	PosHours  float64 `json:"pos_hours"`
+	Timestamp int64 `json:"timestamp"`
+	// UI fields:
+	Title       string  `json:"title"` // from ItemName
+	User        string  `json:"user"`  // from UserName
+	App         string  `json:"app"`
+	Device      string  `json:"device"`
+	PlayMethod  string  `json:"play_method"`  // "Direct" / "Transcode"
+	Video       string  `json:"video"`        // video codec (e.g., H264/HEVC)
+	Audio       string  `json:"audio"`        // audio codec (e.g., AAC/DTS)
+	Subs        string  `json:"subs"`         // "None" or "<n> tracks"
+	Bitrate     int64   `json:"bitrate"`      // bps
+	ProgressPct float64 `json:"progress_pct"` // 0..100
+	Poster      string  `json:"poster"`       // /img/primary/:id
+
+	// reference (not shown in UI, but handy)
+	ItemID   string `json:"item_id"`
+	ItemType string `json:"item_type,omitempty"`
 }
 
 // Snapshot: GET /now
@@ -32,17 +43,48 @@ func Snapshot(db *sql.DB, em *emby.Client) fiber.Handler {
 		nowMs := time.Now().UnixMilli()
 		out := make([]NowEntry, 0, len(sessions))
 		for _, s := range sessions {
-			posMs := s.PosMs / 10_000 // ticks -> ms
+			// ticks -> ms
+			posMs := s.PosTicks / 10_000
+			durTicks := s.DurationTicks
+			progressPct := 0.0
+			if durTicks > 0 {
+				progressPct = (float64(s.PosTicks) / float64(durTicks)) * 100.0
+				if progressPct < 0 {
+					progressPct = 0
+				}
+				if progressPct > 100 {
+					progressPct = 100
+				}
+			}
+
+			subsText := "None"
+			if s.SubsCount > 0 {
+				subsText = fmt.Sprintf("%d", s.SubsCount)
+			}
+
+			poster := ""
+			if s.ItemID != "" {
+				poster = "/img/primary/" + s.ItemID
+			}
+
 			out = append(out, NowEntry{
-				Timestamp: nowMs,
-				UserID:    s.UserID,
-				UserName:  s.UserName,
-				ItemID:    s.ItemID,
-				ItemName:  s.ItemName,
-				ItemType:  s.ItemType,
-				PosHours:  float64(posMs) / 3_600_000.0,
+				Timestamp:   nowMs,
+				Title:       s.ItemName,
+				User:        s.UserName,
+				App:         s.App,
+				Device:      s.Device,
+				PlayMethod:  s.PlayMethod,
+				Video:       s.VideoCodec,
+				Audio:       s.AudioCodec,
+				Subs:        subsText,
+				Bitrate:     s.Bitrate,
+				ProgressPct: progressPct,
+				Poster:      poster,
+				ItemID:      s.ItemID,
+				ItemType:    s.ItemType,
 			})
 		}
+
 		return c.JSON(out)
 	}
 }
@@ -107,9 +149,11 @@ func Stream(db *sql.DB, em *emby.Client, pollSec int) fiber.Handler {
 						})
 					}
 					b, _ := json.Marshal(out)
-					if _, err := w.WriteString("event: update\ndata: " + string(b) + "\n\n"); err != nil {
+					// Send as default message event so EventSource.onmessage receives it
+					if _, err := w.WriteString("data: " + string(b) + "\n\n"); err != nil {
 						return
 					}
+
 					if err := w.Flush(); err != nil {
 						return
 					}
