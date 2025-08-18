@@ -60,7 +60,7 @@ export default function Home(){
     return Math.trunc(n).toLocaleString();
   };
 
-  // initial fetches + now-playing snapshot + SSE
+  // initial fetches + now-playing snapshot + SSE with polling fallback
   useEffect(()=>{
     // stats & overview
     fetch(`${apiBase}/stats/usage?days=14`).then(r=>r.json()).then(setUsage).catch(()=>{});
@@ -72,28 +72,47 @@ export default function Home(){
     fetch(`${apiBase}/stats/active-users-lifetime?limit=1`).then(r=>r.json()).then(setActiveUsers).catch(()=>{});
     fetch(`${apiBase}/stats/users/total`).then(r=>r.json()).then(d=>setTotalUsers(d.total_users||0)).catch(()=>{});
 
-    // one-time snapshot for Now Playing so the grid renders immediately
+    // one-time snapshot so the grid renders fast
     fetch(`${apiBase}/now`)
       .then(r => r.json())
       .then(rows => { if (Array.isArray(rows)) setNow(rows); })
       .catch(() => {});
 
-    // SSE for live Now Playing updates (server emits default 'message' events)
+    // SSE with automatic polling fallback (helps if reverse proxy blocks SSE)
+    let sseFailures = 0;
+    let pollId: any = null;
+
+    const startPolling = () => {
+      if (pollId) return;
+      pollId = setInterval(async () => {
+        try {
+          const rows = await fetch(`${apiBase}/now`).then(r=>r.json());
+          if (Array.isArray(rows)) setNow(rows);
+        } catch {}
+      }, 5000);
+    };
+
     const es = new EventSource(`${apiBase}/now/stream`, { withCredentials: true });
     es.onmessage = (e) => {
       try {
         const rows = JSON.parse(e.data || "[]");
         if (Array.isArray(rows)) setNow(rows);
-      } catch (err) {
-        console.error("now stream parse error:", err);
+        sseFailures = 0; // recovered
+      } catch {}
+    };
+    es.onerror = () => {
+      sseFailures++;
+      if (sseFailures >= 2) { // after two consecutive errors, fallback to polling
+        startPolling();
       }
     };
-    es.onerror = (err) => {
-      console.error("now stream error:", err);
-      // leave the connection; browser will retry automatically
+
+    return ()=> {
+      es.close();
+      if (pollId) clearInterval(pollId);
     };
-    return ()=> es.close();
   }, [apiBase]);
+
 
   // refresh status poll (continuous)
   useEffect(()=>{
@@ -180,6 +199,28 @@ export default function Home(){
 
   const pct = (n:number)=> Math.max(0, Math.min(100, n||0));
 
+  const control = async (sessionId: string, action: "pause"|"unpause"|"stop"|"message", messageText?: string) => {
+    try {
+      if (action === "pause" || action === "unpause") {
+        await fetch(`${apiBase}/now/sessions/${sessionId}/pause`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paused: action === "pause" })
+        });
+      } else if (action === "stop") {
+        await fetch(`${apiBase}/now/sessions/${sessionId}/stop`, { method: "POST" });
+      } else if (action === "message") {
+        await fetch(`${apiBase}/now/sessions/${sessionId}/message`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: messageText || "" })
+        });
+      }
+    } catch (_) {
+      // ignore in UI for now
+    }
+  };
+
   return (
     <div className="min-h-dvh">
       {/* Top nav */}
@@ -260,16 +301,57 @@ export default function Home(){
                 <div className="font-semibold truncate" title={s.title}>{s.title || "—"}</div>
                 <div className="text-xs text-white/60">{s.user} • {s.app}{s.device ? ` • ${s.device}` : ""}</div>
 
-                <div className="mt-2 flex flex-wrap gap-1 text-xs">
-                  <span className="badge">
-                    {s.play_method || (s.video==="Transcode" || s.audio==="Transcode" ? "Transcode" : "Direct")}
-                  </span>
-                  <span className="badge">Video: {s.video}</span>
-                  <span className="badge">Audio: {s.audio}</span>
-                  <span className="badge">Subs: {s.subs}</span>
-                  {typeof s.bitrate === "number" && s.bitrate > 0 && (
-                    <span className="badge">{ (s.bitrate/1000000).toFixed(2) } Mbps</span>
-                  )}
+                <div className="mt-2 space-y-1 text-sm">
+                  <div>
+                    <span className="font-medium">Stream:</span>{" "}
+                    {typeof s.bitrate === "number" && s.bitrate > 0
+                      ? `${(s.bitrate/1000000).toFixed(1)} Mbps`
+                      : "—"}{" "}
+                    → {s.play_method || ((s.video === "Transcode" || s.audio === "Transcode") ? "Transcode" : "Direct")}
+                  </div>
+                  <div>
+                    <span className="font-medium">Video:</span>{" "}
+                    {s.video || "—"} → {s.play_method || ((s.video === "Transcode") ? "Transcode" : "Direct")}
+                  </div>
+                  <div>
+                    <span className="font-medium">Audio:</span>{" "}
+                    {s.audio || "—"} → {s.play_method || ((s.audio === "Transcode") ? "Transcode" : "Direct")}
+                  </div>
+                  <div>
+                    <span className="font-medium">Sub:</span>{" "}
+                    {s.subs || "None"} → {/* Heuristic: any subs count shows as Direct for now */}
+                    {(s.subs && s.subs !== "None") ? "Direct" : "Direct"}
+                  </div>
+                </div>
+
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => control(s.session_id, "pause")}
+                    className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
+                  >
+                    Pause
+                  </button>
+                  <button
+                    onClick={() => control(s.session_id, "unpause")}
+                    className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
+                  >
+                    Unpause
+                  </button>
+                  <button
+                    onClick={() => control(s.session_id, "stop")}
+                    className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
+                  >
+                    Stop
+                  </button>
+                  <button
+                    onClick={() => {
+                      const text = prompt("Message to client:");
+                      if (text) control(s.session_id, "message", text);
+                    }}
+                    className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
+                  >
+                    Message
+                  </button>
                 </div>
 
                 <div className="mt-2 h-2 bg-white/10 rounded-full">
