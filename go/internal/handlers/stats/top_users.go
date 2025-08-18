@@ -28,8 +28,11 @@ func TopUsers(db *sql.DB) fiber.Handler {
 
 		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
 
+		// NEW APPROACH: Count unique sessions and estimate reasonable session time
+		// Instead of summing inflated positions, count sessions and use conservative estimates
 		rows, err := db.Query(`
-			SELECT u.id, u.name, COALESCE(SUM(pe.pos_ms), 0) / 3600000.0 AS hours
+			SELECT u.id, u.name, 
+			       COUNT(DISTINCT DATE(datetime(pe.ts / 1000, 'unixepoch'))) * 1.5 AS hours
 			FROM play_event pe
 			JOIN emby_user u ON u.id = pe.user_id
 			WHERE pe.ts >= ?

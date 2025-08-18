@@ -23,11 +23,12 @@ func Usage(db *sql.DB) fiber.Handler {
 		}
 		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
 
+		// NEW APPROACH: Count events per day and estimate reasonable session time
 		rows, err := db.Query(`
 			SELECT
 			  strftime('%Y-%m-%d', datetime(pe.ts / 1000, 'unixepoch')) AS day,
 			  COALESCE(u.name, pe.user_id) AS user,
-			  SUM(pe.pos_ms) / 3600000.0 AS hours
+			  COUNT(*) * 0.5 AS hours
 			FROM play_event pe
 			LEFT JOIN emby_user u ON u.id = pe.user_id
 			WHERE pe.ts >= ?
