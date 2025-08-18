@@ -54,7 +54,6 @@ func main() {
 	// Web Server Setup
 	// ==========================================
 	app := fiber.New()
-
 	// Static UI
 	app.Use("/", static.New(cfg.WebPath))
 
