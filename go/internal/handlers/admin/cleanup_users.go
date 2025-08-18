@@ -2,6 +2,7 @@ package admin
 
 import (
 	"database/sql"
+
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -20,7 +21,7 @@ func CleanupUsers(db *sql.DB) fiber.Handler {
 			deletedUsers, _ = result1.RowsAffected()
 		}
 
-		// Clean up play_event table  
+		// Clean up play_event table
 		result2, err2 := db.Exec(`DELETE FROM play_event WHERE user_id = '' OR user_id IS NULL`)
 		deletedPlayEvents := int64(0)
 		if err2 == nil {
@@ -40,24 +41,32 @@ func CleanupUsers(db *sql.DB) fiber.Handler {
 		db.QueryRow(`SELECT COUNT(*) FROM play_event`).Scan(&finalPlayEvents)
 		db.QueryRow(`SELECT COUNT(*) FROM lifetime_watch`).Scan(&finalLifetimeWatch)
 
+		// Build error messages
+		errors := []string{}
+		if err1 != nil {
+			errors = append(errors, "users: "+err1.Error())
+		}
+		if err2 != nil {
+			errors = append(errors, "play_events: "+err2.Error())
+		}
+		if err3 != nil {
+			errors = append(errors, "lifetime_watch: "+err3.Error())
+		}
+
 		return c.JSON(fiber.Map{
 			"cleanup_results": fiber.Map{
-				"invalid_users_found":         invalidUsers,
-				"invalid_play_events_found":   invalidPlayEvents,
-				"deleted_users":               deletedUsers,
-				"deleted_play_events":         deletedPlayEvents,
-				"deleted_lifetime_watch":      deletedLifetimeWatch,
+				"invalid_users_found":       invalidUsers,
+				"invalid_play_events_found": invalidPlayEvents,
+				"deleted_users":             deletedUsers,
+				"deleted_play_events":       deletedPlayEvents,
+				"deleted_lifetime_watch":    deletedLifetimeWatch,
 			},
 			"final_counts": fiber.Map{
-				"total_users":         finalUsers,
-				"total_play_events":   finalPlayEvents,
+				"total_users":          finalUsers,
+				"total_play_events":    finalPlayEvents,
 				"total_lifetime_watch": finalLifetimeWatch,
 			},
-			"errors": []string{
-				func() string { if err1 != nil { return "users: " + err1.Error() } return "" }(),
-				func() string { if err2 != nil { return "play_events: " + err2.Error() } return "" }(),
-				func() string { if err3 != nil { return "lifetime_watch: " + err3.Error() } return "" }(),
-			},
+			"errors": errors,
 		})
 	}
 }
