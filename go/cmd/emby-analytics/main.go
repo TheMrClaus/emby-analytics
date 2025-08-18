@@ -46,7 +46,8 @@ func main() {
 	// ==========================================
 	// Background Tasks Setup
 	// ==========================================
-	go tasks.StartUserSyncLoop(sqlDB, em, cfg)
+	go tasks.StartSyncLoop(sqlDB, em, cfg)     // Keep existing sync for real-time data
+	go tasks.StartUserSyncLoop(sqlDB, em, cfg) // Add new user data sync
 
 	// ==========================================
 	// Web Server Setup
