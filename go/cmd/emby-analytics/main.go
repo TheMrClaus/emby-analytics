@@ -109,6 +109,8 @@ func main() {
 	app.Get("/admin/users", admin.ListUsers(sqlDB, em))
 	app.Post("/admin/users/force-sync", admin.ForceUserSync(sqlDB, em))
 	app.Post("/admin/cleanup-users", admin.CleanupUsers(sqlDB))
+	app.Post("/admin/cleanup-users", admin.CleanupUsers(sqlDB))
+	app.Post("/admin/reset-all-data", admin.ResetAllData(sqlDB, em))
 
 	// ==========================================
 	// Start Server

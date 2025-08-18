@@ -5,44 +5,59 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-// CleanupUsers removes users with empty/invalid IDs
+// CleanupUsers removes all invalid/empty records from users and play_events
 func CleanupUsers(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Find invalid users
-		rows, err := db.Query(`SELECT id, name FROM emby_user WHERE id = '' OR id IS NULL`)
-		if err != nil {
-			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-		}
-		defer rows.Close()
+		// Count invalid records before cleanup
+		var invalidUsers, invalidPlayEvents int
+		db.QueryRow(`SELECT COUNT(*) FROM emby_user WHERE id = '' OR id IS NULL`).Scan(&invalidUsers)
+		db.QueryRow(`SELECT COUNT(*) FROM play_event WHERE user_id = '' OR user_id IS NULL`).Scan(&invalidPlayEvents)
 
-		invalidUsers := []fiber.Map{}
-		for rows.Next() {
-			var id, name sql.NullString
-			if err := rows.Scan(&id, &name); err != nil {
-				continue
-			}
-			invalidUsers = append(invalidUsers, fiber.Map{
-				"id": id.String, 
-				"name": name.String,
-			})
+		// Clean up emby_user table
+		result1, err1 := db.Exec(`DELETE FROM emby_user WHERE id = '' OR id IS NULL`)
+		deletedUsers := int64(0)
+		if err1 == nil {
+			deletedUsers, _ = result1.RowsAffected()
 		}
 
-		// Delete invalid users
-		result, err := db.Exec(`DELETE FROM emby_user WHERE id = '' OR id IS NULL`)
-		if err != nil {
-			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		// Clean up play_event table  
+		result2, err2 := db.Exec(`DELETE FROM play_event WHERE user_id = '' OR user_id IS NULL`)
+		deletedPlayEvents := int64(0)
+		if err2 == nil {
+			deletedPlayEvents, _ = result2.RowsAffected()
 		}
 
-		deleted, _ := result.RowsAffected()
+		// Clean up lifetime_watch table
+		result3, err3 := db.Exec(`DELETE FROM lifetime_watch WHERE user_id = '' OR user_id IS NULL`)
+		deletedLifetimeWatch := int64(0)
+		if err3 == nil {
+			deletedLifetimeWatch, _ = result3.RowsAffected()
+		}
 
-		// Get final count
-		var finalCount int
-		db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&finalCount)
+		// Get final counts
+		var finalUsers, finalPlayEvents, finalLifetimeWatch int
+		db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&finalUsers)
+		db.QueryRow(`SELECT COUNT(*) FROM play_event`).Scan(&finalPlayEvents)
+		db.QueryRow(`SELECT COUNT(*) FROM lifetime_watch`).Scan(&finalLifetimeWatch)
 
 		return c.JSON(fiber.Map{
-			"invalid_users_found": invalidUsers,
-			"deleted_count": deleted,
-			"final_total": finalCount,
+			"cleanup_results": fiber.Map{
+				"invalid_users_found":         invalidUsers,
+				"invalid_play_events_found":   invalidPlayEvents,
+				"deleted_users":               deletedUsers,
+				"deleted_play_events":         deletedPlayEvents,
+				"deleted_lifetime_watch":      deletedLifetimeWatch,
+			},
+			"final_counts": fiber.Map{
+				"total_users":         finalUsers,
+				"total_play_events":   finalPlayEvents,
+				"total_lifetime_watch": finalLifetimeWatch,
+			},
+			"errors": []string{
+				func() string { if err1 != nil { return "users: " + err1.Error() } return "" }(),
+				func() string { if err2 != nil { return "play_events: " + err2.Error() } return "" }(),
+				func() string { if err3 != nil { return "lifetime_watch: " + err3.Error() } return "" }(),
+			},
 		})
 	}
 }
