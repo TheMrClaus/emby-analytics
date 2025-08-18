@@ -59,8 +59,13 @@ func main() {
 	app.Use("/", static.New(cfg.WebPath))
 
 	// Now-playing routes
-	app.Get("/now", nown.Snapshot(sqlDB, em))
-	app.Get("/now/stream", nown.Stream(sqlDB, em, cfg.NowPollSec))
+	app.Get("/now", nown.Snapshot)
+	app.Get("/now/stream", nown.Stream)
+
+	// If not already present, also wire the control endpoints:
+	app.Post("/now/sessions/:id/pause", nown.PauseSession)
+	app.Post("/now/sessions/:id/stop", nown.StopSession)
+	app.Post("/now/sessions/:id/message", nown.MessageSession)
 
 	// ==========================================
 	// API Routes
