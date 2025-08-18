@@ -45,26 +45,25 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 	defer rows.Close()
 
 	for rows.Next() {
-		var uid, uname string
+		var uid, uname sql.NullString
 		if err := rows.Scan(&uid, &uname); err != nil {
 			continue
 		}
 
-		// Skip empty user IDs to prevent API errors
-		if strings.TrimSpace(uid) == "" {
-			log.Printf("skipping empty user ID for user: %s", uname)
+		// Skip invalid user records
+		if !uid.Valid || strings.TrimSpace(uid.String) == "" {
 			continue
 		}
 
-		history, err := em.GetUserPlayHistory(uid, cfg.HistoryDays)
+		history, err := em.GetUserPlayHistory(uid.String, cfg.HistoryDays)
 		if err != nil {
-			log.Printf("history error for %s: %v\n", uid, err)
+			log.Printf("history error for %s: %v\n", uid.String, err)
 			continue
 		}
 		for _, h := range history {
-			upsertUserAndItem(db, uid, uname, h.Id, h.Name, h.Type)
+			upsertUserAndItem(db, uid.String, uname.String, h.Id, h.Name, h.Type)
 			posMs := h.PlaybackPos / 10000
-			if insertPlayEvent(db, uid, h.Id, posMs) {
+			if insertPlayEvent(db, uid.String, h.Id, posMs) {
 				insertedEvents++
 			}
 		}
