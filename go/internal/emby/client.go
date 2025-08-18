@@ -277,13 +277,16 @@ type rawSession struct {
 		Name         string `json:"Name"`
 		Type         string `json:"Type"`
 		RunTimeTicks int64  `json:"RunTimeTicks"`
-		// MediaStreams holds audio/video/subs
 		MediaStreams []struct {
-			Type     string `json:"Type"`   // "Video","Audio","Subtitle"
-			Codec    string `json:"Codec"`  // e.g. "h264","aac"
-			IsText   bool   `json:"IsText"` // true for text-based subs
+			Type     string `json:"Type"`  // "Video","Audio","Subtitle"
+			Codec    string `json:"Codec"` // e.g. "h264","aac"
+			IsText   bool   `json:"IsText"`
 			Language string `json:"Language"`
 		} `json:"MediaStreams"`
+		// Fallback source-level bitrate (bps) for direct play
+		MediaSources []struct {
+			Bitrate int64 `json:"Bitrate"`
+		} `json:"MediaSources"`
 	} `json:"NowPlayingItem"`
 
 	PlayState *struct {
@@ -319,6 +322,11 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 
 	out := make([]EmbySession, 0, len(raw))
 	for _, rs := range raw {
+		// Show ONLY active playback: must have an item
+		if rs.NowPlayingItem == nil || rs.NowPlayingItem.Id == "" {
+			continue
+		}
+
 		es := EmbySession{
 			UserID:   rs.UserID,
 			UserName: rs.UserName,
@@ -327,30 +335,67 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 		}
 
 		// Item + duration
-		if rs.NowPlayingItem != nil {
-			es.ItemID = rs.NowPlayingItem.Id
-			es.ItemName = rs.NowPlayingItem.Name
-			es.ItemType = rs.NowPlayingItem.Type
-			es.DurationTicks = rs.NowPlayingItem.RunTimeTicks
+		es.ItemID = rs.NowPlayingItem.Id
+		es.ItemName = rs.NowPlayingItem.Name
+		es.ItemType = rs.NowPlayingItem.Type
+		es.DurationTicks = rs.NowPlayingItem.RunTimeTicks
 
-			// Streams -> codecs + subs count
-			subs := 0
-			for _, ms := range rs.NowPlayingItem.MediaStreams {
-				switch strings.ToLower(ms.Type) {
-				case "video":
-					if es.VideoCodec == "" && ms.Codec != "" {
-						es.VideoCodec = strings.ToUpper(ms.Codec)
-					}
-				case "audio":
-					if es.AudioCodec == "" && ms.Codec != "" {
-						es.AudioCodec = strings.ToUpper(ms.Codec)
-					}
-				case "subtitle":
-					subs++
+		// Streams -> codecs + subs count
+		subs := 0
+		for _, ms := range rs.NowPlayingItem.MediaStreams {
+			switch strings.ToLower(ms.Type) {
+			case "video":
+				if es.VideoCodec == "" && ms.Codec != "" {
+					es.VideoCodec = strings.ToUpper(ms.Codec)
+				}
+			case "audio":
+				if es.AudioCodec == "" && ms.Codec != "" {
+					es.AudioCodec = strings.ToUpper(ms.Codec)
+				}
+			case "subtitle":
+				subs++
+			}
+		}
+		es.SubsCount = subs
+
+		// PlayState -> position (and possibly method)
+		if rs.PlayState != nil {
+			es.PosTicks = rs.PlayState.PositionTicks
+			if rs.PlayState.PlayMethod != "" {
+				if strings.HasPrefix(strings.ToLower(rs.PlayState.PlayMethod), "trans") {
+					es.PlayMethod = "Transcode"
+				} else {
+					es.PlayMethod = "Direct"
 				}
 			}
-			es.SubsCount = subs
 		}
+		if es.PlayMethod == "" {
+			es.PlayMethod = "Direct"
+		}
+
+		// Bitrate:
+		// 1) If transcoding, prefer TranscodingInfo.Bitrate
+		if rs.TranscodingInfo != nil && rs.TranscodingInfo.Bitrate > 0 {
+			es.Bitrate = rs.TranscodingInfo.Bitrate
+			if rs.TranscodingInfo.VideoCodec != "" {
+				es.VideoCodec = strings.ToUpper(rs.TranscodingInfo.VideoCodec)
+			}
+			if rs.TranscodingInfo.AudioCodec != "" {
+				es.AudioCodec = strings.ToUpper(rs.TranscodingInfo.AudioCodec)
+			}
+			es.PlayMethod = "Transcode"
+		} else {
+			// 2) Fallback for direct play: first media source bitrate if present
+			if es.Bitrate == 0 && rs.NowPlayingItem != nil && len(rs.NowPlayingItem.MediaSources) > 0 {
+				if rs.NowPlayingItem.MediaSources[0].Bitrate > 0 {
+					es.Bitrate = rs.NowPlayingItem.MediaSources[0].Bitrate
+				}
+			}
+		}
+
+		out = append(out, es)
+	}
+
 
 		// PlayState -> position (and possibly play method)
 		if rs.PlayState != nil {
