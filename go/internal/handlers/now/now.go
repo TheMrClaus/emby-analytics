@@ -33,6 +33,24 @@ type NowEntry struct {
 
 	ItemID   string `json:"item_id"`
 	ItemType string `json:"item_type,omitempty"`
+
+	// New richer fields (safe for UI to ignore if unused)
+	Container   string `json:"container,omitempty"`
+	Width       int    `json:"width,omitempty"`
+	Height      int    `json:"height,omitempty"`
+	DolbyVision bool   `json:"dolby_vision,omitempty"`
+	HDR10       bool   `json:"hdr10,omitempty"`
+
+	AudioLang string `json:"audio_lang,omitempty"`
+	AudioCh   int    `json:"audio_ch,omitempty"`
+
+	SubLang  string `json:"sub_lang,omitempty"`
+	SubCodec string `json:"sub_codec,omitempty"`
+
+	TransVideoFrom string `json:"trans_video_from,omitempty"`
+	TransVideoTo   string `json:"trans_video_to,omitempty"`
+	TransAudioFrom string `json:"trans_audio_from,omitempty"`
+	TransAudioTo   string `json:"trans_audio_to,omitempty"`
 }
 
 // Generic env-based Emby client (keeps things portable behind any proxy).
@@ -94,6 +112,20 @@ func Snapshot(c fiber.Ctx) error {
 			SessionID:   s.SessionID,
 			ItemID:      s.ItemID,
 			ItemType:    s.ItemType,
+
+			Container:      s.Container,
+			Width:          s.Width,
+			Height:         s.Height,
+			DolbyVision:    s.DolbyVision,
+			HDR10:          s.HDR10,
+			AudioLang:      s.AudioLang,
+			AudioCh:        s.AudioCh,
+			SubLang:        s.SubLang,
+			SubCodec:       s.SubCodec,
+			TransVideoFrom: s.TransVideoFrom,
+			TransVideoTo:   s.TransVideoTo,
+			TransAudioFrom: s.TransAudioFrom,
+			TransAudioTo:   s.TransAudioTo,
 		})
 	}
 	return c.JSON(out)
@@ -161,6 +193,20 @@ func Stream(c fiber.Ctx) error {
 				SessionID:   s.SessionID,
 				ItemID:      s.ItemID,
 				ItemType:    s.ItemType,
+
+				Container:      s.Container,
+				Width:          s.Width,
+				Height:         s.Height,
+				DolbyVision:    s.DolbyVision,
+				HDR10:          s.HDR10,
+				AudioLang:      s.AudioLang,
+				AudioCh:        s.AudioCh,
+				SubLang:        s.SubLang,
+				SubCodec:       s.SubCodec,
+				TransVideoFrom: s.TransVideoFrom,
+				TransVideoTo:   s.TransVideoTo,
+				TransAudioFrom: s.TransAudioFrom,
+				TransAudioTo:   s.TransAudioTo,
 			})
 		}
 		b, _ := json.Marshal(out)
