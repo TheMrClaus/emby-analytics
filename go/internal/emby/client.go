@@ -182,34 +182,55 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 		return nil, err
 	}
 
-	// Convert to LibraryItem format, extracting codec from MediaStreams
-	result := make([]LibraryItem, len(out.Items))
-	for i, item := range out.Items {
-		result[i] = LibraryItem{
-			Id:   item.Id,
-			Name: item.Name,
-			Type: item.Type,
-		}
+	// Convert to LibraryItem format, creating separate entries for each codec
+	var result []LibraryItem
 
-		// Extract codec and height from first video stream
+	for _, item := range out.Items {
+		videoCodecs := make(map[string]*int) // codec -> height
+		audioCodecs := make(map[string]bool)
+
+		// Extract ALL codecs from MediaStreams
 		for _, source := range item.MediaSources {
 			for _, stream := range source.MediaStreams {
-				if stream.Type == "Video" {
-					result[i].Codec = stream.Codec
-					if stream.Height != nil {
-						result[i].Height = stream.Height
+				if stream.Type == "Video" && stream.Codec != "" {
+					if _, exists := videoCodecs[stream.Codec]; !exists {
+						videoCodecs[stream.Codec] = stream.Height
 					}
-					break
+				} else if stream.Type == "Audio" && stream.Codec != "" {
+					audioCodecs[stream.Codec] = true
 				}
-			}
-			if result[i].Codec != "" {
-				break
 			}
 		}
 
-		// Default to "Unknown" if no codec found
-		if result[i].Codec == "" {
-			result[i].Codec = "Unknown"
+		// Create separate LibraryItem entries for each video codec
+		for codec, height := range videoCodecs {
+			result = append(result, LibraryItem{
+				Id:     item.Id + "_v_" + codec,
+				Name:   item.Name,
+				Type:   item.Type,
+				Height: height,
+				Codec:  codec,
+			})
+		}
+
+		// Create separate LibraryItem entries for each audio codec
+		for codec := range audioCodecs {
+			result = append(result, LibraryItem{
+				Id:    item.Id + "_a_" + codec,
+				Name:  item.Name,
+				Type:  item.Type,
+				Codec: codec,
+			})
+		}
+
+		// If no codecs found, create Unknown entry
+		if len(videoCodecs) == 0 && len(audioCodecs) == 0 {
+			result = append(result, LibraryItem{
+				Id:    item.Id,
+				Name:  item.Name,
+				Type:  item.Type,
+				Codec: "Unknown",
+			})
 		}
 	}
 
