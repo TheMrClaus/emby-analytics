@@ -4,21 +4,74 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 )
 
-// Client is a minimal Emby API client used by the analytics backend.
+//
+// ---------- HTTP / JSON helpers ----------
+//
+
+type httpDoer interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// Heuristic: Emby often reports kbps for sources/streams.
+// Treat small values as kbps; large values as already bps.
+func normalizeToBps(v int64) int64 {
+	if v < 1_000_000 { // e.g. 57_000 -> 57 Mbps
+		return v * 1000
+	}
+	return v
+}
+
+// readJSON enforces 200 OK and JSON-decodes into dst.
+// On failure, it returns an error that includes status and a short body snippet.
+func readJSON(resp *http.Response, dst any) error {
+	defer resp.Body.Close()
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		snippet := string(b)
+		if len(snippet) > 240 {
+			snippet = snippet[:240] + "…"
+		}
+		return fmt.Errorf("http %d from %s: %s", resp.StatusCode, resp.Request.URL.String(), snippet)
+	}
+
+	// Optional: check content-type is JSON-ish (don't be too strict)
+	ct := resp.Header.Get("Content-Type")
+	if ct != "" && !strings.Contains(strings.ToLower(ct), "application/json") {
+		// still try to decode, but if it fails we'll show a snippet
+	}
+
+	if err := json.Unmarshal(b, dst); err != nil {
+		snippet := string(b)
+		if len(snippet) > 240 {
+			snippet = snippet[:240] + "…"
+		}
+		return fmt.Errorf("decode json from %s: %w; body: %q", resp.Request.URL.String(), err, snippet)
+	}
+	return nil
+}
+
+//
+// ---------- Client ----------
+//
+
 type Client struct {
 	BaseURL string
 	APIKey  string
-
-	http *http.Client
+	http    *http.Client
 }
 
-// New returns a new Emby client.
 func New(baseURL, apiKey string) *Client {
 	return &Client{
 		BaseURL: strings.TrimRight(baseURL, "/"),
@@ -29,11 +82,328 @@ func New(baseURL, apiKey string) *Client {
 	}
 }
 
-// -------- Data shapes --------
+//
+// ---------- Library (items, codecs, counts) ----------
+//
 
-// Flattened shape consumed by handlers (now.go expects these fields).
+type EmbyItem struct {
+	Id                string `json:"Id"`
+	Name              string `json:"Name"`
+	Type              string `json:"Type"`
+	SeriesName        string `json:"SeriesName"`
+	ParentIndexNumber *int   `json:"ParentIndexNumber"` // season
+	IndexNumber       *int   `json:"IndexNumber"`       // episode
+}
+
+type embyItemsResp struct {
+	Items []EmbyItem `json:"Items"`
+}
+
+// ItemsByIDs fetches item details for a set of IDs (used to prettify Episode display)
+func (c *Client) ItemsByIDs(ids []string) ([]EmbyItem, error) {
+	if c == nil || c.BaseURL == "" || c.APIKey == "" || len(ids) == 0 {
+		return []EmbyItem{}, nil
+	}
+	endpoint := fmt.Sprintf("%s/emby/Items", c.BaseURL)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("Ids", strings.Join(ids, ","))
+
+	req, _ := http.NewRequest("GET", endpoint+"?"+q.Encode(), nil)
+	req.Header.Set("X-Emby-Token", c.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var out embyItemsResp
+	if err := readJSON(resp, &out); err != nil {
+		return nil, err
+	}
+	return out.Items, nil
+}
+
+type LibraryItem struct {
+	Id     string `json:"Id"`
+	Name   string `json:"Name"`
+	Type   string `json:"Type"`
+	Height *int   `json:"Height,omitempty"`
+	Codec  string `json:"VideoCodec,omitempty"`
+}
+
+// Detailed struct for fetching media info with codec data
+type DetailedLibraryItem struct {
+	Id           string `json:"Id"`
+	Name         string `json:"Name"`
+	Type         string `json:"Type"`
+	MediaSources []struct {
+		MediaStreams []struct {
+			Type   string `json:"Type"`
+			Codec  string `json:"Codec"`
+			Height *int   `json:"Height"`
+		} `json:"MediaStreams"`
+	} `json:"MediaSources"`
+}
+
+type itemsResp struct {
+	Items []LibraryItem `json:"Items"`
+	Total int           `json:"TotalRecordCount"`
+}
+
+func (c *Client) TotalItems() (int, error) {
+	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("IncludeItemTypes", "Movie,Episode") // Only count video items
+	q.Set("Recursive", "true")
+	q.Set("StartIndex", "0")
+	q.Set("Limit", "1")
+
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	req.Header.Set("X-Emby-Token", c.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, err
+	}
+
+	var out itemsResp
+	if err := readJSON(resp, &out); err != nil {
+		return 0, err
+	}
+	return out.Total, nil
+}
+
+// GetItemsChunk extracts codec data from MediaStreams
+func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
+	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("Fields", "MediaSources,MediaStreams")
+	q.Set("Recursive", "true")
+	q.Set("StartIndex", fmt.Sprintf("%d", page*limit))
+	q.Set("Limit", fmt.Sprintf("%d", limit))
+	q.Set("IncludeItemTypes", "Movie,Episode") // Only get video items
+
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	req.Header.Set("X-Emby-Token", c.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var out struct {
+		Items []DetailedLibraryItem `json:"Items"`
+	}
+	if err := readJSON(resp, &out); err != nil {
+		return nil, err
+	}
+
+	// Convert to LibraryItem format, creating separate entries for each codec
+	var result []LibraryItem
+
+	for _, item := range out.Items {
+		videoCodecs := make(map[string]*int) // codec -> height
+		audioCodecs := make(map[string]bool)
+
+		// Extract ALL codecs from MediaStreams
+		for _, source := range item.MediaSources {
+			for _, stream := range source.MediaStreams {
+				if stream.Type == "Video" && stream.Codec != "" {
+					if _, exists := videoCodecs[stream.Codec]; !exists {
+						videoCodecs[stream.Codec] = stream.Height
+					}
+				} else if stream.Type == "Audio" && stream.Codec != "" {
+					audioCodecs[stream.Codec] = true
+				}
+			}
+		}
+
+		// Create separate LibraryItem entries for each video codec
+		for codec, height := range videoCodecs {
+			result = append(result, LibraryItem{
+				Id:     item.Id + "_v_" + codec,
+				Name:   item.Name,
+				Type:   item.Type,
+				Height: height,
+				Codec:  codec,
+			})
+		}
+
+		// Create separate LibraryItem entries for each audio codec
+		for codec := range audioCodecs {
+			result = append(result, LibraryItem{
+				Id:    item.Id + "_a_" + codec,
+				Name:  item.Name,
+				Type:  item.Type,
+				Codec: codec,
+			})
+		}
+
+		// If no codecs found, create Unknown entry
+		if len(videoCodecs) == 0 && len(audioCodecs) == 0 {
+			result = append(result, LibraryItem{
+				Id:    item.Id,
+				Name:  item.Name,
+				Type:  item.Type,
+				Codec: "Unknown",
+			})
+		}
+	}
+
+	return result, nil
+}
+
+//
+// ---------- Users & history ----------
+//
+
+type EmbyUser struct {
+	Id   string `json:"Id"`
+	Name string `json:"Name"`
+}
+
+// Struct for history items
+type PlayHistoryItem struct {
+	Id          string `json:"Id"`
+	Name        string `json:"Name"`
+	Type        string `json:"Type"`
+	DatePlayed  string `json:"DatePlayed"` // ISO8601
+	PlaybackPos int64  `json:"PlaybackPositionTicks"`
+	UserID      string `json:"-"`
+}
+
+type playHistoryResp struct {
+	Items []PlayHistoryItem `json:"Items"`
+}
+
+// GetUserPlayHistory returns recent items played by a user (daysBack is how many days to look back)
+func (c *Client) GetUserPlayHistory(userID string, daysBack int) ([]PlayHistoryItem, error) {
+	u := fmt.Sprintf("%s/emby/Users/%s/Items", c.BaseURL, userID)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("SortBy", "DatePlayed")
+	q.Set("SortOrder", "Descending")
+	q.Set("Filters", "IsPlayed")
+	q.Set("Recursive", "true")
+	q.Set("Limit", "100")
+	if daysBack > 0 {
+		from := time.Now().AddDate(0, 0, -daysBack).Format(time.RFC3339)
+		q.Set("MinDatePlayed", from)
+	}
+
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	req.Header.Set("X-Emby-Token", c.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var out struct {
+		Items []PlayHistoryItem `json:"Items"`
+	}
+	if err := readJSON(resp, &out); err != nil {
+		return nil, err
+	}
+
+	// Attach userID so downstream logic knows which user played it
+	for i := range out.Items {
+		out.Items[i].UserID = userID
+	}
+	return out.Items, nil
+}
+
+type usersResp struct {
+	Items []EmbyUser `json:"Items"`
+}
+
+// GetUsers fetches minimal user data (Id, Name) from Emby server.
+// Tries direct array first; if not, retries on the wrapped format.
+func (c *Client) GetUsers() ([]EmbyUser, error) {
+	u := fmt.Sprintf("%s/emby/Users", c.BaseURL)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("Fields", "") // minimal fields
+
+	makeReq := func() (*http.Response, error) {
+		req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+		req.Header.Set("X-Emby-Token", c.APIKey)
+		return c.http.Do(req)
+	}
+
+	// Try direct array first
+	resp, err := makeReq()
+	if err != nil {
+		return nil, err
+	}
+	var users []EmbyUser
+	if err := readJSON(resp, &users); err == nil {
+		return users, nil
+	}
+
+	// Fallback: wrapped payload
+	resp, err = makeReq()
+	if err != nil {
+		return nil, err
+	}
+	var out usersResp
+	if err := readJSON(resp, &out); err != nil {
+		return nil, err
+	}
+	return out.Items, nil
+}
+
+// GetUserData fetches user's watch status for items
+func (c *Client) GetUserData(userID string) ([]UserDataItem, error) {
+	u := fmt.Sprintf("%s/emby/Users/%s/Items", c.BaseURL, userID)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("Recursive", "true")
+	q.Set("Fields", "UserData,RunTimeTicks")
+	q.Set("IncludeItemTypes", "Movie,Episode")
+	q.Set("Filters", "IsPlayed")
+
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	req.Header.Set("X-Emby-Token", c.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var out struct {
+		Items []UserDataItem `json:"Items"`
+	}
+	if err := readJSON(resp, &out); err != nil {
+		return nil, err
+	}
+
+	return out.Items, nil
+}
+
+type UserDataItem struct {
+	Id           string `json:"Id"`
+	Name         string `json:"Name"`
+	Type         string `json:"Type"`
+	RunTimeTicks int64  `json:"RunTimeTicks"`
+	UserData     struct {
+		Played         bool   `json:"Played"`
+		PlaybackPos    int64  `json:"PlaybackPositionTicks"`
+		PlayCount      int    `json:"PlayCount"`
+		LastPlayedDate string `json:"LastPlayedDate"`
+	} `json:"UserData"`
+}
+
+//
+// ---------- Now Playing (sessions) ----------
+//
+
+// Flattened shape consumed by handlers (plus SessionID for controls)
 type EmbySession struct {
-	SessionID string `json:"SessionId"` // Emby session id (for controls)
+	SessionID string `json:"SessionId"` // Emby session id
 
 	UserID   string `json:"UserId"`
 	UserName string `json:"UserName"`
@@ -42,22 +412,21 @@ type EmbySession struct {
 	ItemID        string `json:"NowPlayingItemId"`
 	ItemName      string `json:"NowPlayingItemName,omitempty"`
 	ItemType      string `json:"NowPlayingItemType,omitempty"`
-	DurationTicks int64  `json:"RunTimeTicks"`  // total runtime (100ns ticks)
-	PosTicks      int64  `json:"PositionTicks"` // current position (100ns ticks)
+	DurationTicks int64  `json:"RunTimeTicks"`
+	PosTicks      int64  `json:"PositionTicks"`
 
 	// Client/device
 	App    string `json:"Client"`
 	Device string `json:"DeviceName"`
 
 	// Playback details
-	PlayMethod string `json:"PlayMethod,omitempty"` // "Direct" / "Transcode"
+	PlayMethod string `json:"PlayMethod,omitempty"` // "Direct"/"Transcode"
 	VideoCodec string `json:"VideoCodec,omitempty"`
 	AudioCodec string `json:"AudioCodec,omitempty"`
 	SubsCount  int    `json:"SubsCount,omitempty"`
 	Bitrate    int64  `json:"Bitrate,omitempty"` // bps
 }
 
-// Raw session as delivered by /emby/Sessions.
 type rawSession struct {
 	Id         string `json:"Id"` // session id
 	UserID     string `json:"UserId"`
@@ -75,13 +444,12 @@ type rawSession struct {
 			Type     string `json:"Type"`  // "Video","Audio","Subtitle"
 			Codec    string `json:"Codec"` // e.g. h264,aac
 			Language string `json:"Language"`
-
-			// Some servers expose stream bit rate on the stream objects (usually in kbps).
-			BitRate int64 `json:"BitRate,omitempty"` // note capital R variant appears frequently
+			// Bitrate can be on streams in some servers (kbps)
+			BitRate int64 `json:"BitRate,omitempty"`
 			Bitrate int64 `json:"Bitrate,omitempty"`
 		} `json:"MediaStreams"`
 
-		// Direct-play fallback bitrate; Emby often reports kbps here.
+		// Direct-play fallback (often in kbps)
 		MediaSources []struct {
 			Bitrate int64 `json:"Bitrate"`
 		} `json:"MediaSources"`
@@ -93,31 +461,12 @@ type rawSession struct {
 		IsPaused      bool   `json:"IsPaused"`
 	} `json:"PlayState"`
 
-	// Present during transcode; Bitrate is already in bps.
 	TranscodingInfo *struct {
-		Bitrate    int64  `json:"Bitrate"`
+		Bitrate    int64  `json:"Bitrate"` // bps
 		VideoCodec string `json:"VideoCodec"`
 		AudioCodec string `json:"AudioCodec"`
 	} `json:"TranscodingInfo"`
 }
-
-// -------- Helpers --------
-
-func readJSON(resp *http.Response, v any) error {
-	defer resp.Body.Close()
-	dec := json.NewDecoder(resp.Body)
-	return dec.Decode(v)
-}
-
-// Heuristic: Emby often reports kbps for sources/streams; treat smaller values as kbps.
-func normalizeToBps(v int64) int64 {
-	if v < 1_000_000 {
-		return v * 1000
-	}
-	return v
-}
-
-// -------- Sessions --------
 
 // GetActiveSessions returns only sessions that have a NowPlayingItem.
 func (c *Client) GetActiveSessions() ([]EmbySession, error) {
@@ -126,7 +475,7 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 	q.Set("api_key", c.APIKey)
 
 	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
-	// Some setups prefer header token; keep both for compatibility.
+	// Some setups prefer header token; keep header for compatibility.
 	req.Header.Set("X-Emby-Token", c.APIKey)
 
 	resp, err := c.http.Do(req)
@@ -141,7 +490,7 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 
 	out := make([]EmbySession, 0, len(raw))
 	for _, rs := range raw {
-		// Only show active playback: must have an item
+		// Only show active playback
 		if rs.NowPlayingItem == nil || rs.NowPlayingItem.Id == "" {
 			continue
 		}
@@ -205,7 +554,7 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 		}
 
 		// Bitrate selection:
-		// 1) TranscodingInfo (bps)
+		// 1) TranscodingInfo (already bps)
 		if rs.TranscodingInfo != nil && rs.TranscodingInfo.Bitrate > 0 {
 			es.Bitrate = rs.TranscodingInfo.Bitrate
 			if rs.TranscodingInfo.VideoCodec != "" {
@@ -216,13 +565,13 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 			}
 			es.PlayMethod = "Transcode"
 		} else {
-			// 2) MediaSource bitrate (often kbps) for direct play
+			// 2) MediaSource bitrate (often kbps)
 			if rs.NowPlayingItem != nil && len(rs.NowPlayingItem.MediaSources) > 0 {
 				if b := rs.NowPlayingItem.MediaSources[0].Bitrate; b > 0 {
 					es.Bitrate = normalizeToBps(b)
 				}
 			}
-			// 3) Sum of stream bitrates (kbps) if source bitrate missing
+			// 3) Sum stream bitrates (kbps) if source bitrate missing
 			if es.Bitrate == 0 && streamKbpsSum > 0 {
 				es.Bitrate = normalizeToBps(streamKbpsSum)
 			}
@@ -233,7 +582,9 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 	return out, nil
 }
 
-// -------- Controls --------
+//
+// ---------- Session controls (pause/play/stop/message) ----------
+//
 
 func (c *Client) Pause(sessionID string) error {
 	u := fmt.Sprintf("%s/emby/Sessions/%s/Playing/Pause?api_key=%s", c.BaseURL, sessionID, url.QueryEscape(c.APIKey))
@@ -263,12 +614,12 @@ func (c *Client) SendMessage(sessionID, header, text string, timeoutMs int) erro
 	if timeoutMs <= 0 {
 		timeoutMs = 5000
 	}
-	body := map[string]any{
+	payload := map[string]any{
 		"Header":    header,
 		"Text":      text,
 		"TimeoutMs": timeoutMs,
 	}
-	b, _ := json.Marshal(body)
+	b, _ := json.Marshal(payload)
 	u := fmt.Sprintf("%s/emby/Sessions/%s/Message?api_key=%s", c.BaseURL, sessionID, url.QueryEscape(c.APIKey))
 	req, _ := http.NewRequest("POST", u, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
