@@ -89,14 +89,21 @@ func insertPlayEvent(db *sql.DB, userID, itemID string, posMs int64) bool {
 }
 
 func upsertUserAndItem(db *sql.DB, userID, userName, itemID, itemName, itemType string) {
-	_, _ = db.Exec(`INSERT INTO emby_user (id, name) VALUES (?, ?)
-	                ON CONFLICT(id) DO UPDATE SET name=excluded.name`,
-		userID, userName)
-	_, _ = db.Exec(`INSERT INTO library_item (id, name, type) VALUES (?, ?, ?)
-	                ON CONFLICT(id) DO UPDATE SET
-	                    name=COALESCE(excluded.name, library_item.name),
-	                    type=COALESCE(excluded.type, library_item.type)`,
-		itemID, itemName, itemType)
+	// Only insert user if userID is valid (not empty)
+	if strings.TrimSpace(userID) != "" {
+		_, _ = db.Exec(`INSERT INTO emby_user (id, name) VALUES (?, ?)
+		                ON CONFLICT(id) DO UPDATE SET name=excluded.name`,
+			userID, userName)
+	}
+
+	// Only insert item if itemID is valid (not empty)
+	if strings.TrimSpace(itemID) != "" {
+		_, _ = db.Exec(`INSERT INTO library_item (id, name, type) VALUES (?, ?, ?)
+		                ON CONFLICT(id) DO UPDATE SET
+		                    name=COALESCE(excluded.name, library_item.name),
+		                    type=COALESCE(excluded.type, library_item.type)`,
+			itemID, itemName, itemType)
+	}
 }
 
 // RunOnce triggers a single sync cycle immediately.

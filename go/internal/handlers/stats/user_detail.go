@@ -62,18 +62,18 @@ func UserDetailHandler(db *sql.DB) fiber.Handler {
 		// user name
 		_ = db.QueryRow(`SELECT name FROM emby_user WHERE id = ?`, userID).Scan(&detail.UserName)
 
-		// totals in window
+		// totals in window - use session count instead of position sum
 		_ = db.QueryRow(`
-			SELECT COALESCE(SUM(pos_ms),0)/3600000.0 AS hours,
+			SELECT COUNT(*) * 0.75 AS hours,
 			       COUNT(*) AS plays
 			FROM play_event
 			WHERE user_id = ? AND ts >= ?
 		`, userID, fromMs).Scan(&detail.TotalHours, &detail.Plays)
 
-		// top items
+		// top items - use event count instead of position sum
 		if rows, err := db.Query(`
 			SELECT li.id, li.name, li.type,
-			       COALESCE(SUM(pe.pos_ms),0)/3600000.0 AS hours
+			       COUNT(*) * 0.5 AS hours
 			FROM play_event pe
 			JOIN library_item li ON li.id = pe.item_id
 			WHERE pe.user_id = ? AND pe.ts >= ?
