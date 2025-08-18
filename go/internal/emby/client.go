@@ -425,6 +425,24 @@ type EmbySession struct {
 	AudioCodec string `json:"AudioCodec,omitempty"`
 	SubsCount  int    `json:"SubsCount,omitempty"`
 	Bitrate    int64  `json:"Bitrate,omitempty"` // bps
+
+	Container   string `json:"Container,omitempty"` // MKV/MP4
+	Width       int    `json:"Width,omitempty"`
+	Height      int    `json:"Height,omitempty"`
+	DolbyVision bool   `json:"DolbyVision,omitempty"`
+	HDR10       bool   `json:"HDR10,omitempty"`
+
+	AudioLang string `json:"AudioLang,omitempty"`
+	AudioCh   int    `json:"AudioChannels,omitempty"`
+
+	SubLang  string `json:"SubLang,omitempty"`
+	SubCodec string `json:"SubCodec,omitempty"`
+
+	// Transcode details (when PlayMethod=Transcode)
+	TransVideoFrom string `json:"TransVideoFrom,omitempty"`
+	TransVideoTo   string `json:"TransVideoTo,omitempty"`
+	TransAudioFrom string `json:"TransAudioFrom,omitempty"`
+	TransAudioTo   string `json:"TransAudioTo,omitempty"`
 }
 
 type rawSession struct {
@@ -440,10 +458,20 @@ type rawSession struct {
 		Type         string `json:"Type"`
 		RunTimeTicks int64  `json:"RunTimeTicks"`
 
+		Container string `json:"Container"`
+
 		MediaStreams []struct {
 			Type     string `json:"Type"`  // "Video","Audio","Subtitle"
 			Codec    string `json:"Codec"` // e.g. h264,aac
 			Language string `json:"Language"`
+			Channels int    `json:"Channels"`
+			Width    int    `json:"Width"`
+			Height   int    `json:"Height"`
+			// DV/HDR flags appear in various forms; capture common ones
+			IsHdr     bool `json:"IsHdr"`
+			Hdr       bool `json:"Hdr"`
+			Hdr10     bool `json:"Hdr10"`
+			DvProfile *int `json:"DvProfile,omitempty"`
 			// Bitrate can be on streams in some servers (kbps)
 			BitRate int64 `json:"BitRate,omitempty"`
 			Bitrate int64 `json:"Bitrate,omitempty"`
@@ -509,14 +537,36 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 		es.ItemType = rs.NowPlayingItem.Type
 		es.DurationTicks = rs.NowPlayingItem.RunTimeTicks
 
+		// Capture additional media info defaults
+		es.Container = strings.ToUpper(rs.NowPlayingItem.Container)
+
 		// Streams -> codecs + subs; also sum stream bitrates (usually kbps)
 		subs := 0
 		streamKbpsSum := int64(0)
+
+		// To compute transcode "from" values
+		var sourceVideoCodec, sourceAudioCodec string
+
+		// Resolution / HDR / audio lang & channels / subs info
 		for _, ms := range rs.NowPlayingItem.MediaStreams {
 			switch strings.ToLower(ms.Type) {
 			case "video":
 				if es.VideoCodec == "" && ms.Codec != "" {
 					es.VideoCodec = strings.ToUpper(ms.Codec)
+				}
+				if sourceVideoCodec == "" && ms.Codec != "" {
+					sourceVideoCodec = strings.ToUpper(ms.Codec)
+				}
+				if es.Width == 0 && ms.Width > 0 {
+					es.Width = ms.Width
+					es.Height = ms.Height
+				}
+				// HDR flags
+				if ms.DvProfile != nil && *ms.DvProfile > 0 {
+					es.DolbyVision = true
+				}
+				if ms.Hdr10 || ms.Hdr || ms.IsHdr {
+					es.HDR10 = true
 				}
 				if ms.BitRate > 0 {
 					streamKbpsSum += ms.BitRate
@@ -527,6 +577,15 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 				if es.AudioCodec == "" && ms.Codec != "" {
 					es.AudioCodec = strings.ToUpper(ms.Codec)
 				}
+				if sourceAudioCodec == "" && ms.Codec != "" {
+					sourceAudioCodec = strings.ToUpper(ms.Codec)
+				}
+				if es.AudioLang == "" && ms.Language != "" {
+					es.AudioLang = strings.ToUpper(ms.Language)
+				}
+				if es.AudioCh == 0 && ms.Channels > 0 {
+					es.AudioCh = ms.Channels
+				}
 				if ms.BitRate > 0 {
 					streamKbpsSum += ms.BitRate
 				} else if ms.Bitrate > 0 {
@@ -534,6 +593,13 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 				}
 			case "subtitle":
 				subs++
+				// Keep first sub details for convenience
+				if es.SubLang == "" && ms.Language != "" {
+					es.SubLang = strings.ToUpper(ms.Language)
+				}
+				if es.SubCodec == "" && ms.Codec != "" {
+					es.SubCodec = strings.ToUpper(ms.Codec)
+				}
 			}
 		}
 		es.SubsCount = subs
@@ -557,11 +623,21 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 		// 1) TranscodingInfo (already bps)
 		if rs.TranscodingInfo != nil && rs.TranscodingInfo.Bitrate > 0 {
 			es.Bitrate = rs.TranscodingInfo.Bitrate
+			// When transcoding, current codecs are the transcode "to" values
 			if rs.TranscodingInfo.VideoCodec != "" {
 				es.VideoCodec = strings.ToUpper(rs.TranscodingInfo.VideoCodec)
+				es.TransVideoTo = es.VideoCodec
 			}
 			if rs.TranscodingInfo.AudioCodec != "" {
 				es.AudioCodec = strings.ToUpper(rs.TranscodingInfo.AudioCodec)
+				es.TransAudioTo = es.AudioCodec
+			}
+			// Fill in the "from" codecs if we detected them from source streams
+			if sourceVideoCodec != "" {
+				es.TransVideoFrom = strings.ToUpper(sourceVideoCodec)
+			}
+			if sourceAudioCodec != "" {
+				es.TransAudioFrom = strings.ToUpper(sourceAudioCodec)
 			}
 			es.PlayMethod = "Transcode"
 		} else {
