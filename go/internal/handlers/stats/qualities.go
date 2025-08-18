@@ -7,9 +7,26 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-type QualityStat struct {
-	Height int `json:"height"`
-	Count  int `json:"count"`
+type QualityBuckets struct {
+	Buckets map[string]MediaTypeCounts `json:"buckets"`
+}
+
+type MediaTypeCounts struct {
+	Movie   int `json:"Movie"`
+	Episode int `json:"Episode"`
+}
+
+func getQualityLabel(height int) string {
+	if height >= 2160 {
+		return "4K"
+	} else if height >= 1080 {
+		return "1080p"
+	} else if height >= 720 {
+		return "720p"
+	} else if height > 0 {
+		return "SD"
+	}
+	return "Unknown"
 }
 
 func Qualities(db *sql.DB) fiber.Handler {
@@ -22,12 +39,11 @@ func Qualities(db *sql.DB) fiber.Handler {
 		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
 
 		rows, err := db.Query(`
-			SELECT li.height, COUNT(DISTINCT li.id) as count
+			SELECT li.height, li.type, COUNT(DISTINCT li.id) as count
 			FROM play_event pe
 			JOIN library_item li ON li.id = pe.item_id
-			WHERE li.height IS NOT NULL
-			  AND pe.ts >= ?
-			GROUP BY li.height
+			WHERE pe.ts >= ?
+			GROUP BY li.height, li.type
 			ORDER BY li.height DESC;
 		`, fromMs)
 		if err != nil {
@@ -35,14 +51,42 @@ func Qualities(db *sql.DB) fiber.Handler {
 		}
 		defer rows.Close()
 
-		out := []QualityStat{}
+		buckets := make(map[string]MediaTypeCounts)
+
 		for rows.Next() {
-			var q QualityStat
-			if err := rows.Scan(&q.Height, &q.Count); err != nil {
+			var height sql.NullInt64
+			var mediaType sql.NullString
+			var count int
+			if err := rows.Scan(&height, &mediaType, &count); err != nil {
 				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 			}
-			out = append(out, q)
+
+			heightVal := 0
+			if height.Valid {
+				heightVal = int(height.Int64)
+			}
+
+			typeVal := "Unknown"
+			if mediaType.Valid {
+				typeVal = mediaType.String
+			}
+
+			quality := getQualityLabel(heightVal)
+
+			if _, exists := buckets[quality]; !exists {
+				buckets[quality] = MediaTypeCounts{}
+			}
+
+			bucket := buckets[quality]
+			if typeVal == "Movie" {
+				bucket.Movie += count
+			} else if typeVal == "Episode" {
+				bucket.Episode += count
+			}
+			buckets[quality] = bucket
 		}
-		return c.JSON(out)
+
+		result := QualityBuckets{Buckets: buckets}
+		return c.JSON(result)
 	}
 }
