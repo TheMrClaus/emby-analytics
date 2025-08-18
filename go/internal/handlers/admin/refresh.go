@@ -71,18 +71,26 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 			rm.set(Progress{Error: err.Error(), Done: true})
 			return
 		}
+
+		if len(items) == 0 {
+			break // No more items to process
+		}
+
 		// Insert into DB
 		for _, it := range items {
 			_, _ = db.Exec(`
-				INSERT INTO library_item (id, name, type, height, codec)
-				VALUES (?, ?, ?, ?, ?)
-				ON CONFLICT(id) DO UPDATE SET
-					name=excluded.name,
-					type=excluded.type,
-					height=excluded.height,
-					codec=excluded.codec
-			`, it.Id, it.Name, it.Type, it.Height, it.Codec)
+            INSERT INTO library_item (id, name, type, height, codec)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name=excluded.name,
+                type=excluded.type,
+                height=excluded.height,
+                codec=excluded.codec
+        `, it.Id, it.Name, it.Type, it.Height, it.Codec)
 		}
+
+		processed += len(items) // BUG FIX: Actually increment processed count
+
 		rm.set(Progress{
 			Total:     total,
 			Processed: processed,
@@ -91,7 +99,7 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 			Running:   true,
 		})
 		page++
-		time.Sleep(100 * time.Millisecond) // avoid hammering API
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	rm.set(Progress{Total: total, Processed: processed, Done: true, Message: "Refresh complete", Running: false})
