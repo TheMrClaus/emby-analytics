@@ -72,21 +72,17 @@ export default function Home(){
     fetch(`${apiBase}/stats/active-users-lifetime?limit=1`).then(r=>r.json()).then(setActiveUsers).catch(()=>{});
     fetch(`${apiBase}/stats/users/total`).then(r=>r.json()).then(d=>setTotalUsers(d.total_users||0)).catch(()=>{});
 
-    // one-time snapshot so the grid renders fast
-    fetch(`${apiBase}/now`)
-      .then(r => r.json())
-      .then(rows => { if (Array.isArray(rows)) setNow(rows); })
-      .catch(() => {});
+    // one-time snapshot so Now Playing renders fast
+    fetch(`${apiBase}/now`).then(r=>r.json()).then(rows=>{ if (Array.isArray(rows)) setNow(rows); }).catch(()=>{});
 
-    // SSE with automatic polling fallback (helps if reverse proxy blocks SSE)
-    let sseFailures = 0;
     let pollId: any = null;
+    let sseErrors = 0;
 
     const startPolling = () => {
       if (pollId) return;
       pollId = setInterval(async () => {
         try {
-          const rows = await fetch(`${apiBase}/now`).then(r=>r.json());
+          const rows = await fetch(`${apiBase}/now`, { cache: "no-store" }).then(r=>r.json());
           if (Array.isArray(rows)) setNow(rows);
         } catch {}
       }, 5000);
@@ -97,14 +93,13 @@ export default function Home(){
       try {
         const rows = JSON.parse(e.data || "[]");
         if (Array.isArray(rows)) setNow(rows);
-        sseFailures = 0; // recovered
+        sseErrors = 0;
       } catch {}
     };
     es.onerror = () => {
-      sseFailures++;
-      if (sseFailures >= 2) { // after two consecutive errors, fallback to polling
-        startPolling();
-      }
+      // if SSE fails twice in a row (proxy blocking, etc.), fall back to polling
+      sseErrors++;
+      if (sseErrors >= 2) startPolling();
     };
 
     return ()=> {
@@ -112,7 +107,6 @@ export default function Home(){
       if (pollId) clearInterval(pollId);
     };
   }, [apiBase]);
-
 
   // refresh status poll (continuous)
   useEffect(()=>{
@@ -301,45 +295,59 @@ export default function Home(){
                 <div className="font-semibold truncate" title={s.title}>{s.title || "—"}</div>
                 <div className="text-xs text-white/60">{s.user} • {s.app}{s.device ? ` • ${s.device}` : ""}</div>
 
-                <div className="mt-2 space-y-1 text-sm">
+                <div className="mt-2 space-y-1 text-sm leading-5">
                   <div>
                     <span className="font-medium">Stream:</span>{" "}
+                    {s.container ? s.container : "—"}
                     {typeof s.bitrate === "number" && s.bitrate > 0
-                      ? `${(s.bitrate/1000000).toFixed(1)} Mbps`
-                      : "—"}{" "}
-                    → {s.play_method || ((s.video === "Transcode" || s.audio === "Transcode") ? "Transcode" : "Direct")}
+                      ? ` (${(s.bitrate/1000000).toFixed(1)} Mbps)`
+                      : ""}
+                    {" "}→ {s.play_method === "Transcode"
+                      ? (s.trans_summary || "Transcode")
+                      : "Direct"}
                   </div>
+
                   <div>
                     <span className="font-medium">Video:</span>{" "}
-                    {s.video || "—"} → {s.play_method || ((s.video === "Transcode") ? "Transcode" : "Direct")}
+                    {s.video_detail || s.video || "—"}{" "}
+                    → {s.play_method === "Transcode" && s.trans_video
+                      ? `Transcode (${s.trans_video.from} → ${s.trans_video.to})`
+                      : (s.play_method || "Direct")}
                   </div>
+
                   <div>
                     <span className="font-medium">Audio:</span>{" "}
-                    {s.audio || "—"} → {s.play_method || ((s.audio === "Transcode") ? "Transcode" : "Direct")}
+                    {s.audio_detail || s.audio || "—"}{" "}
+                    → {s.play_method === "Transcode" && s.trans_audio
+                      ? `Transcode (${s.trans_audio.from} → ${s.trans_audio.to})`
+                      : (s.play_method || "Direct")}
                   </div>
+
                   <div>
                     <span className="font-medium">Sub:</span>{" "}
-                    {s.subs || "None"} → {/* Heuristic: any subs count shows as Direct for now */}
-                    {(s.subs && s.subs !== "None") ? "Direct" : "Direct"}
+                    {s.sub_lang || s.sub_codec
+                      ? `${s.sub_lang || "Unknown"} - ${s.sub_codec || "Unknown"}`
+                      : (s.subs || "None")}
+                    {" "}→ Direct
                   </div>
                 </div>
 
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     onClick={() => control(s.session_id, "pause")}
-                    className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
+                    className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs shrink-0"
                   >
                     Pause
                   </button>
                   <button
                     onClick={() => control(s.session_id, "unpause")}
-                    className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
+                    className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs shrink-0"
                   >
                     Unpause
                   </button>
                   <button
                     onClick={() => control(s.session_id, "stop")}
-                    className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
+                    className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs shrink-0"
                   >
                     Stop
                   </button>
@@ -348,7 +356,7 @@ export default function Home(){
                       const text = prompt("Message to client:");
                       if (text) control(s.session_id, "message", text);
                     }}
-                    className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs"
+                    className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs shrink-0"
                   >
                     Message
                   </button>
