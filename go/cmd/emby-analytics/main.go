@@ -107,7 +107,7 @@ func main() {
 	app.Post("/admin/users/sync", admin.UsersSyncHandler(sqlDB, em, cfg))
 
 	app.Post("/admin/reset-lifetime", admin.ResetLifetimeWatch(sqlDB))
-
+	app.Get("/admin/debug/user-data", admin.DebugUserData(em))
 	// ==========================================
 	// Start Server
 	// ==========================================
