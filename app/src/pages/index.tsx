@@ -267,7 +267,7 @@ export default function Home(){
                   <span className="badge">Video: {s.video}</span>
                   <span className="badge">Audio: {s.audio}</span>
                   <span className="badge">Subs: {s.subs}</span>
-                  {typeof s.bitrate === "number" && (
+                  {typeof s.bitrate === "number" && s.bitrate > 0 && (
                     <span className="badge">{ (s.bitrate/1000000).toFixed(2) } Mbps</span>
                   )}
                 </div>
