@@ -105,6 +105,8 @@ func main() {
 	// Users sync trigger
 	app.Post("/admin/users/sync", admin.UsersSyncHandler(sqlDB, em, cfg))
 
+	app.Post("/admin/reset-lifetime", admin.ResetLifetimeWatch(sqlDB))
+
 	// ==========================================
 	// Start Server
 	// ==========================================

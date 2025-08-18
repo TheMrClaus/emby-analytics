@@ -76,17 +76,38 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 
 func insertPlayEvent(db *sql.DB, userID, itemID string, posMs int64) bool {
 	ts := time.Now().UnixMilli()
+
+	// Insert the play event
 	res, err := db.Exec(`INSERT INTO play_event (ts, user_id, item_id, pos_ms)
 	                VALUES (?, ?, ?, ?)`,
 		ts, userID, itemID, posMs)
 	if err != nil {
 		return false
 	}
-	_, _ = db.Exec(`INSERT INTO lifetime_watch (user_id, total_ms)
-	                VALUES (?, ?)
-	                ON CONFLICT(user_id) DO UPDATE SET
-	                    total_ms = total_ms + excluded.total_ms`,
-		userID, posMs)
+
+	// Only update lifetime_watch if this is actual progress (position > 30 seconds)
+	// and limit updates to prevent inflated totals from frequent sync runs
+	if posMs > 30000 { // 30 seconds minimum
+		// Check if we've updated this user's total recently (within last 5 minutes)
+		var lastUpdate sql.NullInt64
+		db.QueryRow(`SELECT MAX(ts) FROM play_event WHERE user_id = ? AND ts > ?`,
+			userID, ts-300000).Scan(&lastUpdate) // 5 minutes ago
+
+		if !lastUpdate.Valid || ts-lastUpdate.Int64 > 300000 { // 5+ minutes since last update
+			// Add a reasonable session duration (max 1 hour per update)
+			sessionDuration := int64(3600000) // 1 hour in ms
+			if posMs < sessionDuration {
+				sessionDuration = posMs / 10 // Use 10% of position as reasonable session time
+			}
+
+			_, _ = db.Exec(`INSERT INTO lifetime_watch (user_id, total_ms)
+			                VALUES (?, ?)
+			                ON CONFLICT(user_id) DO UPDATE SET
+			                    total_ms = total_ms + excluded.total_ms`,
+				userID, sessionDuration)
+		}
+	}
+
 	rowsAffected, _ := res.RowsAffected()
 	return rowsAffected > 0
 }
