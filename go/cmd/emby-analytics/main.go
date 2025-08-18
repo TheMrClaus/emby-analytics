@@ -110,6 +110,8 @@ func main() {
 	app.Get("/admin/debug/user-data", admin.DebugUserData(em))
 	app.Get("/admin/users", admin.ListUsers(sqlDB, em))
 
+	app.Post("/admin/users/force-sync", admin.ForceUserSync(sqlDB, em))
+
 	// ==========================================
 	// Start Server
 	// ==========================================
