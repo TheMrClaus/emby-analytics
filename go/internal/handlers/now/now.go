@@ -134,31 +134,53 @@ func Stream(db *sql.DB, em *emby.Client, pollSec int) fiber.Handler {
 						}
 						continue
 					}
-
 					nowMs := time.Now().UnixMilli()
 					out := make([]NowEntry, 0, len(sessions))
 					for _, s := range sessions {
-						posMs := s.PosMs / 10_000
+						var progressPct float64
+						if s.DurationTicks > 0 {
+							progressPct = (float64(s.PosTicks) / float64(s.DurationTicks)) * 100.0
+							if progressPct < 0 {
+								progressPct = 0
+							}
+							if progressPct > 100 {
+								progressPct = 100
+							}
+						}
+						subsText := "None"
+						if s.SubsCount > 0 {
+							subsText = fmt.Sprintf("%d", s.SubsCount)
+						}
+						poster := ""
+						if s.ItemID != "" {
+							poster = "/img/primary/" + s.ItemID
+						}
+
 						out = append(out, NowEntry{
-							Timestamp: nowMs,
-							UserID:    s.UserID,
-							UserName:  s.UserName,
-							ItemID:    s.ItemID,
-							ItemName:  s.ItemName,
-							ItemType:  s.ItemType,
-							PosHours:  float64(posMs) / 3_600_000.0,
+							Timestamp:   nowMs,
+							Title:       s.ItemName,
+							User:        s.UserName,
+							App:         s.App,
+							Device:      s.Device,
+							PlayMethod:  s.PlayMethod,
+							Video:       s.VideoCodec,
+							Audio:       s.AudioCodec,
+							Subs:        subsText,
+							Bitrate:     s.Bitrate,
+							ProgressPct: progressPct,
+							Poster:      poster,
+							ItemID:      s.ItemID,
+							ItemType:    s.ItemType,
 						})
 					}
 					b, _ := json.Marshal(out)
-					// Send as default message event so EventSource.onmessage receives it
+					// default event (no 'event:' line) -> triggers EventSource.onmessage in the UI
 					if _, err := w.WriteString("data: " + string(b) + "\n\n"); err != nil {
 						return
 					}
-
 					if err := w.Flush(); err != nil {
 						return
 					}
-
 				case <-keep.C:
 					_, _ = w.WriteString("event: keepalive\ndata: {}\n\n")
 					if err := w.Flush(); err != nil {
