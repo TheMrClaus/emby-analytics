@@ -108,6 +108,10 @@ func Stream(db *sql.DB, em *emby.Client, pollSec int) fiber.Handler {
 		c.Set("Connection", "keep-alive")
 		// NB: No compression for SSE
 		c.Response().Header.Del(fiber.HeaderContentEncoding)
+		c.Set("Content-Type", "text/event-stream")
+		c.Set("Cache-Control", "no-cache")
+		c.Set("Connection", "keep-alive")
+		c.Set("Access-Control-Allow-Origin", "*")
 
 		poll := time.NewTicker(time.Duration(pollSec) * time.Second)
 		defer poll.Stop()
