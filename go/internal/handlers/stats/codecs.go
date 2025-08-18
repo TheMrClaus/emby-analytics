@@ -7,9 +7,8 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-type CodecStat struct {
-	Codec string `json:"codec"`
-	Count int    `json:"count"`
+type CodecBuckets struct {
+	Codecs map[string]MediaTypeCounts `json:"codecs"`
 }
 
 func Codecs(db *sql.DB) fiber.Handler {
@@ -23,12 +22,12 @@ func Codecs(db *sql.DB) fiber.Handler {
 		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
 
 		q := `
-			SELECT li.codec, COUNT(DISTINCT li.id) as count
+			SELECT li.codec, li.type, COUNT(DISTINCT li.id) as count
 			FROM play_event pe
 			JOIN library_item li ON li.id = pe.item_id
 			WHERE li.codec IS NOT NULL
 			  AND pe.ts >= ?
-			GROUP BY li.codec
+			GROUP BY li.codec, li.type
 			ORDER BY count DESC
 		`
 		var rows *sql.Rows
@@ -44,14 +43,39 @@ func Codecs(db *sql.DB) fiber.Handler {
 		}
 		defer rows.Close()
 
-		out := []CodecStat{}
+		codecs := make(map[string]MediaTypeCounts)
 		for rows.Next() {
-			var cs CodecStat
-			if err := rows.Scan(&cs.Codec, &cs.Count); err != nil {
+			var codec sql.NullString
+			var mediaType sql.NullString
+			var count int
+			if err := rows.Scan(&codec, &mediaType, &count); err != nil {
 				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 			}
-			out = append(out, cs)
+
+			codecVal := "Unknown"
+			if codec.Valid {
+				codecVal = codec.String
+			}
+
+			typeVal := "Unknown"
+			if mediaType.Valid {
+				typeVal = mediaType.String
+			}
+
+			if _, exists := codecs[codecVal]; !exists {
+				codecs[codecVal] = MediaTypeCounts{}
+			}
+
+			bucket := codecs[codecVal]
+			if typeVal == "Movie" {
+				bucket.Movie += count
+			} else if typeVal == "Episode" {
+				bucket.Episode += count
+			}
+			codecs[codecVal] = bucket
 		}
-		return c.JSON(out)
+
+		result := CodecBuckets{Codecs: codecs}
+		return c.JSON(result)
 	}
 }
