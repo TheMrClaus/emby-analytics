@@ -41,14 +41,13 @@ func Snapshot(db *sql.DB, em *emby.Client) fiber.Handler {
 			return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
 		}
 		nowMs := time.Now().UnixMilli()
+
 		out := make([]NowEntry, 0, len(sessions))
 		for _, s := range sessions {
-			// ticks -> ms
-			posMs := s.PosTicks / 10_000
-			durTicks := s.DurationTicks
-			progressPct := 0.0
-			if durTicks > 0 {
-				progressPct = (float64(s.PosTicks) / float64(durTicks)) * 100.0
+			// Compute progress from ticks
+			var progressPct float64
+			if s.DurationTicks > 0 {
+				progressPct = (float64(s.PosTicks) / float64(s.DurationTicks)) * 100.0
 				if progressPct < 0 {
 					progressPct = 0
 				}
@@ -57,11 +56,13 @@ func Snapshot(db *sql.DB, em *emby.Client) fiber.Handler {
 				}
 			}
 
+			// Subtitles label
 			subsText := "None"
 			if s.SubsCount > 0 {
 				subsText = fmt.Sprintf("%d", s.SubsCount)
 			}
 
+			// Poster URL proxied by our image handler
 			poster := ""
 			if s.ItemID != "" {
 				poster = "/img/primary/" + s.ItemID
@@ -84,8 +85,8 @@ func Snapshot(db *sql.DB, em *emby.Client) fiber.Handler {
 				ItemType:    s.ItemType,
 			})
 		}
-
 		return c.JSON(out)
+
 	}
 }
 
