@@ -52,9 +52,9 @@ func (rm *RefreshManager) Start(db *sql.DB, em *emby.Client, chunkSize int) {
 
 func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize int) {
 	var total int
-	var processed int
+	var actualItemsProcessed int
 
-	// Step 1: Get total count
+	// Step 1: Get total count (this is the count of actual Emby items, not codec entries)
 	count, err := em.TotalItems()
 	if err != nil {
 		rm.set(Progress{Error: err.Error(), Done: true})
@@ -65,36 +65,66 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 
 	// Step 2: Fetch in chunks
 	page := 0
-	for processed < total {
-		items, err := em.GetItemsChunk(chunkSize, page)
+	for actualItemsProcessed < total {
+		// GetItemsChunk now returns multiple entries per item (one per codec)
+		codecEntries, err := em.GetItemsChunk(chunkSize, page)
 		if err != nil {
 			rm.set(Progress{Error: err.Error(), Done: true})
 			return
 		}
 
-		if len(items) == 0 {
+		if len(codecEntries) == 0 {
 			break // No more items to process
 		}
 
-		// Insert into DB
-		for _, it := range items {
-			_, _ = db.Exec(`
-            INSERT INTO library_item (id, name, type, height, codec)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET
-                name=excluded.name,
-                type=excluded.type,
-                height=excluded.height,
-                codec=excluded.codec
-        `, it.Id, it.Name, it.Type, it.Height, it.Codec)
+		// Insert codec entries into DB
+		dbEntriesInserted := 0
+		for _, entry := range codecEntries {
+			result, err := db.Exec(`
+				INSERT INTO library_item (id, name, type, height, codec)
+				VALUES (?, ?, ?, ?, ?)
+				ON CONFLICT(id) DO UPDATE SET
+					name=excluded.name,
+					type=excluded.type,
+					height=excluded.height,
+					codec=excluded.codec
+			`, entry.Id, entry.Name, entry.Type, entry.Height, entry.Codec)
+
+			if err == nil {
+				if rowsAffected, _ := result.RowsAffected(); rowsAffected > 0 {
+					dbEntriesInserted++
+				}
+			}
 		}
 
-		processed += len(items) // BUG FIX: Actually increment processed count
+		// Count unique actual items processed (not codec entries)
+		uniqueItems := make(map[string]bool)
+		for _, entry := range codecEntries {
+			// Extract original item ID (remove codec suffix)
+			originalID := entry.Id
+			if len(originalID) > 4 {
+				// Remove "_v_codec" or "_a_codec" suffix to get original ID
+				if pos := len(originalID) - 1; pos > 0 {
+					for i := pos; i >= 0; i-- {
+						if originalID[i] == '_' {
+							// Check if this looks like our codec suffix pattern
+							if i > 0 && (originalID[i-1] == 'v' || originalID[i-1] == 'a') && i >= 2 && originalID[i-2] == '_' {
+								originalID = originalID[:i-2]
+								break
+							}
+						}
+					}
+				}
+			}
+			uniqueItems[originalID] = true
+		}
+
+		actualItemsProcessed += len(uniqueItems)
 
 		rm.set(Progress{
 			Total:     total,
-			Processed: processed,
-			Message:   fmt.Sprintf("Processed %d / %d", processed, total),
+			Processed: actualItemsProcessed,
+			Message:   fmt.Sprintf("Processed %d / %d items (%d codec entries)", actualItemsProcessed, total, dbEntriesInserted),
 			Page:      page,
 			Running:   true,
 		})
@@ -102,7 +132,13 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	rm.set(Progress{Total: total, Processed: processed, Done: true, Message: "Refresh complete", Running: false})
+	rm.set(Progress{
+		Total:     total,
+		Processed: actualItemsProcessed,
+		Done:      true,
+		Message:   "Refresh complete",
+		Running:   false,
+	})
 }
 
 // StartHandler kicks off a background refresh using the provided chunk size.
@@ -141,7 +177,7 @@ func StreamHandler(rm *RefreshManager) fiber.Handler {
 				// client disconnected
 				return nil
 			}
-			// best-effort flush (works under Fiber v3’s HTTP server)
+			// best-effort flush (works under Fiber v3's HTTP server)
 			if f, ok := c.Response().BodyWriter().(interface{ Flush() error }); ok {
 				_ = f.Flush()
 			}
