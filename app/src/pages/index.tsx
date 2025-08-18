@@ -5,8 +5,13 @@ import {
   BarChart, Bar
 } from "recharts";
 
-// Use relative API when UI is served by Go server
-const API = ""; // process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080"
+/**
+ * API base:
+ * - When UI is served by the Go server or same origin behind a reverse proxy (Traefik, etc.),
+ *   leave NEXT_PUBLIC_API_BASE unset -> this becomes "" and all calls are relative.
+ * - When developing locally, set NEXT_PUBLIC_API_BASE (e.g., http://localhost:8080).
+ */
+const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/+$/, "");
 
 type UsageRow = { day: string; user: string; hours: number };
 type TopUser = { user: string; hours: number };
@@ -55,41 +60,60 @@ export default function Home(){
     return Math.trunc(n).toLocaleString();
   };
 
-  // initial fetches
+  // initial fetches + now-playing snapshot + SSE
   useEffect(()=>{
-    fetch(`${API}/stats/usage?days=14`).then(r=>r.json()).then(setUsage);
-    fetch(`${API}/stats/overview`).then(r=>r.json()).then(setOverview);
-    fetch(`${API}/stats/top/users?window=14d&limit=5`).then(r=>r.json()).then(setTopUsers);
-    fetch(`${API}/stats/top/items?window=14d&limit=5`).then(r=>r.json()).then(setTopItems);
-    fetch(`${API}/stats/qualities`).then(r=>r.json()).then(setQualities);
-    fetch(`${API}/stats/codecs?limit=8`).then(r=>r.json()).then(setCodecs);
-    fetch(`${API}/stats/active-users-lifetime?limit=1`).then(r=>r.json()).then(setActiveUsers);
-    fetch(`${API}/stats/users/total`).then(r=>r.json()).then(d=>setTotalUsers(d.total_users||0));
+    // stats & overview
+    fetch(`${apiBase}/stats/usage?days=14`).then(r=>r.json()).then(setUsage).catch(()=>{});
+    fetch(`${apiBase}/stats/overview`).then(r=>r.json()).then(setOverview).catch(()=>{});
+    fetch(`${apiBase}/stats/top/users?window=14d&limit=5`).then(r=>r.json()).then(setTopUsers).catch(()=>{});
+    fetch(`${apiBase}/stats/top/items?window=14d&limit=5`).then(r=>r.json()).then(setTopItems).catch(()=>{});
+    fetch(`${apiBase}/stats/qualities`).then(r=>r.json()).then(setQualities).catch(()=>{});
+    fetch(`${apiBase}/stats/codecs?limit=8`).then(r=>r.json()).then(setCodecs).catch(()=>{});
+    fetch(`${apiBase}/stats/active-users-lifetime?limit=1`).then(r=>r.json()).then(setActiveUsers).catch(()=>{});
+    fetch(`${apiBase}/stats/users/total`).then(r=>r.json()).then(d=>setTotalUsers(d.total_users||0)).catch(()=>{});
 
-    const es = new EventSource(`${API}/now/stream`);
-    es.onmessage = (e)=> setNow(JSON.parse(e.data||"[]"));
+    // one-time snapshot for Now Playing so the grid renders immediately
+    fetch(`${apiBase}/now`)
+      .then(r => r.json())
+      .then(rows => { if (Array.isArray(rows)) setNow(rows); })
+      .catch(() => {});
+
+    // SSE for live Now Playing updates (server emits default 'message' events)
+    const es = new EventSource(`${apiBase}/now/stream`, { withCredentials: true });
+    es.onmessage = (e) => {
+      try {
+        const rows = JSON.parse(e.data || "[]");
+        if (Array.isArray(rows)) setNow(rows);
+      } catch (err) {
+        console.error("now stream parse error:", err);
+      }
+    };
+    es.onerror = (err) => {
+      console.error("now stream error:", err);
+      // leave the connection; browser will retry automatically
+    };
     return ()=> es.close();
-  },[]);
+  }, [apiBase]);
 
   // refresh status poll (continuous)
   useEffect(()=>{
     let cancelled = false;
     const poll = async () => {
       try {
-        const s = await fetch(`${API}/admin/refresh/status`).then(r=>r.json());
+        const s = await fetch(`${apiBase}/admin/refresh/status`).then(r=>r.json());
         if (!cancelled && s) setRefresh(s);
       } catch (_) {}
     };
     const id = setInterval(poll, 1500);
     poll(); // immediate read
     return ()=> { cancelled = true; clearInterval(id); };
-  },[]);
+  }, [apiBase]);
 
   // resolve Top Item IDs -> names
   useEffect(()=>{
     const ids = Array.from(new Set(topItems.map(t => t.item_id).filter(Boolean))) as string[];
     if (!ids.length) { setItemNameMap({}); return; }
-    fetch(`${API}/items/by-ids?ids=${encodeURIComponent(ids.join(","))}`)
+    fetch(`${apiBase}/items/by-ids?ids=${encodeURIComponent(ids.join(","))}`)
       .then(r=>r.json())
       .then((rows: ItemRow[])=>{
         const m: Record<string,string> = {};
@@ -97,7 +121,7 @@ export default function Home(){
         setItemNameMap(m);
       })
       .catch(()=>{ /* ignore */});
-  }, [topItems]);
+  }, [topItems, apiBase]);
 
   // reshape usage -> one line per user
   const days = useMemo(()=>Array.from(new Set(usage.map(u=>u.day))).sort(), [usage]);
@@ -118,7 +142,7 @@ export default function Home(){
 
   const startRefresh = async () => {
     try {
-      const res = await fetch(`${API}/admin/refresh`, { method:"POST" }).then(r=>r.json());
+      const res = await fetch(`${apiBase}/admin/refresh`, { method:"POST" }).then(r=>r.json());
       if (res?.started || res?.running) setRefresh(prev => ({...prev, running: true}));
       setToast(res?.started ? "Library refresh started" : "Library refresh already running");
     } catch {
@@ -132,7 +156,7 @@ export default function Home(){
   const refetchTotalUsers = async (tries=6, delayMs=1000) => {
     for (let i=0; i<tries; i++) {
       try {
-        const d = await fetch(`${API}/stats/users/total`).then(r=>r.json());
+        const d = await fetch(`${apiBase}/stats/users/total`).then(r=>r.json());
         setTotalUsers(d.total_users||0);
       } catch (_){}
       await new Promise(r=>setTimeout(r, delayMs));
@@ -143,7 +167,7 @@ export default function Home(){
     if (syncingUsers) return;
     setSyncingUsers(true);
     try {
-      const res = await fetch(`${API}/admin/users/sync`, { method:"POST" }).then(r=>r.json()).catch(()=>null);
+      const res = await fetch(`${apiBase}/admin/users/sync`, { method:"POST" }).then(r=>r.json()).catch(()=>null);
       setToast(res?.started ? "User sync started" : "User sync already running");
       refetchTotalUsers();
     } catch {
@@ -334,7 +358,7 @@ export default function Home(){
           {/* Total Users */}
           <div className="card p-4 flex flex-col items-center justify-center">
             <div className="font-semibold">Total Users</div>
-            <div className="text-3xl font-extrabold mt-1">{totalUsers}</div>
+            <div className="text-3xl font-extrabold mt-1">{fmtInt(totalUsers)}</div>
           </div>
         </div>
 
