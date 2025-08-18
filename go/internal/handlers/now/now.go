@@ -107,7 +107,7 @@ func Stream(c fiber.Ctx) error {
 	c.Set("Connection", "keep-alive")
 	c.Set("Access-Control-Allow-Origin", "*")
 
-	w := bufio.NewWriter(c.Context().Response.BodyWriter())
+	w := bufio.NewWriter(c.RequestCtx().Response.BodyWriter())
 	flush := func() { _ = w.Flush() }
 
 	em, err := getEmbyClient()
@@ -175,7 +175,7 @@ func Stream(c fiber.Ctx) error {
 	_ = send()
 	for {
 		select {
-		case <-c.Context().Done():
+		case <-c.Done():
 			return nil
 		case <-ticker.C:
 			_ = send()
@@ -192,7 +192,7 @@ func PauseSession(c fiber.Ctx) error {
 	var body struct {
 		Paused *bool `json:"paused"`
 	}
-	_ = c.BodyParser(&body)
+	_ = c.Bind().Body(&body)
 
 	em, err := getEmbyClient()
 	if err != nil {
@@ -232,7 +232,7 @@ func MessageSession(c fiber.Ctx) error {
 		Text      string `json:"text"`
 		TimeoutMs int    `json:"timeout_ms"`
 	}
-	if err := c.BodyParser(&body); err != nil {
+	if err := c.Bind().Body(&body); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 	if strings.TrimSpace(body.Text) == "" {
