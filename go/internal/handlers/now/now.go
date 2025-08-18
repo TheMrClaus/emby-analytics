@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -28,32 +29,26 @@ type NowEntry struct {
 	Bitrate     int64   `json:"bitrate"`
 	ProgressPct float64 `json:"progress_pct"`
 	Poster      string  `json:"poster"`
-	SessionID   string  `json:"session_id"` // used by control buttons
+	SessionID   string  `json:"session_id"`
 
-	// references
 	ItemID   string `json:"item_id"`
 	ItemType string `json:"item_type,omitempty"`
 }
 
-// Assume you already have this helper in your project.
-func getEmbyClient(c *fiber.Ctx) (*emby.Client, error) {
-	// Typically pulled from app config / ctx locals. This is a placeholder.
-	// Replace with your existing implementation if different.
-	type cfg struct {
-		BaseURL string
-		APIKey  string
+// Generic env-based Emby client (keeps things portable behind any proxy).
+// Set EMBY_BASE_URL and EMBY_API_KEY in your container/env.
+func getEmbyClient() (*emby.Client, error) {
+	base := strings.TrimRight(os.Getenv("EMBY_BASE_URL"), "/")
+	key := os.Getenv("EMBY_API_KEY")
+	if base == "" || key == "" {
+		return nil, fmt.Errorf("EMBY_BASE_URL or EMBY_API_KEY not set")
 	}
-	confAny := c.Locals("emby_config")
-	if confAny == nil {
-		return nil, fmt.Errorf("emby config not found in context")
-	}
-	conf := confAny.(cfg)
-	return emby.New(conf.BaseURL, conf.APIKey), nil
+	return emby.New(base, key), nil
 }
 
 // Snapshot returns the current list once.
-func Snapshot(c *fiber.Ctx) error {
-	em, err := getEmbyClient(c)
+func Snapshot(c fiber.Ctx) error {
+	em, err := getEmbyClient()
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -75,17 +70,14 @@ func Snapshot(c *fiber.Ctx) error {
 				progressPct = 100
 			}
 		}
-
 		subsText := "None"
 		if s.SubsCount > 0 {
 			subsText = fmt.Sprintf("%d", s.SubsCount)
 		}
-
 		poster := ""
 		if s.ItemID != "" {
 			poster = "/img/primary/" + s.ItemID
 		}
-
 		out = append(out, NowEntry{
 			Timestamp:   nowMs,
 			Title:       s.ItemName,
@@ -108,8 +100,8 @@ func Snapshot(c *fiber.Ctx) error {
 }
 
 // Stream pushes snapshots periodically via SSE (default message events).
-func Stream(c *fiber.Ctx) error {
-	// SSE/CORS headers (allow cross-origin dashboards).
+func Stream(c fiber.Ctx) error {
+	// SSE/CORS headers
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")
 	c.Set("Connection", "keep-alive")
@@ -118,7 +110,7 @@ func Stream(c *fiber.Ctx) error {
 	w := bufio.NewWriter(c.Context().Response.BodyWriter())
 	flush := func() { _ = w.Flush() }
 
-	em, err := getEmbyClient(c)
+	em, err := getEmbyClient()
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -126,7 +118,6 @@ func Stream(c *fiber.Ctx) error {
 	ticker := time.NewTicker(1500 * time.Millisecond)
 	defer ticker.Stop()
 
-	// initial tick immediately
 	send := func() bool {
 		sessions, err := em.GetActiveSessions()
 		if err != nil {
@@ -180,18 +171,14 @@ func Stream(c *fiber.Ctx) error {
 		return true
 	}
 
-	// send immediately, then on each tick
-	if !send() {
-		// keep connection open anyway; client will retry on next tick
-	}
+	// initial push, then ticks
+	_ = send()
 	for {
 		select {
 		case <-c.Context().Done():
 			return nil
 		case <-ticker.C:
-			if !send() {
-				// transient error; continue and try next tick
-			}
+			_ = send()
 		}
 	}
 }
@@ -200,14 +187,14 @@ func Stream(c *fiber.Ctx) error {
 
 // POST /now/sessions/:id/pause  body: {"paused":true} pauses, {"paused":false} unpauses.
 // If body omitted, defaults to pause.
-func PauseSession(c *fiber.Ctx) error {
+func PauseSession(c fiber.Ctx) error {
 	id := c.Params("id")
 	var body struct {
 		Paused *bool `json:"paused"`
 	}
 	_ = c.BodyParser(&body)
 
-	em, err := getEmbyClient(c)
+	em, err := getEmbyClient()
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -225,9 +212,9 @@ func PauseSession(c *fiber.Ctx) error {
 }
 
 // POST /now/sessions/:id/stop
-func StopSession(c *fiber.Ctx) error {
+func StopSession(c fiber.Ctx) error {
 	id := c.Params("id")
-	em, err := getEmbyClient(c)
+	em, err := getEmbyClient()
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -238,7 +225,7 @@ func StopSession(c *fiber.Ctx) error {
 }
 
 // POST /now/sessions/:id/message  body: {header?, text, timeout_ms?}
-func MessageSession(c *fiber.Ctx) error {
+func MessageSession(c fiber.Ctx) error {
 	id := c.Params("id")
 	var body struct {
 		Header    string `json:"header"`
@@ -252,7 +239,7 @@ func MessageSession(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "text required"})
 	}
 
-	em, err := getEmbyClient(c)
+	em, err := getEmbyClient()
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -266,15 +253,13 @@ func MessageSession(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-// (Optional) If you register routes here, do something like:
-//
-//  app.Get("/now", Snapshot)
-//  app.Get("/now/stream", Stream)
-//  app.Post("/now/sessions/:id/pause", PauseSession)
-//  app.Post("/now/sessions/:id/stop", StopSession)
-//  app.Post("/now/sessions/:id/message", MessageSession)
+// Router wiring elsewhere should use fiber v3 style:
+//   app.Get("/now", Snapshot)
+//   app.Get("/now/stream", Stream)
+//   app.Post("/now/sessions/:id/pause", PauseSession)
+//   app.Post("/now/sessions/:id/stop", StopSession)
+//   app.Post("/now/sessions/:id/message", MessageSession)
 
-// Dummy references so the compiler keeps these imports if your project
-// doesn't use sql/log directly here; remove if unneeded.
+// Dummy references so the compiler keeps these imports if unneeded here.
 var _ = sql.ErrNoRows
 var _ = log.Printf
