@@ -108,6 +108,8 @@ func main() {
 
 	app.Post("/admin/reset-lifetime", admin.ResetLifetimeWatch(sqlDB))
 	app.Get("/admin/debug/user-data", admin.DebugUserData(em))
+	app.Get("/admin/users", admin.ListUsers(sqlDB, em))
+
 	// ==========================================
 	// Start Server
 	// ==========================================
