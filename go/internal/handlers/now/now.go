@@ -15,20 +15,20 @@ import (
 
 type NowEntry struct {
 	Timestamp int64 `json:"timestamp"`
-	// UI fields:
-	Title       string  `json:"title"` // from ItemName
-	User        string  `json:"user"`  // from UserName
+	// Fields the UI expects (app/src/pages/index.tsx):
+	Title       string  `json:"title"`
+	User        string  `json:"user"`
 	App         string  `json:"app"`
 	Device      string  `json:"device"`
-	PlayMethod  string  `json:"play_method"`  // "Direct" / "Transcode"
-	Video       string  `json:"video"`        // video codec (e.g., H264/HEVC)
-	Audio       string  `json:"audio"`        // audio codec (e.g., AAC/DTS)
-	Subs        string  `json:"subs"`         // "None" or "<n> tracks"
-	Bitrate     int64   `json:"bitrate"`      // bps
-	ProgressPct float64 `json:"progress_pct"` // 0..100
-	Poster      string  `json:"poster"`       // /img/primary/:id
+	PlayMethod  string  `json:"play_method"`
+	Video       string  `json:"video"`
+	Audio       string  `json:"audio"`
+	Subs        string  `json:"subs"`
+	Bitrate     int64   `json:"bitrate"`
+	ProgressPct float64 `json:"progress_pct"`
+	Poster      string  `json:"poster"`
 
-	// reference (not shown in UI, but handy)
+	// Useful references
 	ItemID   string `json:"item_id"`
 	ItemType string `json:"item_type,omitempty"`
 }
