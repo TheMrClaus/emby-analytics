@@ -30,13 +30,22 @@ func TopItems(db *sql.DB) fiber.Handler {
 
 		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
 
-		// FIXED: Use event count instead of position sum to avoid inflated hours
+		// SMART APPROACH: Group by user+item+day to get unique viewing sessions
+		// Then estimate time per session based on content type
 		rows, err := db.Query(`
-			SELECT li.id, li.name, li.type, 
-			       COUNT(*) * 0.75 AS hours
+			SELECT 
+				li.id, 
+				COALESCE(li.name, 'Unknown') as name, 
+				COALESCE(li.type, 'Unknown') as type,
+				COUNT(DISTINCT pe.user_id || '-' || DATE(datetime(pe.ts / 1000, 'unixepoch'))) * 
+				CASE 
+					WHEN li.type = 'Movie' THEN 1.8
+					WHEN li.type = 'Episode' THEN 0.7  
+					ELSE 1.0
+				END AS hours
 			FROM play_event pe
-			JOIN library_item li ON li.id = pe.item_id
-			WHERE pe.ts >= ?
+			LEFT JOIN library_item li ON li.id = pe.item_id
+			WHERE pe.ts >= ? AND pe.item_id != ''
 			GROUP BY li.id, li.name, li.type
 			ORDER BY hours DESC
 			LIMIT ?;

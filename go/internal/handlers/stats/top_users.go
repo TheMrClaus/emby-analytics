@@ -28,13 +28,15 @@ func TopUsers(db *sql.DB) fiber.Handler {
 
 		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
 
-		// FIXED: Use daily activity count instead of position sum
+		// Count unique viewing sessions (user+item+day combinations)
 		rows, err := db.Query(`
-			SELECT u.id, u.name, 
-			       COUNT(DISTINCT DATE(datetime(pe.ts / 1000, 'unixepoch'))) * 1.5 AS hours
+			SELECT 
+				u.id, 
+				u.name,
+				COUNT(DISTINCT pe.item_id || '-' || DATE(datetime(pe.ts / 1000, 'unixepoch'))) * 1.2 AS hours
 			FROM play_event pe
 			JOIN emby_user u ON u.id = pe.user_id
-			WHERE pe.ts >= ?
+			WHERE pe.ts >= ? AND pe.user_id != ''
 			GROUP BY u.id, u.name
 			ORDER BY hours DESC
 			LIMIT ?;
