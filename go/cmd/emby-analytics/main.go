@@ -43,6 +43,7 @@ func main() {
 	if err := db.EnsureSchema(sqlDB); err != nil {
 		log.Fatal(err)
 	}
+
 	// ==========================================
 	// Background Tasks Setup
 	// ==========================================
@@ -57,7 +58,6 @@ func main() {
 	// Static UI
 	app.Use("/", static.New(cfg.WebPath))
 
-	// Now-playing routes
 	// Now-playing routes
 	app.Get("/now", nown.Snapshot(sqlDB, em))
 	app.Get("/now/stream", nown.Stream(sqlDB, em, cfg.NowPollSec))
@@ -77,15 +77,12 @@ func main() {
 	app.Get("/stats/qualities", stats.Qualities(sqlDB))
 	app.Get("/stats/codecs", stats.Codecs(sqlDB))
 	app.Get("/stats/activity", stats.Activity(sqlDB))
-	app.Get("/stats/users/:id", stats.UserDetailHandler(sqlDB))
 	app.Get("/stats/active-users-lifetime", stats.ActiveUsersLifetime(sqlDB))
-	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))
+	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))      // FIXED: Moved before :id route
+	app.Get("/stats/users/:id", stats.UserDetailHandler(sqlDB)) // Keep this after /total
 
 	// Items
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
-
-	// Background sync (sessions + history backfill)
-	go tasks.StartSyncLoop(sqlDB, em, cfg)
 
 	// Images
 	app.Get("/img/primary/:id", images.Primary(imgOpts))
@@ -106,10 +103,10 @@ func main() {
 	// Users sync trigger
 	app.Post("/admin/users/sync", admin.UsersSyncHandler(sqlDB, em, cfg))
 
+	// Admin debug and utility endpoints
 	app.Post("/admin/reset-lifetime", admin.ResetLifetimeWatch(sqlDB))
 	app.Get("/admin/debug/user-data", admin.DebugUserData(em))
 	app.Get("/admin/users", admin.ListUsers(sqlDB, em))
-
 	app.Post("/admin/users/force-sync", admin.ForceUserSync(sqlDB, em))
 
 	// ==========================================
