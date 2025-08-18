@@ -28,8 +28,7 @@ func TopUsers(db *sql.DB) fiber.Handler {
 
 		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
 
-		// NEW APPROACH: Count unique sessions and estimate reasonable session time
-		// Instead of summing inflated positions, count sessions and use conservative estimates
+		// FIXED: Use daily activity count instead of position sum
 		rows, err := db.Query(`
 			SELECT u.id, u.name, 
 			       COUNT(DISTINCT DATE(datetime(pe.ts / 1000, 'unixepoch'))) * 1.5 AS hours

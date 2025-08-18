@@ -30,8 +30,10 @@ func TopItems(db *sql.DB) fiber.Handler {
 
 		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
 
+		// FIXED: Use event count instead of position sum to avoid inflated hours
 		rows, err := db.Query(`
-			SELECT li.id, li.name, li.type, COALESCE(SUM(pe.pos_ms), 0) / 3600000.0 AS hours
+			SELECT li.id, li.name, li.type, 
+			       COUNT(*) * 0.75 AS hours
 			FROM play_event pe
 			JOIN library_item li ON li.id = pe.item_id
 			WHERE pe.ts >= ?
