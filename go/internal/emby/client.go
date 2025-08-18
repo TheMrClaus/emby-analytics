@@ -16,6 +16,15 @@ type httpDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
+func normalizeToBps(v int64) int64 {
+	// Heuristic: Emby often reports kbps for sources/streams.
+	// Treat small values as kbps; large values as already bps.
+	if v < 1_000_000 { // e.g. 57_000 -> 57 Mbps
+		return v * 1000
+	}
+	return v
+}
+
 // readJSON enforces 200 OK and JSON-decodes into dst.
 // On failure, it returns an error that includes status and a short body snippet.
 func readJSON(resp *http.Response, dst any) error {
@@ -242,8 +251,10 @@ type EmbyUser struct {
 	Name string `json:"Name"`
 }
 
-// Flattened shape consumed by handlers (now.go expects rich fields)
+// Flattened shape consumed by handlers (plus SessionID for controls)
 type EmbySession struct {
+	SessionID string `json:"SessionId"` // NEW: Emby session id
+
 	UserID   string `json:"UserId"`
 	UserName string `json:"UserName"`
 
@@ -251,7 +262,7 @@ type EmbySession struct {
 	ItemID        string `json:"NowPlayingItemId"`
 	ItemName      string `json:"NowPlayingItemName,omitempty"`
 	ItemType      string `json:"NowPlayingItemType,omitempty"`
-	DurationTicks int64  `json:"RunTimeTicks"` // item runtime
+	DurationTicks int64  `json:"RunTimeTicks"`
 	PosTicks      int64  `json:"PositionTicks"`
 
 	// Client/device
@@ -259,14 +270,15 @@ type EmbySession struct {
 	Device string `json:"DeviceName"`
 
 	// Playback details
-	PlayMethod string `json:"PlayMethod,omitempty"` // "Direct" / "Transcode" (if available)
+	PlayMethod string `json:"PlayMethod,omitempty"` // "Direct"/"Transcode"
 	VideoCodec string `json:"VideoCodec,omitempty"`
 	AudioCodec string `json:"AudioCodec,omitempty"`
 	SubsCount  int    `json:"SubsCount,omitempty"`
-	Bitrate    int64  `json:"Bitrate,omitempty"`
+	Bitrate    int64  `json:"Bitrate,omitempty"` // bps
 }
 
 type rawSession struct {
+	Id         string `json:"Id"` // session id
 	UserID     string `json:"UserId"`
 	UserName   string `json:"UserName"`
 	Client     string `json:"Client"`
@@ -277,13 +289,17 @@ type rawSession struct {
 		Name         string `json:"Name"`
 		Type         string `json:"Type"`
 		RunTimeTicks int64  `json:"RunTimeTicks"`
+
 		MediaStreams []struct {
-			Type     string `json:"Type"`  // "Video","Audio","Subtitle"
-			Codec    string `json:"Codec"` // e.g. "h264","aac"
-			IsText   bool   `json:"IsText"`
+			Type     string `json:"Type"`    // "Video","Audio","Subtitle"
+			Codec    string `json:"Codec"`   // e.g. h264,aac
 			Language string `json:"Language"`
+			// Bitrate can be on streams in some servers (kbps)
+			BitRate int64 `json:"BitRate,omitempty"`
+			Bitrate int64 `json:"Bitrate,omitempty"`
 		} `json:"MediaStreams"`
-		// Fallback source-level bitrate (bps) for direct play
+
+		// Direct-play fallback (often in kbps)
 		MediaSources []struct {
 			Bitrate int64 `json:"Bitrate"`
 		} `json:"MediaSources"`
@@ -291,12 +307,12 @@ type rawSession struct {
 
 	PlayState *struct {
 		PositionTicks int64  `json:"PositionTicks"`
-		PlayMethod    string `json:"PlayMethod"` // often present ("DirectPlay"/"Transcode")
+		PlayMethod    string `json:"PlayMethod"`
+		IsPaused      bool   `json:"IsPaused"`
 	} `json:"PlayState"`
 
-	// Present when transcoding; contains bitrate/codecs being produced
 	TranscodingInfo *struct {
-		Bitrate    int64  `json:"Bitrate"`
+		Bitrate    int64  `json:"Bitrate"`    // bps
 		VideoCodec string `json:"VideoCodec"`
 		AudioCodec string `json:"AudioCodec"`
 	} `json:"TranscodingInfo"`
@@ -320,119 +336,99 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 		return nil, err
 	}
 
-	out := make([]EmbySession, 0, len(raw))
-	for _, rs := range raw {
-		// Show ONLY active playback: must have an item
-		if rs.NowPlayingItem == nil || rs.NowPlayingItem.Id == "" {
-			continue
-		}
-
-		es := EmbySession{
-			UserID:   rs.UserID,
-			UserName: rs.UserName,
-			App:      rs.Client,
-			Device:   rs.DeviceName,
-		}
-
-		// Item + duration
-		es.ItemID = rs.NowPlayingItem.Id
-		es.ItemName = rs.NowPlayingItem.Name
-		es.ItemType = rs.NowPlayingItem.Type
-		es.DurationTicks = rs.NowPlayingItem.RunTimeTicks
-
-		// Streams -> codecs + subs count
-		subs := 0
-		for _, ms := range rs.NowPlayingItem.MediaStreams {
-			switch strings.ToLower(ms.Type) {
-			case "video":
-				if es.VideoCodec == "" && ms.Codec != "" {
-					es.VideoCodec = strings.ToUpper(ms.Codec)
-				}
-			case "audio":
-				if es.AudioCodec == "" && ms.Codec != "" {
-					es.AudioCodec = strings.ToUpper(ms.Codec)
-				}
-			case "subtitle":
-				subs++
-			}
-		}
-		es.SubsCount = subs
-
-		// PlayState -> position (and possibly method)
-		if rs.PlayState != nil {
-			es.PosTicks = rs.PlayState.PositionTicks
-			if rs.PlayState.PlayMethod != "" {
-				if strings.HasPrefix(strings.ToLower(rs.PlayState.PlayMethod), "trans") {
-					es.PlayMethod = "Transcode"
-				} else {
-					es.PlayMethod = "Direct"
-				}
-			}
-		}
-		if es.PlayMethod == "" {
-			es.PlayMethod = "Direct"
-		}
-
-		// Bitrate:
-		// 1) If transcoding, prefer TranscodingInfo.Bitrate
-		if rs.TranscodingInfo != nil && rs.TranscodingInfo.Bitrate > 0 {
-			es.Bitrate = rs.TranscodingInfo.Bitrate
-			if rs.TranscodingInfo.VideoCodec != "" {
-				es.VideoCodec = strings.ToUpper(rs.TranscodingInfo.VideoCodec)
-			}
-			if rs.TranscodingInfo.AudioCodec != "" {
-				es.AudioCodec = strings.ToUpper(rs.TranscodingInfo.AudioCodec)
-			}
-			es.PlayMethod = "Transcode"
-		} else {
-			// 2) Fallback for direct play: first media source bitrate if present
-			if es.Bitrate == 0 && rs.NowPlayingItem != nil && len(rs.NowPlayingItem.MediaSources) > 0 {
-				if rs.NowPlayingItem.MediaSources[0].Bitrate > 0 {
-					es.Bitrate = rs.NowPlayingItem.MediaSources[0].Bitrate
-				}
-			}
-		}
-
-		out = append(out, es)
+out := make([]EmbySession, 0, len(raw))
+for _, rs := range raw {
+	// Only show active playback
+	if rs.NowPlayingItem == nil || rs.NowPlayingItem.Id == "" {
+		continue
 	}
 
-
-		// PlayState -> position (and possibly play method)
-		if rs.PlayState != nil {
-			es.PosTicks = rs.PlayState.PositionTicks
-			if rs.PlayState.PlayMethod != "" {
-				if strings.HasPrefix(strings.ToLower(rs.PlayState.PlayMethod), "trans") {
-					es.PlayMethod = "Transcode"
-				} else {
-					es.PlayMethod = "Direct"
-				}
-			}
-		}
-
-		// Transcoding info -> bitrate and codecs override + method
-		if rs.TranscodingInfo != nil {
-			if rs.TranscodingInfo.Bitrate > 0 {
-				es.Bitrate = rs.TranscodingInfo.Bitrate
-			}
-			// If transcoding advertises codecs, use them
-			if rs.TranscodingInfo.VideoCodec != "" {
-				es.VideoCodec = strings.ToUpper(rs.TranscodingInfo.VideoCodec)
-			}
-			if rs.TranscodingInfo.AudioCodec != "" {
-				es.AudioCodec = strings.ToUpper(rs.TranscodingInfo.AudioCodec)
-			}
-			es.PlayMethod = "Transcode"
-		}
-
-		// Default play method if unknown
-		if es.PlayMethod == "" {
-			es.PlayMethod = "Direct"
-		}
-
-		out = append(out, es)
+	es := EmbySession{
+		SessionID: rs.Id,
+		UserID:    rs.UserID,
+		UserName:  rs.UserName,
+		App:       rs.Client,
+		Device:    rs.DeviceName,
 	}
-	return out, nil
+
+	// Item + duration
+	es.ItemID = rs.NowPlayingItem.Id
+	es.ItemName = rs.NowPlayingItem.Name
+	es.ItemType = rs.NowPlayingItem.Type
+	es.DurationTicks = rs.NowPlayingItem.RunTimeTicks
+
+	// Streams -> codecs + subs
+	subs := 0
+	streamKbpsSum := int64(0)
+	for _, ms := range rs.NowPlayingItem.MediaStreams {
+		switch strings.ToLower(ms.Type) {
+		case "video":
+			if es.VideoCodec == "" && ms.Codec != "" {
+				es.VideoCodec = strings.ToUpper(ms.Codec)
+			}
+			if ms.BitRate > 0 {
+				streamKbpsSum += ms.BitRate
+			} else if ms.Bitrate > 0 {
+				streamKbpsSum += ms.Bitrate
+			}
+		case "audio":
+			if es.AudioCodec == "" && ms.Codec != "" {
+				es.AudioCodec = strings.ToUpper(ms.Codec)
+			}
+			if ms.BitRate > 0 {
+				streamKbpsSum += ms.BitRate
+			} else if ms.Bitrate > 0 {
+				streamKbpsSum += ms.Bitrate
+			}
+		case "subtitle":
+			subs++
+		}
+	}
+	es.SubsCount = subs
+
+	// PlayState
+	if rs.PlayState != nil {
+		es.PosTicks = rs.PlayState.PositionTicks
+		if rs.PlayState.PlayMethod != "" {
+			if strings.HasPrefix(strings.ToLower(rs.PlayState.PlayMethod), "trans") {
+				es.PlayMethod = "Transcode"
+			} else {
+				es.PlayMethod = "Direct"
+			}
+		}
+	}
+	if es.PlayMethod == "" {
+		es.PlayMethod = "Direct"
+	}
+
+	// Bitrate selection:
+	// 1) TranscodingInfo (already bps)
+	if rs.TranscodingInfo != nil && rs.TranscodingInfo.Bitrate > 0 {
+		es.Bitrate = rs.TranscodingInfo.Bitrate
+		if rs.TranscodingInfo.VideoCodec != "" {
+			es.VideoCodec = strings.ToUpper(rs.TranscodingInfo.VideoCodec)
+		}
+		if rs.TranscodingInfo.AudioCodec != "" {
+			es.AudioCodec = strings.ToUpper(rs.TranscodingInfo.AudioCodec)
+		}
+		es.PlayMethod = "Transcode"
+	} else {
+		// 2) MediaSource bitrate (often kbps)
+		if rs.NowPlayingItem != nil && len(rs.NowPlayingItem.MediaSources) > 0 {
+			if b := rs.NowPlayingItem.MediaSources[0].Bitrate; b > 0 {
+				es.Bitrate = normalizeToBps(b)
+			}
+		}
+		// 3) Sum stream bitrates (kbps) if source bitrate missing
+		if es.Bitrate == 0 && streamKbpsSum > 0 {
+			es.Bitrate = normalizeToBps(streamKbpsSum)
+		}
+	}
+
+	out = append(out, es)
 }
+return out, nil
+
 
 type playHistoryResp struct {
 	Items []PlayHistoryItem `json:"Items"`
