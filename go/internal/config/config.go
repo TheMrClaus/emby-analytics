@@ -23,7 +23,7 @@ type Config struct {
 	HistoryDays     int // e.g. 2
 
 	// User sync
-	UserSyncIntervalSec int // e.g. 3600
+	UserSyncIntervalSec int `env:"USERSYNC_INTERVAL" envDefault:"3600"` // 1 hour
 
 	// Images
 	ImgQuality          int // e.g. 90

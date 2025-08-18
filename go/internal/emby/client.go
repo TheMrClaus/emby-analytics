@@ -314,3 +314,44 @@ type PlayHistoryItem struct {
 	PlaybackPos int64  `json:"PlaybackPositionTicks"`
 	UserID      string `json:"-"`
 }
+
+// GetUserData fetches user's watch status for items
+func (c *Client) GetUserData(userID string) ([]UserDataItem, error) {
+	u := fmt.Sprintf("%s/emby/Users/%s/Items", c.BaseURL, userID)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("Recursive", "true")
+	q.Set("Fields", "UserData,RunTimeTicks")
+	q.Set("IncludeItemTypes", "Movie,Episode")
+	q.Set("Filters", "IsPlayed")
+
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	req.Header.Set("X-Emby-Token", c.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var out struct {
+		Items []UserDataItem `json:"Items"`
+	}
+	if err := readJSON(resp, &out); err != nil {
+		return nil, err
+	}
+
+	return out.Items, nil
+}
+
+type UserDataItem struct {
+	Id           string `json:"Id"`
+	Name         string `json:"Name"`
+	Type         string `json:"Type"`
+	RunTimeTicks int64  `json:"RunTimeTicks"`
+	UserData     struct {
+		Played         bool   `json:"Played"`
+		PlaybackPos    int64  `json:"PlaybackPositionTicks"`
+		PlayCount      int    `json:"PlayCount"`
+		LastPlayedDate string `json:"LastPlayedDate"`
+	} `json:"UserData"`
+}
