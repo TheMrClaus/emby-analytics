@@ -65,7 +65,7 @@ func getEmbyClient() (*emby.Client, error) {
 }
 
 // videoDetailFromSession builds strings like "4K Dolby Vision HEVC"
-func videoDetailFromSession(s emby.Embysession) string {
+func videoDetailFromSession(s emby.EmbySession) string {
 	parts := []string{}
 
 	// Resolution
