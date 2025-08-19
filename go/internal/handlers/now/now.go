@@ -64,6 +64,39 @@ func getEmbyClient() (*emby.Client, error) {
 	return emby.New(base, key), nil
 }
 
+// videoDetailFromSession builds strings like "4K Dolby Vision HEVC"
+func videoDetailFromSession(s emby.Embysession) string {
+	parts := []string{}
+
+	// Resolution
+	if s.Height >= 2160 {
+		parts = append(parts, "4K")
+	} else if s.Height >= 1440 {
+		parts = append(parts, "1440p")
+	} else if s.Height >= 1080 {
+		parts = append(parts, "1080p")
+	} else if s.Height >= 720 {
+		parts = append(parts, "720p")
+	}
+
+	// HDR / DV
+	if s.DolbyVision {
+		parts = append(parts, "Dolby Vision")
+	} else if s.HDR10 {
+		parts = append(parts, "HDR")
+	}
+
+	// Codec
+	if s.VideoCodec != "" {
+		parts = append(parts, strings.ToUpper(s.VideoCodec))
+	}
+
+	if len(parts) == 0 {
+		return s.VideoCodec // fallback
+	}
+	return strings.Join(parts, " ")
+}
+
 // Snapshot returns the current list once.
 func Snapshot(c fiber.Ctx) error {
 	em, err := getEmbyClient()
@@ -103,7 +136,7 @@ func Snapshot(c fiber.Ctx) error {
 			App:         s.App,
 			Device:      s.Device,
 			PlayMethod:  s.PlayMethod,
-			Video:       s.VideoCodec,
+			Video:       videoDetailFromSession(s),
 			Audio:       s.AudioCodec,
 			Subs:        subsText,
 			Bitrate:     s.Bitrate,
@@ -184,7 +217,7 @@ func Stream(c fiber.Ctx) error {
 				App:         s.App,
 				Device:      s.Device,
 				PlayMethod:  s.PlayMethod,
-				Video:       s.VideoCodec,
+				Video:       videoDetailFromSession(s),
 				Audio:       s.AudioCodec,
 				Subs:        subsText,
 				Bitrate:     s.Bitrate,
