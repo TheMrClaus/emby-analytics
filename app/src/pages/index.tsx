@@ -299,28 +299,36 @@ export default function Home(){
                   <div>
                     <span className="font-medium">Stream:</span>{" "}
                     {s.container ? s.container : "—"}
-                    {typeof s.bitrate === "number" && s.bitrate > 0
-                      ? ` (${(s.bitrate/1000000).toFixed(1)} Mbps)`
-                      : ""}
-                    {" "}→ {s.play_method === "Transcode"
-                      ? (s.trans_summary || "Transcode")
-                      : "Direct"}
+                    {typeof s.bitrate === "number" && s.bitrate > 0 ? ` (${(s.bitrate/1000000).toFixed(1)} Mbps)` : ""}
+                    {" "}→ {s.play_method === "Direct" ? "Direct Play" : "Transcode"}
+                    {s.play_method !== "Direct" && (
+                      <>
+                        <div className="mt-1 text-xs opacity-80">
+                          {"\u2192"} {s.stream_detail || `${s.stream_path || "Transcode"} (${(s.bitrate/1000000).toFixed(1)} Mbps)`}
+                        </div>
+                        {s.trans_reason && (
+                          <div className="text-xs opacity-80">
+                            {s.trans_reason}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   <div>
                     <span className="font-medium">Video:</span>{" "}
                     {s.video_detail || s.video || "—"}{" "}
-                    → {s.play_method === "Transcode" && s.trans_video
-                      ? `Transcode (${s.trans_video.from} → ${s.trans_video.to})`
-                      : (s.play_method || "Direct")}
+                    → {s.video_method === "Transcode"
+                        ? `Transcode (${s.trans_video_to || "—"})`
+                        : "Direct Play"}
                   </div>
 
                   <div>
                     <span className="font-medium">Audio:</span>{" "}
                     {s.audio_detail || s.audio || "—"}{" "}
-                    → {s.play_method === "Transcode" && s.trans_audio
-                      ? `Transcode (${s.trans_audio.from} → ${s.trans_audio.to})`
-                      : (s.play_method || "Direct")}
+                    → {s.audio_method === "Transcode"
+                        ? `Transcode (${s.trans_audio_to || "—"}${s.trans_audio_bitrate ? ` ${(s.trans_audio_bitrate/1000).toFixed(0)} kbps` : ""})`
+                        : "Direct Play"}
                   </div>
 
                   <div>
@@ -364,6 +372,14 @@ export default function Home(){
 
                 <div className="mt-2 h-2 bg-white/10 rounded-full">
                   <div className="h-full bg-white/60 rounded-full" style={{ width:`${pct(s.progress_pct)}%` }}/>
+                    {/* transcode progress (red) */}
+                    {s.play_method !== "Direct" && (
+                      <div
+                        className="absolute left-0 top-0 h-2 rounded"
+                        style={{ background: "#ef4444", width: `${Math.min(100, Math.max(0, s.trans_pct || 0))}%`, opacity: 0.8 }}
+                        title="Transcode progress"
+                      />
+                    )}
                 </div>
               </div>
             </div>
