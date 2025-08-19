@@ -370,25 +370,29 @@ export default function Home(){
                   </button>
                 </div>
 
-                {/* Progress (grey) + Transcode (red) */}
-                <div className="mt-2 h-2 rounded bg-white/10 relative overflow-hidden">
+                {/* Progress bars */}
+                <div className="mt-2 space-y-1">
                   {/* playback progress (grey) */}
-                  <div
-                    className="absolute left-0 top-0 h-2 rounded bg-white/40"
-                    style={{ zIndex: 1, width: `${Math.min(100, Math.max(0, s.progress_pct || 0))}%` }}
-                  />
-                  {/* transcode progress (red) */}
-                  {(s.video_method === "Transcode" || s.audio_method === "Transcode") && (
+                  <div className="h-2 rounded bg-white/10 overflow-hidden">
                     <div
-                      className="absolute left-0 top-0 h-2 rounded"
-                      style={{
-                        zIndex: 2,
-                        background: "#ef4444",
-                        width: `${Math.min(100, Math.max(0, (s.trans_pct ?? s.progress_pct ?? 0)))}%`,
-                        opacity: 0.9
-                      }}
-                      title="Transcode progress"
+                      className="h-2 bg-white/40"
+                      style={{ width: `${Math.min(100, Math.max(0, s.progress_pct || 0))}%` }}
+                      title="Playback progress"
                     />
+                  </div>
+
+                  {/* transcode progress (red, thinner, only when transcoding) */}
+                  {(s.video_method === "Transcode" || s.audio_method === "Transcode") && (
+                    <div className="h-1 rounded bg-red-900/30 overflow-hidden">
+                      <div
+                        className="h-1"
+                        style={{
+                          background: "#ef4444",
+                          width: `${Math.min(100, Math.max(0, (s.trans_pct ?? s.progress_pct ?? 0)))}%`
+                        }}
+                        title="Transcode progress"
+                      />
+                    </div>
                   )}
                 </div>
               </div>
