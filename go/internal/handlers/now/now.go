@@ -97,6 +97,52 @@ func videoDetailFromSession(s emby.EmbySession) string {
 	return strings.Join(parts, " ")
 }
 
+// audioDetailFromSession builds strings like "English AC3 5.1 (Default)"
+func audioDetailFromSession(s emby.EmbySession) string {
+	parts := []string{}
+	if s.AudioLang != "" {
+		parts = append(parts, s.AudioLang) // keep casing from Emby
+	}
+	if s.AudioCodec != "" {
+		parts = append(parts, strings.ToUpper(s.AudioCodec))
+	}
+	if s.AudioCh > 0 {
+		ch := ""
+		switch s.AudioCh {
+		case 1:
+			ch = "1.0"
+		case 2:
+			ch = "2.0"
+		case 3:
+			ch = "2.1"
+		case 4:
+			ch = "4.0"
+		case 5:
+			ch = "5.0"
+		case 6:
+			ch = "5.1"
+		case 7:
+			ch = "6.1"
+		case 8:
+			ch = "7.1"
+		default:
+			ch = fmt.Sprintf("%d.0", s.AudioCh)
+		}
+		parts = append(parts, ch)
+	}
+	out := strings.TrimSpace(strings.Join(parts, " "))
+	if s.AudioDefault {
+		if out == "" {
+			return "(Default)"
+		}
+		return out + " (Default)"
+	}
+	if out == "" {
+		return s.AudioCodec
+	}
+	return out
+}
+
 // Snapshot returns the current list once.
 func Snapshot(c fiber.Ctx) error {
 	em, err := getEmbyClient()
@@ -137,7 +183,7 @@ func Snapshot(c fiber.Ctx) error {
 			Device:      s.Device,
 			PlayMethod:  s.PlayMethod,
 			Video:       videoDetailFromSession(s),
-			Audio:       s.AudioCodec,
+			Audio:       audioDetailFromSession(s),
 			Subs:        subsText,
 			Bitrate:     s.Bitrate,
 			ProgressPct: progressPct,
@@ -218,7 +264,7 @@ func Stream(c fiber.Ctx) error {
 				Device:      s.Device,
 				PlayMethod:  s.PlayMethod,
 				Video:       videoDetailFromSession(s),
-				Audio:       s.AudioCodec,
+				Audio:       audioDetailFromSession(s),
 				Subs:        subsText,
 				Bitrate:     s.Bitrate,
 				ProgressPct: progressPct,
