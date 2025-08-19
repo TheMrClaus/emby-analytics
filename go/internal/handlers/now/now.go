@@ -51,6 +51,20 @@ type NowEntry struct {
 	TransVideoTo   string `json:"trans_video_to,omitempty"`
 	TransAudioFrom string `json:"trans_audio_from,omitempty"`
 	TransAudioTo   string `json:"trans_audio_to,omitempty"`
+
+	// UI-friendly extras
+	VideoMethod  string `json:"video_method,omitempty"` // "Direct Play"/"Transcode"
+	AudioMethod  string `json:"audio_method,omitempty"`
+	StreamPath   string `json:"stream_path,omitempty"`   // e.g. HLS
+	StreamDetail string `json:"stream_detail,omitempty"` // e.g. "HLS (6.2 Mbps, 1483 fps)"
+	TransReason  string `json:"trans_reason,omitempty"`
+
+	// For the red transcode bar
+	TransPct float64 `json:"trans_pct,omitempty"`
+
+	// For parentheses after lines when transcoding
+	TransAudioBitrate string `json:"trans_audio_bitrate,omitempty"`
+	TransVideoBitrate string `json:"trans_video_bitrate,omitempty"`
 }
 
 // Generic env-based Emby client (keeps things portable behind any proxy).
@@ -143,6 +157,74 @@ func audioDetailFromSession(s emby.EmbySession) string {
 	return out
 }
 
+// Map container -> streaming path label
+func streamPathLabel(container string) string {
+	c := strings.ToLower(container)
+	switch c {
+	case "ts", "mpegts", "hls", "fmp4":
+		return "HLS"
+	case "dash":
+		return "DASH"
+	default:
+		if c == "" {
+			return "Transcode"
+		}
+		return strings.ToUpper(container)
+	}
+}
+
+func mbps(bps int64) string {
+	if bps <= 0 {
+		return "—"
+	}
+	f := float64(bps) / 1_000_000.0
+	return fmt.Sprintf("%.1f Mbps", f)
+}
+
+// Human text for primary reason (borrowed from Emby wording)
+func reasonText(videoMethod, audioMethod string, reasons []string) string {
+	if len(reasons) == 0 {
+		// fallback: infer from which track is transcoding
+		switch {
+		case videoMethod == "Transcode" && audioMethod == "Transcode":
+			return "Converting video and audio to compatible codecs"
+		case videoMethod == "Transcode":
+			return "Converting video to compatible codec"
+		case audioMethod == "Transcode":
+			return "Converting audio to compatible codec"
+		default:
+			return ""
+		}
+	}
+	rset := map[string]bool{}
+	for _, r := range reasons {
+		rset[strings.ToLower(r)] = true
+	}
+	switch {
+	case rset["audiocodecnotsupported"]:
+		return "Converting audio to compatible codec"
+	case rset["videocodecnotsupported"]:
+		return "Converting video to compatible codec"
+	case rset["containernotsupported"]:
+		// often remux/HLS with copy for video
+		if audioMethod == "Transcode" && videoMethod != "Transcode" {
+			return "Remuxing stream; converting audio to compatible codec"
+		}
+		return "Remuxing stream to a compatible container"
+	case rset["subtitlecodecnotsupported"]:
+		return "Burning/transforming subtitles to compatible format"
+	default:
+		// generic
+		if audioMethod == "Transcode" && videoMethod != "Transcode" {
+			return "Converting audio to compatible codec"
+		}
+		if videoMethod == "Transcode" && audioMethod != "Transcode" {
+			return "Converting video to compatible codec"
+		}
+		return "Transcoding stream"
+	}
+}
+
 // Snapshot returns the current list once.
 func Snapshot(c fiber.Ctx) error {
 	em, err := getEmbyClient()
@@ -192,7 +274,8 @@ func Snapshot(c fiber.Ctx) error {
 			ItemID:      s.ItemID,
 			ItemType:    s.ItemType,
 
-			Container:      s.Container,
+			Container: s.Container,
+
 			Width:          s.Width,
 			Height:         s.Height,
 			DolbyVision:    s.DolbyVision,
@@ -205,6 +288,53 @@ func Snapshot(c fiber.Ctx) error {
 			TransVideoTo:   s.TransVideoTo,
 			TransAudioFrom: s.TransAudioFrom,
 			TransAudioTo:   s.TransAudioTo,
+
+			// UI-friendly extras
+			VideoMethod: s.VideoMethod,
+			AudioMethod: s.AudioMethod,
+
+			StreamPath: streamPathLabel(s.TransContainer),
+			StreamDetail: func() string {
+				if !strings.EqualFold(s.PlayMethod, "Transcode") {
+					return ""
+				}
+				fp := ""
+				if s.TransFramerate > 0 {
+					fp = fmt.Sprintf(", %.0f fps", s.TransFramerate)
+				}
+				return fmt.Sprintf("%s (%s%s)", streamPathLabel(s.TransContainer), mbps(s.Bitrate), fp)
+			}(),
+			TransReason: reasonText(s.VideoMethod, s.AudioMethod, s.TransReasons),
+
+			TransPct: func() float64 {
+				// Prefer server-reported progress; else fall back to current playback pct
+				if s.TransCompletion > 0 {
+					if s.TransCompletion > 100 {
+						return 100
+					}
+					return s.TransCompletion
+				}
+				if s.TransPosTicks > 0 && s.DurationTicks > 0 {
+					p := (float64(s.TransPosTicks) / float64(s.DurationTicks)) * 100
+					if p > 100 {
+						p = 100
+					}
+					return p
+				}
+				// fallback: match playback progress (at least shows a bar)
+				if s.DurationTicks > 0 {
+					p := (float64(s.PosTicks) / float64(s.DurationTicks)) * 100
+					if p > 100 {
+						p = 100
+					}
+					return p
+				}
+				return 0
+			}(),
+
+			TransVideoTo:      s.TransVideoTo,
+			TransAudioTo:      s.TransAudioTo,
+			TransAudioBitrate: s.TransAudioBitrate,
 		})
 	}
 	return c.JSON(out)
@@ -273,7 +403,8 @@ func Stream(c fiber.Ctx) error {
 				ItemID:      s.ItemID,
 				ItemType:    s.ItemType,
 
-				Container:      s.Container,
+				Container: s.Container,
+
 				Width:          s.Width,
 				Height:         s.Height,
 				DolbyVision:    s.DolbyVision,
@@ -286,6 +417,51 @@ func Stream(c fiber.Ctx) error {
 				TransVideoTo:   s.TransVideoTo,
 				TransAudioFrom: s.TransAudioFrom,
 				TransAudioTo:   s.TransAudioTo,
+
+				// UI-friendly extras
+				VideoMethod: s.VideoMethod,
+				AudioMethod: s.AudioMethod,
+
+				StreamPath: streamPathLabel(s.TransContainer),
+				StreamDetail: func() string {
+					if !strings.EqualFold(s.PlayMethod, "Transcode") {
+						return ""
+					}
+					fp := ""
+					if s.TransFramerate > 0 {
+						fp = fmt.Sprintf(", %.0f fps", s.TransFramerate)
+					}
+					return fmt.Sprintf("%s (%s%s)", streamPathLabel(s.TransContainer), mbps(s.Bitrate), fp)
+				}(),
+				TransReason: reasonText(s.VideoMethod, s.AudioMethod, s.TransReasons),
+
+				TransPct: func() float64 {
+					if s.TransCompletion > 0 {
+						if s.TransCompletion > 100 {
+							return 100
+						}
+						return s.TransCompletion
+					}
+					if s.TransPosTicks > 0 && s.DurationTicks > 0 {
+						p := (float64(s.TransPosTicks) / float64(s.DurationTicks)) * 100
+						if p > 100 {
+							p = 100
+						}
+						return p
+					}
+					if s.DurationTicks > 0 {
+						p := (float64(s.PosTicks) / float64(s.DurationTicks)) * 100
+						if p > 100 {
+							p = 100
+						}
+						return p
+					}
+					return 0
+				}(),
+
+				TransVideoTo:      s.TransVideoTo,
+				TransAudioTo:      s.TransAudioTo,
+				TransAudioBitrate: s.TransAudioBitrate,
 			})
 		}
 		b, _ := json.Marshal(out)
