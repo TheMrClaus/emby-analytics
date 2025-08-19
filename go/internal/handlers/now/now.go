@@ -340,37 +340,60 @@ func Snapshot(c fiber.Ctx) error {
 	return c.JSON(out)
 }
 
-// Stream pushes snapshots periodically via SSE with keepalive heartbeat
+// Stream pushes snapshots periodically via SSE (default message events).
 func Stream(c fiber.Ctx) error {
+	log.Printf("[now] SSE client connected from %s", c.IP())
+
 	// SSE/CORS headers
 	c.Set("Content-Type", "text/event-stream")
 	c.Set("Cache-Control", "no-cache")
 	c.Set("Connection", "keep-alive")
 	c.Set("Access-Control-Allow-Origin", "*")
-	c.Set("Access-Control-Allow-Headers", "Cache-Control")
 
 	w := bufio.NewWriter(c.RequestCtx().Response.BodyWriter())
-	flush := func() { _ = w.Flush() }
+	flush := func() error {
+		if err := w.Flush(); err != nil {
+			return err
+		}
+		// Force immediate response flush in Fiber v3
+		if f, ok := c.Response().BodyWriter().(interface{ Flush() error }); ok {
+			return f.Flush()
+		}
+		return nil
+	}
 
 	em, err := getEmbyClient()
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
 
-	// Data ticker (every 2 seconds for responsiveness)
-	dataTicker := time.NewTicker(2 * time.Second)
-	defer dataTicker.Stop()
-
-	// Keepalive ticker (every 10 seconds to detect dead connections)
+	dataTicker := time.NewTicker(1500 * time.Millisecond)
 	keepaliveTicker := time.NewTicker(10 * time.Second)
-	defer keepaliveTicker.Stop()
+	defer func() {
+		dataTicker.Stop()
+		keepaliveTicker.Stop()
+		log.Printf("[now] SSE client disconnected from %s", c.IP())
+	}()
+
+	// Send initial connection event
+	if _, err := w.WriteString("event: connected\ndata: {\"status\":\"connected\"}\n\n"); err != nil {
+		return nil
+	}
+	if err := flush(); err != nil {
+		return nil
+	}
 
 	send := func() bool {
 		sessions, err := em.GetActiveSessions()
 		if err != nil {
 			log.Printf("[now] get sessions: %v", err)
-			return false
+			// Send error event to client but continue
+			if _, err := w.WriteString("event: error\ndata: {\"error\":\"Failed to fetch sessions\"}\n\n"); err != nil {
+				return false
+			}
+			return flush() == nil
 		}
+
 		nowMs := time.Now().UnixMilli()
 		out := make([]NowEntry, 0, len(sessions))
 		for _, s := range sessions {
@@ -474,24 +497,21 @@ func Stream(c fiber.Ctx) error {
 		if _, err := w.WriteString("data: " + string(b) + "\n\n"); err != nil {
 			return false
 		}
-		flush()
-		return true
+		return flush() == nil
 	}
 
 	sendKeepalive := func() bool {
 		if _, err := w.WriteString("event: keepalive\ndata: {\"timestamp\":" + fmt.Sprintf("%d", time.Now().UnixMilli()) + "}\n\n"); err != nil {
 			return false
 		}
-		flush()
-		return true
+		return flush() == nil
 	}
 
-	// Send initial data immediately
+	// Send initial data
 	if !send() {
 		return nil
 	}
 
-	// Main loop with separate timers for data and keepalive
 	for {
 		select {
 		case <-c.Done():
