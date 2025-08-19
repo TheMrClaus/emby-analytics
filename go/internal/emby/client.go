@@ -467,12 +467,17 @@ type rawSession struct {
 			Channels int    `json:"Channels"`
 			Width    int    `json:"Width"`
 			Height   int    `json:"Height"`
-			// DV/HDR flags appear in various forms; capture common ones
+
+			// NEW: many Emby builds signal DV/HDR here
+			VideoRange     string `json:"VideoRange"`     // e.g. "DOVI", "HDR10", "SDR"
+			VideoRangeType string `json:"VideoRangeType"` // e.g. "Dv", "Hdr10", "Sdr"
+
+			// Existing flags
 			IsHdr     bool `json:"IsHdr"`
 			Hdr       bool `json:"Hdr"`
 			Hdr10     bool `json:"Hdr10"`
 			DvProfile *int `json:"DvProfile,omitempty"`
-			// Bitrate can be on streams in some servers (kbps)
+
 			BitRate int64 `json:"BitRate,omitempty"`
 			Bitrate int64 `json:"Bitrate,omitempty"`
 		} `json:"MediaStreams"`
@@ -561,11 +566,16 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 					es.Width = ms.Width
 					es.Height = ms.Height
 				}
-				// HDR flags
-				if ms.DvProfile != nil && *ms.DvProfile > 0 {
+				// HDR/DV detection (prefer DV if present)
+				vr := strings.ToLower(strings.TrimSpace(ms.VideoRange))
+				vrt := strings.ToLower(strings.TrimSpace(ms.VideoRangeType))
+				if (ms.DvProfile != nil && *ms.DvProfile > 0) ||
+					vr == "dovi" || vr == "dolby vision" || vr == "dolbyvision" ||
+					vrt == "dv" || vrt == "dolbyvision" {
 					es.DolbyVision = true
 				}
-				if ms.Hdr10 || ms.Hdr || ms.IsHdr {
+				if ms.Hdr10 || ms.Hdr || ms.IsHdr ||
+					strings.Contains(vr, "hdr") || vrt == "hdr10" || vrt == "hdr10plus" {
 					es.HDR10 = true
 				}
 				if ms.BitRate > 0 {
