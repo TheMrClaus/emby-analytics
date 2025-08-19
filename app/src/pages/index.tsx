@@ -370,16 +370,26 @@ export default function Home(){
                   </button>
                 </div>
 
-                <div className="mt-2 h-2 bg-white/10 rounded-full">
-                  <div className="h-full bg-white/60 rounded-full" style={{ width:`${pct(s.progress_pct)}%` }}/>
-                    {/* transcode progress (red) */}
-                    {s.play_method !== "Direct" && (
-                      <div
-                        className="absolute left-0 top-0 h-2 rounded"
-                        style={{ background: "#ef4444", width: `${Math.min(100, Math.max(0, s.trans_pct || 0))}%`, opacity: 0.8 }}
-                        title="Transcode progress"
-                      />
-                    )}
+                {/* Progress (grey) + Transcode (red) */}
+                <div className="mt-2 h-2 rounded bg-white/10 relative overflow-hidden">
+                  {/* playback progress (grey) */}
+                  <div
+                    className="absolute left-0 top-0 h-2 rounded bg-white/40"
+                    style={{ zIndex: 1, width: `${Math.min(100, Math.max(0, s.progress_pct || 0))}%` }}
+                  />
+                  {/* transcode progress (red) */}
+                  {(s.video_method === "Transcode" || s.audio_method === "Transcode") && (
+                    <div
+                      className="absolute left-0 top-0 h-2 rounded"
+                      style={{
+                        zIndex: 2,
+                        background: "#ef4444",
+                        width: `${Math.min(100, Math.max(0, (s.trans_pct ?? s.progress_pct ?? 0)))}%`,
+                        opacity: 0.9
+                      }}
+                      title="Transcode progress"
+                    />
+                  )}
                 </div>
               </div>
             </div>
