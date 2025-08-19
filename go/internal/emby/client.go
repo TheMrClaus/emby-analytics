@@ -444,6 +444,21 @@ type EmbySession struct {
 	TransVideoTo   string `json:"TransVideoTo,omitempty"`
 	TransAudioFrom string `json:"TransAudioFrom,omitempty"`
 	TransAudioTo   string `json:"TransAudioTo,omitempty"`
+
+	// Per-track methods
+	VideoMethod string `json:"VideoMethod,omitempty"` // "Direct Play" or "Transcode"
+	AudioMethod string `json:"AudioMethod,omitempty"`
+
+	// Transcode target details
+	TransContainer    string   `json:"TransContainer,omitempty"`
+	TransFramerate    float64  `json:"TransFramerate,omitempty"`
+	TransAudioBitrate int64    `json:"TransAudioBitrate,omitempty"`
+	TransVideoBitrate int64    `json:"TransVideoBitrate,omitempty"`
+	TransWidth        int      `json:"TransWidth,omitempty"`
+	TransHeight       int      `json:"TransHeight,omitempty"`
+	TransReasons      []string `json:"TransReasons,omitempty"`
+	TransCompletion   float64  `json:"TransCompletion,omitempty"`
+	TransPosTicks     int64    `json:"TransPosTicks,omitempty"`
 }
 
 type rawSession struct {
@@ -500,9 +515,18 @@ type rawSession struct {
 	} `json:"PlayState"`
 
 	TranscodingInfo *struct {
-		Bitrate    int64  `json:"Bitrate"` // bps
-		VideoCodec string `json:"VideoCodec"`
-		AudioCodec string `json:"AudioCodec"`
+		Bitrate                int64    `json:"Bitrate"` // overall bps (target)
+		VideoCodec             string   `json:"VideoCodec"`
+		AudioCodec             string   `json:"AudioCodec"`
+		Container              string   `json:"Container"`    // "ts", "mp4", "fmp4", ...
+		Framerate              float64  `json:"Framerate"`    // transcoder speed or output fps (server-dependent)
+		AudioBitrate           int64    `json:"AudioBitrate"` // target audio bps
+		VideoBitrate           int64    `json:"VideoBitrate"` // target video bps
+		Width                  int      `json:"Width"`
+		Height                 int      `json:"Height"`
+		TranscodeReasons       []string `json:"TranscodeReasons"`     // e.g. AudioCodecNotSupported
+		CompletionPercentage   float64  `json:"CompletionPercentage"` // if server reports it
+		TranscodePositionTicks int64    `json:"TranscodePositionTicks"`
 	} `json:"TranscodingInfo"`
 }
 
@@ -550,11 +574,9 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 		// Capture additional media info defaults
 		es.Container = strings.ToUpper(rs.NowPlayingItem.Container)
 
-		// Streams -> codecs + subs; also sum stream bitrates (usually kbps)
+		// Per-track and stream info
 		subs := 0
 		streamKbpsSum := int64(0)
-
-		// To compute transcode "from" values
 		var sourceVideoCodec, sourceAudioCodec string
 
 		// Resolution / HDR / audio lang & channels / subs info
@@ -564,7 +586,8 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 				if es.VideoCodec == "" && ms.Codec != "" {
 					es.VideoCodec = strings.ToUpper(ms.Codec)
 				}
-				if sourceVideoCodec == "" && ms.Codec != "" {
+				// Always assign sourceVideoCodec if present
+				if ms.Codec != "" {
 					sourceVideoCodec = strings.ToUpper(ms.Codec)
 				}
 				if es.Width == 0 && ms.Width > 0 {
@@ -591,6 +614,10 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 			case "audio":
 				if es.AudioCodec == "" && ms.Codec != "" {
 					es.AudioCodec = strings.ToUpper(ms.Codec)
+				}
+				// Always assign sourceAudioCodec if not set and present
+				if sourceAudioCodec == "" && ms.Codec != "" {
+					sourceAudioCodec = strings.ToUpper(ms.Codec)
 				}
 				// Keep language as-is (don't force uppercase) so "English" stays "English"
 				if es.AudioLang == "" && ms.Language != "" {
@@ -637,26 +664,36 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 			es.PlayMethod = "Direct"
 		}
 
-		// Bitrate selection:
-		// 1) TranscodingInfo (already bps)
+		// Bitrate selection and transcode info
 		if rs.TranscodingInfo != nil && rs.TranscodingInfo.Bitrate > 0 {
 			es.Bitrate = rs.TranscodingInfo.Bitrate
-			// When transcoding, current codecs are the transcode "to" values
-			if rs.TranscodingInfo.VideoCodec != "" {
-				es.VideoCodec = strings.ToUpper(rs.TranscodingInfo.VideoCodec)
-				es.TransVideoTo = es.VideoCodec
+
+			// Target (TO) codecs/container/etc
+			es.TransContainer = strings.ToUpper(rs.TranscodingInfo.Container)
+			es.TransFramerate = rs.TranscodingInfo.Framerate
+			es.TransAudioBitrate = rs.TranscodingInfo.AudioBitrate
+			es.TransVideoBitrate = rs.TranscodingInfo.VideoBitrate
+			es.TransWidth = rs.TranscodingInfo.Width
+			es.TransHeight = rs.TranscodingInfo.Height
+			es.TransReasons = append(es.TransReasons, rs.TranscodingInfo.TranscodeReasons...)
+			es.TransCompletion = rs.TranscodingInfo.CompletionPercentage
+			es.TransPosTicks = rs.TranscodingInfo.TranscodePositionTicks
+
+			if v := rs.TranscodingInfo.VideoCodec; v != "" {
+				es.TransVideoTo = strings.ToUpper(v)
 			}
-			if rs.TranscodingInfo.AudioCodec != "" {
-				es.AudioCodec = strings.ToUpper(rs.TranscodingInfo.AudioCodec)
-				es.TransAudioTo = es.AudioCodec
+			if a := rs.TranscodingInfo.AudioCodec; a != "" {
+				es.TransAudioTo = strings.ToUpper(a)
 			}
-			// Fill in the "from" codecs if we detected them from source streams
+
+			// Fill FROM using detected source codecs
 			if sourceVideoCodec != "" {
-				es.TransVideoFrom = strings.ToUpper(sourceVideoCodec)
+				es.TransVideoFrom = sourceVideoCodec
 			}
 			if sourceAudioCodec != "" {
-				es.TransAudioFrom = strings.ToUpper(sourceAudioCodec)
+				es.TransAudioFrom = sourceAudioCodec
 			}
+
 			es.PlayMethod = "Transcode"
 		} else {
 			// 2) MediaSource bitrate (often kbps)
@@ -668,6 +705,18 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 			// 3) Sum stream bitrates (kbps) if source bitrate missing
 			if es.Bitrate == 0 && streamKbpsSum > 0 {
 				es.Bitrate = normalizeToBps(streamKbpsSum)
+			}
+		}
+
+		// Decide per-track methods
+		es.VideoMethod = "Direct Play"
+		es.AudioMethod = "Direct Play"
+		if es.PlayMethod == "Transcode" {
+			if es.TransVideoFrom != "" && es.TransVideoTo != "" && es.TransVideoFrom != es.TransVideoTo {
+				es.VideoMethod = "Transcode"
+			}
+			if es.TransAudioFrom != "" && es.TransAudioTo != "" && es.TransAudioFrom != es.TransAudioTo {
+				es.AudioMethod = "Transcode"
 			}
 		}
 
