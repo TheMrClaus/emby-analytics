@@ -403,7 +403,8 @@ type UserDataItem struct {
 
 // Flattened shape consumed by handlers (plus SessionID for controls)
 type EmbySession struct {
-	SessionID string `json:"SessionId"` // Emby session id
+	SessionID    string `json:"SessionId"` // Emby session id
+	AudioDefault bool   `json:"AudioDefault,omitempty"`
 
 	UserID   string `json:"UserId"`
 	UserName string `json:"UserName"`
@@ -467,6 +468,10 @@ type rawSession struct {
 			Channels int    `json:"Channels"`
 			Width    int    `json:"Width"`
 			Height   int    `json:"Height"`
+
+			// NEW for audio default detection
+			IsDefault bool `json:"IsDefault"`
+			Default   bool `json:"Default"`
 
 			// NEW: many Emby builds signal DV/HDR here
 			VideoRange     string `json:"VideoRange"`     // e.g. "DOVI", "HDR10", "SDR"
@@ -587,20 +592,23 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 				if es.AudioCodec == "" && ms.Codec != "" {
 					es.AudioCodec = strings.ToUpper(ms.Codec)
 				}
-				if sourceAudioCodec == "" && ms.Codec != "" {
-					sourceAudioCodec = strings.ToUpper(ms.Codec)
-				}
+				// Keep language as-is (don't force uppercase) so "English" stays "English"
 				if es.AudioLang == "" && ms.Language != "" {
-					es.AudioLang = strings.ToUpper(ms.Language)
+					es.AudioLang = ms.Language
 				}
 				if es.AudioCh == 0 && ms.Channels > 0 {
 					es.AudioCh = ms.Channels
+				}
+				// NEW: detect default audio track
+				if ms.IsDefault || ms.Default {
+					es.AudioDefault = true
 				}
 				if ms.BitRate > 0 {
 					streamKbpsSum += ms.BitRate
 				} else if ms.Bitrate > 0 {
 					streamKbpsSum += ms.Bitrate
 				}
+
 			case "subtitle":
 				subs++
 				// Keep first sub details for convenience
