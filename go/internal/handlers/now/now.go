@@ -63,8 +63,8 @@ type NowEntry struct {
 	TransPct float64 `json:"trans_pct,omitempty"`
 
 	// For parentheses after lines when transcoding
-	TransAudioBitrate string `json:"trans_audio_bitrate,omitempty"`
-	TransVideoBitrate string `json:"trans_video_bitrate,omitempty"`
+	TransAudioBitrate int64 `json:"trans_audio_bitrate,omitempty"`
+	TransVideoBitrate int64 `json:"trans_video_bitrate,omitempty"`
 }
 
 // Generic env-based Emby client (keeps things portable behind any proxy).
@@ -332,9 +332,9 @@ func Snapshot(c fiber.Ctx) error {
 				return 0
 			}(),
 
-			TransVideoTo:      s.TransVideoTo,
-			TransAudioTo:      s.TransAudioTo,
+			// expose targets/bitrates once (no duplicates)
 			TransAudioBitrate: s.TransAudioBitrate,
+			TransVideoBitrate: s.TransVideoBitrate,
 		})
 	}
 	return c.JSON(out)
@@ -459,9 +459,9 @@ func Stream(c fiber.Ctx) error {
 					return 0
 				}(),
 
-				TransVideoTo:      s.TransVideoTo,
-				TransAudioTo:      s.TransAudioTo,
+				// expose targets/bitrates once (no duplicates)
 				TransAudioBitrate: s.TransAudioBitrate,
+				TransVideoBitrate: s.TransVideoBitrate,
 			})
 		}
 		b, _ := json.Marshal(out)
