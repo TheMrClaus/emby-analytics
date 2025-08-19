@@ -21,6 +21,7 @@ type RefreshState = { running: boolean; imported: number; total?: number; page: 
 
 export default function Home(){
   const [now, setNow] = useState<any[]>([]);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'sse' | 'polling' | 'error'>('connecting');
   const [usage, setUsage] = useState<UsageRow[]>([]);
   const [overview, setOverview] = useState<any>({});
   const [topUsers, setTopUsers] = useState<TopUser[]>([]);
@@ -60,87 +61,197 @@ export default function Home(){
     return Math.trunc(n).toLocaleString();
   };
 
-  // initial fetches + now-playing snapshot + SSE with polling fallback
-  // initial fetches + now-playing snapshot + SSE with polling fallback
+// Ultra-robust Now Playing connection with heartbeat detection
   useEffect(() => {
-    // stats & overview
-    fetch(`${apiBase}/stats/usage?days=14`).then(r => r.json()).then(setUsage).catch(() => {});
-    fetch(`${apiBase}/stats/overview`).then(r => r.json()).then(setOverview).catch(() => {});
-    fetch(`${apiBase}/stats/top/users?window=14d&limit=5`).then(r => r.json()).then(setTopUsers).catch(() => {});
-    fetch(`${apiBase}/stats/top/items?window=14d&limit=5`).then(r => r.json()).then(setTopItems).catch(() => {});
-    fetch(`${apiBase}/stats/qualities`).then(r => r.json()).then(setQualities).catch(() => {});
-    fetch(`${apiBase}/stats/codecs?limit=8`).then(r => r.json()).then(setCodecs).catch(() => {});
-    fetch(`${apiBase}/stats/active-users-lifetime?limit=1`).then(r => r.json()).then(setActiveUsers).catch(() => {});
-    fetch(`${apiBase}/stats/users/total`).then(r => r.json()).then(d => setTotalUsers(d.total_users || 0)).catch(() => {});
+    // Stats & overview fetches (unchanged)
+    fetch(`${apiBase}/stats/usage?days=14`).then(r=>r.json()).then(setUsage).catch(()=>{});
+    fetch(`${apiBase}/stats/overview`).then(r=>r.json()).then(setOverview).catch(()=>{});
+    fetch(`${apiBase}/stats/top/users?window=14d&limit=5`).then(r=>r.json()).then(setTopUsers).catch(()=>{});
+    fetch(`${apiBase}/stats/top/items?window=14d&limit=5`).then(r=>r.json()).then(setTopItems).catch(()=>{});
+    fetch(`${apiBase}/stats/qualities`).then(r=>r.json()).then(setQualities).catch(()=>{});
+    fetch(`${apiBase}/stats/codecs?limit=8`).then(r=>r.json()).then(setCodecs).catch(()=>{});
+    fetch(`${apiBase}/stats/active-users-lifetime?limit=1`).then(r=>r.json()).then(setActiveUsers).catch(()=>{});
+    fetch(`${apiBase}/stats/users/total`).then(r=>r.json()).then(d=>setTotalUsers(d.total_users||0)).catch(()=>{});
 
-    // one-time snapshot so Now Playing renders fast
-    fetch(`${apiBase}/now`).then(r => r.json()).then(rows => { if (Array.isArray(rows)) setNow(rows); }).catch(() => {});
+    // Connection state management
+    let eventSource: EventSource | null = null;
+    let pollInterval: NodeJS.Timeout | null = null;
+    let heartbeatTimeout: NodeJS.Timeout | null = null;
+    let reconnectTimeout: NodeJS.Timeout | null = null;
+    let connectionAttempts = 0;
+    let isPolling = false;
+    let isConnected = false;
+    let cleanedUp = false;
+    let lastHeartbeat = 0;
 
-    let pollId: any = null;
-    let sseErrors = 0;
-    let lastNowSig: string | null = null;
-    let lastNowTs: number = 0;
+    const HEARTBEAT_TIMEOUT = 25000; // 25 seconds (backend sends every 10s)
+    const POLL_INTERVAL = 2500; // 2.5 seconds
+    const MAX_SSE_ATTEMPTS = 3;
 
-    const startPolling = () => {
-      if (pollId) return;
-      pollId = setInterval(async () => {
-        try {
-          const rows = await fetch(`${apiBase}/now`, { cache: "no-store" }).then(r => r.json());
-          if (Array.isArray(rows)) {
-            // Only update if changed (optional optimization)
-            const sig = JSON.stringify(rows.map((e: any) => [e.item_id, e.user, e.progress_pct]));
-            if (sig !== lastNowSig) {
-              setNow(rows);
-              lastNowSig = sig;
-              lastNowTs = Date.now();
-            }
-          }
-        } catch {}
-      }, 5000);
+    // Clear all timers
+    const clearAllTimers = () => {
+      if (heartbeatTimeout) clearTimeout(heartbeatTimeout);
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (pollInterval) clearInterval(pollInterval);
+      heartbeatTimeout = null;
+      reconnectTimeout = null;
+      pollInterval = null;
     };
 
-    const es = new EventSource(`${apiBase}/now/stream`, { withCredentials: true });
-    es.onmessage = (e) => {
+    // Fetch Now Playing data via REST API
+    const fetchNowPlaying = async (): Promise<boolean> => {
       try {
-        const rows = JSON.parse(e.data || "[]");
-        if (Array.isArray(rows)) {
-          // Only update if changed (optional optimization)
-          const sig = JSON.stringify(rows.map((e: any) => [e.item_id, e.user, e.progress_pct]));
-          if (sig !== lastNowSig) {
-            setNow(rows);
-            lastNowSig = sig;
-            lastNowTs = Date.now();
-          }
+        const response = await fetch(`${apiBase}/now`, { 
+          cache: "no-store",
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const rows = await response.json();
+        if (Array.isArray(rows) && !cleanedUp) {
+          setNow(rows);
+          return true;
         }
-        sseErrors = 0;
-      } catch {}
-    };
-    es.onerror = () => {
-      // if SSE fails twice in a row (proxy blocking, etc.), fall back to polling
-      sseErrors++;
-      if (sseErrors >= 2) startPolling();
-    };
-
-    // Heartbeat fallback: if no update for 30s, force a poll
-    const heartbeatId = setInterval(() => {
-      if (Date.now() - lastNowTs > 30000) {
-        fetch(`${apiBase}/now`).then(r => r.json()).then(rows => {
-          if (Array.isArray(rows)) {
-            const sig = JSON.stringify(rows.map((e: any) => [e.item_id, e.user, e.progress_pct]));
-            if (sig !== lastNowSig) {
-              setNow(rows);
-              lastNowSig = sig;
-              lastNowTs = Date.now();
-            }
-          }
-        }).catch(() => {});
+      } catch (error) {
+        console.warn('💥 Failed to fetch Now Playing:', error);
       }
-    }, 10000);
+      return false;
+    };
 
+    // Start polling mode
+    const startPolling = () => {
+      if (isPolling || cleanedUp) return;
+      console.log('🔄 Starting polling mode for Now Playing');
+      isPolling = true;
+      isConnected = false;
+      setConnectionStatus('polling');
+      
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(() => {
+        if (!cleanedUp) {
+          fetchNowPlaying();
+        }
+      }, POLL_INTERVAL);
+      
+      // Immediate fetch
+      fetchNowPlaying();
+    };
+
+    // Stop polling mode
+    const stopPolling = () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+      isPolling = false;
+    };
+
+    // Reset heartbeat timeout
+    const resetHeartbeat = () => {
+      if (heartbeatTimeout) clearTimeout(heartbeatTimeout);
+      lastHeartbeat = Date.now();
+      
+      heartbeatTimeout = setTimeout(() => {
+        if (!cleanedUp) {
+          console.warn('💀 SSE heartbeat timeout - connection appears dead');
+          handleConnectionFailure();
+        }
+      }, HEARTBEAT_TIMEOUT);
+    };
+
+    // Handle SSE connection failure
+    const handleConnectionFailure = () => {
+      console.log('🚨 SSE connection failed, attempting recovery...');
+      
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      
+      clearAllTimers();
+      isConnected = false;
+      connectionAttempts++;
+      setConnectionStatus('error');
+      
+      if (connectionAttempts >= MAX_SSE_ATTEMPTS) {
+        console.log('❌ SSE max attempts reached, falling back to polling permanently');
+        startPolling();
+      } else {
+        console.log(`🔄 Will retry SSE connection (attempt ${connectionAttempts + 1}/${MAX_SSE_ATTEMPTS}) in 3 seconds...`);
+        reconnectTimeout = setTimeout(() => {
+          if (!cleanedUp && !isPolling) {
+            connectSSE();
+          }
+        }, 3000);
+      }
+    };
+
+    // Establish SSE connection
+    const connectSSE = () => {
+      if (eventSource || isPolling || cleanedUp) return;
+      
+      console.log(`🔌 Attempting SSE connection (attempt ${connectionAttempts + 1})`);
+      setConnectionStatus('connecting');
+      
+      try {
+        eventSource = new EventSource(`${apiBase}/now/stream`);
+        
+        eventSource.onopen = () => {
+          console.log('✅ SSE connection established');
+          isConnected = true;
+          connectionAttempts = 0; // Reset on successful connection
+          stopPolling(); // Stop polling if it was running
+          resetHeartbeat(); // Start heartbeat monitoring
+          setConnectionStatus('sse');
+        };
+        
+        eventSource.onmessage = (event) => {
+          try {
+            const rows = JSON.parse(event.data || "[]");
+            if (Array.isArray(rows) && !cleanedUp) {
+              setNow(rows);
+              resetHeartbeat(); // Reset heartbeat on data message
+            }
+          } catch (error) {
+            console.warn('📦 Failed to parse SSE data:', error);
+          }
+        };
+        
+        // Handle custom keepalive events
+        eventSource.addEventListener('keepalive', (event) => {
+          console.log('💗 SSE keepalive received');
+          resetHeartbeat();
+        });
+        
+        eventSource.onerror = (error) => {
+          console.warn('⚠️ SSE error event:', error);
+          handleConnectionFailure();
+        };
+        
+      } catch (error) {
+        console.error('💥 Failed to create EventSource:', error);
+        handleConnectionFailure();
+      }
+    };
+
+    // Start with immediate data fetch, then try SSE
+    fetchNowPlaying().then(() => {
+      if (!cleanedUp) {
+        connectSSE();
+      }
+    });
+
+    // Cleanup function
     return () => {
-      es.close();
-      if (pollId) clearInterval(pollId);
-      clearInterval(heartbeatId);
+      console.log('🧹 Cleaning up Now Playing connections');
+      cleanedUp = true;
+      
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      
+      clearAllTimers();
+      stopPolling();
     };
   }, [apiBase]);
 
@@ -273,6 +384,21 @@ export default function Home(){
             {toast}
           </div>
         )}
+
+        {/* Connection Status Indicator */}
+        <div className="fixed bottom-3 right-3 z-50">
+          <div className={`px-2 py-1 rounded text-xs font-medium ${
+            connectionStatus === 'sse' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
+            connectionStatus === 'polling' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' :
+            connectionStatus === 'connecting' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+            'bg-red-500/20 text-red-400 border border-red-500/30'
+          }`}>
+            {connectionStatus === 'sse' ? '🟢 Live' :
+             connectionStatus === 'polling' ? '🟡 Polling' :
+             connectionStatus === 'connecting' ? '🔵 Connecting' :
+             '🔴 Error'}
+          </div>
+        </div>
 
         <h1 className="sr-only">Emby Analytics</h1>
 
