@@ -61,29 +61,40 @@ export default function Home(){
   };
 
   // initial fetches + now-playing snapshot + SSE with polling fallback
-  useEffect(()=>{
+  // initial fetches + now-playing snapshot + SSE with polling fallback
+  useEffect(() => {
     // stats & overview
-    fetch(`${apiBase}/stats/usage?days=14`).then(r=>r.json()).then(setUsage).catch(()=>{});
-    fetch(`${apiBase}/stats/overview`).then(r=>r.json()).then(setOverview).catch(()=>{});
-    fetch(`${apiBase}/stats/top/users?window=14d&limit=5`).then(r=>r.json()).then(setTopUsers).catch(()=>{});
-    fetch(`${apiBase}/stats/top/items?window=14d&limit=5`).then(r=>r.json()).then(setTopItems).catch(()=>{});
-    fetch(`${apiBase}/stats/qualities`).then(r=>r.json()).then(setQualities).catch(()=>{});
-    fetch(`${apiBase}/stats/codecs?limit=8`).then(r=>r.json()).then(setCodecs).catch(()=>{});
-    fetch(`${apiBase}/stats/active-users-lifetime?limit=1`).then(r=>r.json()).then(setActiveUsers).catch(()=>{});
-    fetch(`${apiBase}/stats/users/total`).then(r=>r.json()).then(d=>setTotalUsers(d.total_users||0)).catch(()=>{});
+    fetch(`${apiBase}/stats/usage?days=14`).then(r => r.json()).then(setUsage).catch(() => {});
+    fetch(`${apiBase}/stats/overview`).then(r => r.json()).then(setOverview).catch(() => {});
+    fetch(`${apiBase}/stats/top/users?window=14d&limit=5`).then(r => r.json()).then(setTopUsers).catch(() => {});
+    fetch(`${apiBase}/stats/top/items?window=14d&limit=5`).then(r => r.json()).then(setTopItems).catch(() => {});
+    fetch(`${apiBase}/stats/qualities`).then(r => r.json()).then(setQualities).catch(() => {});
+    fetch(`${apiBase}/stats/codecs?limit=8`).then(r => r.json()).then(setCodecs).catch(() => {});
+    fetch(`${apiBase}/stats/active-users-lifetime?limit=1`).then(r => r.json()).then(setActiveUsers).catch(() => {});
+    fetch(`${apiBase}/stats/users/total`).then(r => r.json()).then(d => setTotalUsers(d.total_users || 0)).catch(() => {});
 
     // one-time snapshot so Now Playing renders fast
-    fetch(`${apiBase}/now`).then(r=>r.json()).then(rows=>{ if (Array.isArray(rows)) setNow(rows); }).catch(()=>{});
+    fetch(`${apiBase}/now`).then(r => r.json()).then(rows => { if (Array.isArray(rows)) setNow(rows); }).catch(() => {});
 
     let pollId: any = null;
     let sseErrors = 0;
+    let lastNowSig: string | null = null;
+    let lastNowTs: number = 0;
 
     const startPolling = () => {
       if (pollId) return;
       pollId = setInterval(async () => {
         try {
-          const rows = await fetch(`${apiBase}/now`, { cache: "no-store" }).then(r=>r.json());
-          if (Array.isArray(rows)) setNow(rows);
+          const rows = await fetch(`${apiBase}/now`, { cache: "no-store" }).then(r => r.json());
+          if (Array.isArray(rows)) {
+            // Only update if changed (optional optimization)
+            const sig = JSON.stringify(rows.map((e: any) => [e.item_id, e.user, e.progress_pct]));
+            if (sig !== lastNowSig) {
+              setNow(rows);
+              lastNowSig = sig;
+              lastNowTs = Date.now();
+            }
+          }
         } catch {}
       }, 5000);
     };
@@ -92,7 +103,15 @@ export default function Home(){
     es.onmessage = (e) => {
       try {
         const rows = JSON.parse(e.data || "[]");
-        if (Array.isArray(rows)) setNow(rows);
+        if (Array.isArray(rows)) {
+          // Only update if changed (optional optimization)
+          const sig = JSON.stringify(rows.map((e: any) => [e.item_id, e.user, e.progress_pct]));
+          if (sig !== lastNowSig) {
+            setNow(rows);
+            lastNowSig = sig;
+            lastNowTs = Date.now();
+          }
+        }
         sseErrors = 0;
       } catch {}
     };
@@ -102,9 +121,26 @@ export default function Home(){
       if (sseErrors >= 2) startPolling();
     };
 
-    return ()=> {
+    // Heartbeat fallback: if no update for 30s, force a poll
+    const heartbeatId = setInterval(() => {
+      if (Date.now() - lastNowTs > 30000) {
+        fetch(`${apiBase}/now`).then(r => r.json()).then(rows => {
+          if (Array.isArray(rows)) {
+            const sig = JSON.stringify(rows.map((e: any) => [e.item_id, e.user, e.progress_pct]));
+            if (sig !== lastNowSig) {
+              setNow(rows);
+              lastNowSig = sig;
+              lastNowTs = Date.now();
+            }
+          }
+        }).catch(() => {});
+      }
+    }, 10000);
+
+    return () => {
       es.close();
       if (pollId) clearInterval(pollId);
+      clearInterval(heartbeatId);
     };
   }, [apiBase]);
 
