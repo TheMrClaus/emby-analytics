@@ -83,9 +83,8 @@ func main() {
 	// ---- now playing ----
 	// Snapshot: one-shot pull of active sessions
 	app.Get("/now/snapshot", now.Snapshot)
-	// SSE stream: periodic polling + push to frontend
-	app.Get("/now/stream", now.Stream)
-	// WebSocket alternative
+
+	// WebSocket
 	app.Get("/now/ws", func(c fiber.Ctx) error {
 		if ws.IsWebSocketUpgrade(c) {
 			return c.Next()
