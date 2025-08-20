@@ -1,141 +1,147 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"os"
 
-	// Third-party packages
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/logger"
+	"github.com/gofiber/fiber/v3/middleware/recover"
 	"github.com/gofiber/fiber/v3/middleware/static"
 	"github.com/joho/godotenv"
 
-	// Internal packages
 	"emby-analytics/internal/config"
 	"emby-analytics/internal/db"
 	"emby-analytics/internal/emby"
-	"emby-analytics/internal/handlers/admin"
-	"emby-analytics/internal/handlers/health"
-	"emby-analytics/internal/handlers/images"
-	"emby-analytics/internal/handlers/items"
-	nown "emby-analytics/internal/handlers/now"
-	"emby-analytics/internal/handlers/stats"
+
+	// admin
+	admin "emby-analytics/internal/handlers/admin"
+	// health
+	health "emby-analytics/internal/handlers/health"
+	// images
+	images "emby-analytics/internal/handlers/images"
+	// items
+	items "emby-analytics/internal/handlers/items"
+	// now-playing
+	now "emby-analytics/internal/handlers/now"
+	// stats
+	stats "emby-analytics/internal/handlers/stats"
+
+	// background workers
 	"emby-analytics/internal/tasks"
 
-	// WS middleware (Fiber v3 compatible)
 	ws "github.com/saveblush/gofiber3-contrib/websocket"
 )
 
 func main() {
-	// ==========================================
-	// Configuration Setup
-	// ==========================================
 	_ = godotenv.Load()
+
+	// ---- config & clients ----
 	cfg := config.Load()
-
-	// Clients / options
 	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
-	imgOpts := images.NewOpts(cfg)
-
-	// ==========================================
-	// Database Setup
-	// ==========================================
 	sqlDB, err := db.Open(cfg.SQLitePath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("open db: %v", err)
 	}
+	defer func(dbh *sql.DB) { _ = dbh.Close() }(sqlDB)
 	if err := db.EnsureSchema(sqlDB); err != nil {
-		log.Fatal(err)
+		log.Fatalf("ensure schema: %v", err)
 	}
 
-	// ==========================================
-	// Background Tasks Setup
-	// ==========================================
-	go tasks.StartSyncLoop(sqlDB, em, cfg)
-	go tasks.StartUserSyncLoop(sqlDB, em, cfg)
-
-	// ==========================================
-	// Web Server Setup
-	// ==========================================
-	app := fiber.New()
-
-	// Static UI
-	app.Use("/", static.New(cfg.WebPath))
-
-	// ---- WebSocket upgrade gate for /ws/* paths (Fiber v3 + saveblush) ----
-	app.Use("/ws", func(c fiber.Ctx) error {
-		if ws.IsWebSocketUpgrade(c) {
-			// You can stash data into locals to read in the WS handler
-			c.Locals("allowed", true)
-			return c.Next()
-		}
-		return fiber.ErrUpgradeRequired
+	// ---- fiber v3 app ----
+	app := fiber.New(fiber.Config{
+		EnableIPValidation: true,
+		ProxyHeader:        fiber.HeaderXForwardedFor,
 	})
+	app.Use(recover.New())
+	app.Use(logger.New())
 
-	// Now-playing routes (snapshot + SSE + WS + controls)
-	app.Get("/now", nown.Snapshot)
-	app.Get("/now/stream", nown.Stream)
-	app.Get("/ws/nowplaying", nown.WS()) // <— WebSocket endpoint
-
-	app.Post("/now/sessions/:id/pause", nown.PauseSession)
-	app.Post("/now/sessions/:id/stop", nown.StopSession)
-	app.Post("/now/sessions/:id/message", nown.MessageSession)
-
-	// ==========================================
-	// API Routes
-	// ==========================================
-	// Health
+	// ---- health ----
 	app.Get("/health", health.Health(sqlDB))
 	app.Get("/health/emby", health.Emby(em))
 
-	// Stats
+	// ---- stats API ----
 	app.Get("/stats/overview", stats.Overview(sqlDB))
 	app.Get("/stats/usage", stats.Usage(sqlDB))
 	app.Get("/stats/top/users", stats.TopUsers(sqlDB))
 	app.Get("/stats/top/items", stats.TopItems(sqlDB))
 	app.Get("/stats/qualities", stats.Qualities(sqlDB))
 	app.Get("/stats/codecs", stats.Codecs(sqlDB))
-	app.Get("/stats/activity", stats.Activity(sqlDB))
-	app.Get("/stats/active-users-lifetime", stats.ActiveUsersLifetime(sqlDB))
-	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))      // Keep before :id
-	app.Get("/stats/users/:id", stats.UserDetailHandler(sqlDB)) // After /total
+	app.Get("/stats/active-users", stats.ActiveUsersLifetime(sqlDB))
+	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))
+	app.Get("/stats/user/:id", stats.UserDetailHandler(sqlDB))
 
-	// Items
+	// ---- item helpers ----
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
 
-	// Images
+	// ---- images (proxied from Emby) ----
+	imgOpts := images.NewOpts(cfg)
 	app.Get("/img/primary/:id", images.Primary(imgOpts))
 	app.Get("/img/backdrop/:id", images.Backdrop(imgOpts))
 
-	// Admin refresh (both legacy SSE and FastAPI-compatible endpoints)
+	// ---- now playing ----
+	// Snapshot: one-shot pull of active sessions
+	app.Get("/now/snapshot", now.Snapshot)
+	// SSE stream: periodic polling + push to frontend
+	app.Get("/now/stream", now.Stream)
+	// WebSocket alternative
+	app.Get("/now/ws", func(c fiber.Ctx) error {
+		if ws.IsWebSocketUpgrade(c) {
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	}, now.WS())
+	// Controls
+	app.Post("/now/:sessionId/pause", now.PauseSession)
+	app.Post("/now/:sessionId/stop", now.StopSession)
+	app.Post("/now/:sessionId/message", now.MessageSession)
+
+	// ---- admin endpoints (opt-in, keep but unexposed publicly in prod proxies) ----
 	rm := admin.NewRefreshManager()
-
-	// Legacy SSE/GET endpoints (kept)
-	app.Get("/admin/refresh/start", admin.StartHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
-	app.Get("/admin/refresh/stream", admin.StreamHandler(rm))
-	app.Get("/admin/refresh/full", admin.FullHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
-
-	// FastAPI-compatible endpoints used by the UI
-	app.Post("/admin/refresh", admin.StartPostHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
+	app.Post("/admin/refresh/start", admin.StartPostHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
 	app.Get("/admin/refresh/status", admin.StatusHandler(rm))
-
-	// Users sync trigger
-	app.Post("/admin/users/sync", admin.UsersSyncHandler(sqlDB, em, cfg))
-
-	// Admin debug and utility endpoints
+	app.Get("/admin/refresh/stream", admin.StreamHandler(rm))
+	app.Post("/admin/reset-all", admin.ResetAllData(sqlDB, em))
 	app.Post("/admin/reset-lifetime", admin.ResetLifetimeWatch(sqlDB))
-	app.Get("/admin/debug/user-data", admin.DebugUserData(em))
-	app.Get("/admin/users", admin.ListUsers(sqlDB, em))
 	app.Post("/admin/users/force-sync", admin.ForceUserSync(sqlDB, em))
-	app.Post("/admin/cleanup-users", admin.CleanupUsers(sqlDB))
-	app.Post("/admin/reset-all-data", admin.ResetAllData(sqlDB, em))
+	app.Post("/admin/users/sync", admin.UsersSyncHandler(sqlDB, em, cfg))
+	app.Get("/admin/users", admin.ListUsers(sqlDB, em))
+	app.Get("/admin/debug/userdata", admin.DebugUserData(em))
+	// background loops
+	go tasks.StartSyncLoop(sqlDB, em, cfg)
+	go tasks.StartUserSyncLoop(sqlDB, em, cfg)
 
-	// ==========================================
-	// Start Server
-	// ==========================================
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	// ---- static UI (Next.js export in /app/web) ----
+	app.Use("/", static.New(&static.Config{
+		Directory: cfg.WebPath, // typically "/app/web"
+		MaxAge:    86400,
+	}))
+
+	// SPA fallback for unknown GET routes (but NOT for API)
+	app.Use(func(c fiber.Ctx) error {
+		if c.Method() == fiber.MethodGet && !startsWithAny(c.Path(),
+			"/health", "/stats", "/admin", "/now", "/img", "/items") {
+			return c.SendFile(cfg.WebPath + "/index.html")
+		}
+		return fiber.ErrNotFound
+	})
+
+	addr := ":8080"
+	if p := os.Getenv("PORT"); p != "" {
+		addr = ":" + p
 	}
-	log.Printf("[INFO] Starting server on :%s", port)
-	log.Fatal(app.Listen(":" + port))
+	log.Printf("listening on %s", addr)
+	if err := app.Listen(addr); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func startsWithAny(s string, prefixes ...string) bool {
+	for _, p := range prefixes {
+		if len(s) >= len(p) && s[:len(p)] == p {
+			return true
+		}
+	}
+	return false
 }
