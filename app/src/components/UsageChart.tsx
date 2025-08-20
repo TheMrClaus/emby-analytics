@@ -17,21 +17,30 @@ export default function UsageChart({ days = 14 }: { days?: number }) {
   const data = useMemo<ChartRow[]>(() => {
     const byDay: Record<string, ChartRow> = {};
     const users = new Set<string>();
+
     for (const r of rows) {
       users.add(r.user);
       if (!byDay[r.day]) byDay[r.day] = { day: r.day };
       byDay[r.day][r.user] = (byDay[r.day][r.user] as number | undefined ?? 0) + r.hours;
     }
+
     // maintain sorted by day
     const arr = Object.values(byDay).sort((a, b) => (a.day as string).localeCompare(b.day as string));
-    // ensure all user keys exist
-    for (const row of arr) for (const u of users) row[u] = (row[u] as number | undefined) ?? 0;
+
+    // ensure all user keys exist (convert Set -> array to avoid downlevel iteration issue)
+    const userArr = Array.from(users);
+    for (const row of arr) {
+      for (const u of userArr) {
+        row[u] = (row[u] as number | undefined) ?? 0;
+      }
+    }
+
     return arr;
   }, [rows]);
 
   const users = useMemo(() => {
     const s = new Set<string>();
-    rows.forEach(r => s.add(r.user));
+    rows.forEach((r) => s.add(r.user));
     return Array.from(s).sort();
   }, [rows]);
 
@@ -54,4 +63,3 @@ export default function UsageChart({ days = 14 }: { days?: number }) {
     </div>
   );
 }
-
