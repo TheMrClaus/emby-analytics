@@ -1,5 +1,7 @@
 // app/src/components/NowPlaying.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNowStream } from "../hooks/useNowStream";
+
 
 type NowEntry = {
   timestamp: number;
