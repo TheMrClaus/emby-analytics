@@ -1,9 +1,6 @@
 # Emby Analytics
 
-Emby Analytics is a self-hosted dashboard and API service for monitoring and visualizing activity from your [Emby](https://emby.media/) media server.  
-It collects playback statistics, library information, and live "now playing" data, storing them in SQLite for historical analysis.  
-A web interface built with Next.js provides rich charts and tables powered by [Recharts](https://recharts.org/).
-
+Emby Analytics is a self-hosted dashboard and API service for monitoring and visualizing activity from your [Emby](https://emby.media/) media server. Built with **Go/Fiber v3** backend and **Next.js** frontend, it collects playback statistics, library information, and live "now playing" data, storing them in SQLite for historical analysis.
 
 ## Features
 
@@ -11,111 +8,181 @@ A web interface built with Next.js provides rich charts and tables powered by [R
 - **Usage analytics** (hours watched per user/day)
 - **Top users** and **top items** in custom time windows
 - **Media quality breakdown** (4K / 1080p / 720p / SD / Unknown)
-- **Codec distribution**
-- **Most active users** (over a configurable time window)
+- **Codec distribution** analysis
+- **Most active users** (over configurable time windows)
 - **Library overview** by type (Movies, Series, Episodes)
-- **Manual library refresh** from Emby
+- **Manual library refresh** and user sync from Emby
+- **Admin controls** for data management and cleanup
 - **Lightweight database** (SQLite) for persistence
-- **Single-page React UI** served via FastAPI
+- **Modern web UI** with Recharts visualizations
 
+## Architecture
+
+- **Backend**: Go with Fiber v3 framework
+- **Frontend**: Next.js (static export served by Go backend)
+- **Database**: SQLite
+- **Real-time**: Server-Sent Events (SSE)
+- **Images**: Proxied through backend from Emby
 
 ## Project Structure
 ```text
 .
-├── app/                     # Next.js frontend
-│   ├── src/pages/            # React pages (main dashboard in index.tsx)
-│   ├── package.json          # Frontend dependencies
-│   └── next.config.js        # Next.js config (static export)
-├── server/                   # FastAPI backend
-│   ├── main.py                # API, SSE, data collector
-│   └── requirements.txt       # Python dependencies
-├── .gitignore
+├── go/                          # Go backend
+│   ├── cmd/emby-analytics/      # Main application
+│   │   └── main.go              # Entry point & route setup
+│   ├── internal/                # Internal packages
+│   │   ├── config/              # Configuration management
+│   │   ├── db/                  # Database schema & operations
+│   │   ├── emby/                # Emby API client
+│   │   ├── handlers/            # HTTP route handlers
+│   │   │   ├── admin/           # Admin endpoints
+│   │   │   ├── health/          # Health checks
+│   │   │   ├── images/          # Image proxy
+│   │   │   ├── items/           # Library items
+│   │   │   ├── now/             # Now playing & SSE
+│   │   │   └── stats/           # Statistics endpoints
+│   │   └── tasks/               # Background sync tasks
+│   ├── go.mod                   # Go module definition
+│   └── go.sum                   # Go dependencies
+├── app/                         # Next.js frontend
+│   ├── src/pages/               # React pages
+│   ├── package.json             # Frontend dependencies
+│   └── next.config.js           # Next.js config (static export)
+├── Dockerfile                   # Multi-stage Docker build
+├── .env.example                 # Environment variables template
 └── README.md
 ```
 
 ## Requirements
-Python 3.10+
-Node.js 18+
-An accessible Emby Server with API key
-pip and npm / yarn
 
-## Backend Setup
-1. Clone repo & install dependencies
+- **Go 1.25+**
+- **Node.js 18+** (for frontend development)
+- **Emby Server** with API access
+- **Docker** (optional, for containerized deployment)
+
+## Development Setup
+
+### Backend Setup
 ```bash
-git clone https://github.com/yourusername/emby-analytics.git
-cd emby-analytics/server
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+# Clone and navigate to project
+git clone <your-repo>
+cd emby-analytics
+
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your Emby server details
+# EMBY_BASE_URL=http://your-emby:8096
+# EMBY_API_KEY=your_api_key_here
+
+# Run backend in development
+cd go
+go mod tidy
+go run ./cmd/emby-analytics
 ```
 
-2. Configure environment variables
+### Frontend Development
 ```bash
-export EMBY_BASE_URL=http://emby:8096
-export EMBY_API_KEY=your_api_key_here
-export SQLITE_PATH=./emby.db
-```
-
-3. Run the server
-```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8080
-```
-
-## Frontend Setup
-1. Install dependencies
-```bash
+# Install and run frontend in dev mode
 cd app
 npm install
-```
-
-2. Run in dev mode
-```bash
 npm run dev
 ```
-By default, it uses the backend at the same origin.
-You can set NEXT_PUBLIC_API_BASE to override the API endpoint.
 
-3. Build for production:
+The frontend dev server will proxy API requests to the Go backend.
+
+## Production Deployment
+
+### Option 1: Docker (Recommended)
 ```bash
-npm run build
-npm run start
+# Build and run with Docker
+docker build -t emby-analytics .
+docker run -d \
+  -p 8080:8080 \
+  -v /path/to/data:/var/lib/emby-analytics \
+  -e EMBY_BASE_URL=http://your-emby:8096 \
+  -e EMBY_API_KEY=your_api_key \
+  emby-analytics
 ```
 
-4. Static export for embedding in FastAPI
+### Option 2: Manual Build
 ```bash
+# Build frontend
+cd app
 npm run build
-npx next export
+
+# Build Go binary
+cd ../go
+CGO_ENABLED=0 go build -o emby-analytics ./cmd/emby-analytics
+
+# Copy built frontend to serve location
+cp -r ../app/out ./web
+
+# Run
+./emby-analytics
 ```
-This creates an out/ directory served by FastAPI automatically if present.
+
+## Configuration
+
+Key environment variables (see `.env.example` for complete list):
+
+- `EMBY_BASE_URL`: Your Emby server URL (e.g., `http://emby:8096`)
+- `EMBY_API_KEY`: Emby API key (Settings → Advanced → API Keys)
+- `SQLITE_PATH`: Database location (default: `/var/lib/emby-analytics/emby.db`)
+- `WEB_PATH`: Static UI files path (default: `/app/web`)
+- `SYNC_INTERVAL`: Background sync interval in seconds (default: 60)
+- `HISTORY_DAYS`: Days of history to sync (default: 2)
 
 ## API Endpoints
-The backend provides several REST endpoints:
-| Endpoint                | Description                     |
-| ----------------------- | ------------------------------- |
-| `/health`               | Backend health check            |
-| `/health/emby`          | Checks Emby connectivity        |
-| `/admin/refresh`        | Starts library refresh          |
-| `/admin/refresh/status` | Gets refresh status             |
-| `/stats/overview`       | Library type counts             |
-| `/stats/usage`          | Usage stats by user/day         |
-| `/stats/top/users`      | Top users                       |
-| `/stats/top/items`      | Top items                       |
-| `/stats/qualities`      | Media quality distribution      |
-| `/stats/codecs`         | Codec usage distribution        |
-| `/stats/active-users`   | Most active users               |
-| `/stats/users/total`    | Total registered users          |
-| `/now/stream`           | Real-time SSE for "Now Playing" |
-| `/img/primary/{id}`     | Proxied poster image            |
-| `/img/backdrop/{id}`    | Proxied backdrop image          |
 
-## Deployment
-You can run backend and frontend separately, or use FastAPI to serve the static export of the frontend.
-For production, use gunicorn or uvicorn workers for the backend, and reverse proxy with Nginx or Traefik.
+### Statistics
+- `GET /stats/overview` - General library overview
+- `GET /stats/usage` - Usage analytics by user/day
+- `GET /stats/top/users` - Top users by watch time
+- `GET /stats/top/items` - Most watched content
+- `GET /stats/qualities` - Quality distribution
+- `GET /stats/codecs` - Codec statistics
+- `GET /stats/activity` - Activity timeline
 
-Example (backend only):
-```bash
-uvicorn main:app --host 0.0.0.0 --port 8080 --workers 4
-```
+### Now Playing
+- `GET /now` - Current playback snapshot
+- `GET /now/stream` - SSE stream of live updates
+- `POST /now/sessions/:id/pause` - Pause session
+- `POST /now/sessions/:id/stop` - Stop session
 
-## License
-MIT License — free to use, modify, and distribute.
+### Admin
+- `POST /admin/refresh` - Start library refresh
+- `GET /admin/refresh/status` - Refresh progress
+- `POST /admin/users/sync` - Sync users from Emby
+- `POST /admin/reset-all-data` - Reset all data
+
+### Health
+- `GET /health` - Database health
+- `GET /health/emby` - Emby connection health
+
+## Features in Detail
+
+### Real-time Dashboard
+- Live view of current playback sessions
+- User avatars and session details
+- Remote control capabilities (pause/stop/message)
+
+### Analytics
+- Historical usage trends per user
+- Content popularity rankings
+- Quality and codec breakdowns
+- Activity heatmaps
+
+### Data Management
+- Automatic background syncing
+- Manual refresh controls
+- User data synchronization
+- Data cleanup utilities
+
+## Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
