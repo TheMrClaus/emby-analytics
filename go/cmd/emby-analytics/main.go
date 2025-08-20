@@ -113,10 +113,7 @@ func main() {
 	go tasks.StartUserSyncLoop(sqlDB, em, cfg)
 
 	// ---- static UI (Next.js export in /app/web) ----
-	app.Use("/", static.New(&static.Config{
-		Directory: cfg.WebPath, // typically "/app/web"
-		MaxAge:    86400,
-	}))
+	app.Use("/", static.New(cfg.WebPath))
 
 	// SPA fallback for unknown GET routes (but NOT for API)
 	app.Use(func(c fiber.Ctx) error {
