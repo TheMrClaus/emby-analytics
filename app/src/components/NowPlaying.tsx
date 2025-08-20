@@ -58,6 +58,47 @@ export default function NowPlaying() {
     return `${proto}://${window.location.host}/now/ws`;
   }, []);
 
+  // Crossfade + parallax state
+  const [bgA, setBgA] = useState<string>("");
+  const [bgB, setBgB] = useState<string>("");
+  const [useA, setUseA] = useState<boolean>(true); // which layer is "on"
+  const [parallaxY, setParallaxY] = useState<number>(0);
+
+  // Compute next hero URL from the first session
+  const nextHeroUrl = useMemo(() => {
+    const first = sessions[0];
+    if (!first?.item_id) return "";
+    return `${apiBase}/img/backdrop/${encodeURIComponent(first.item_id)}`;
+  }, [sessions]);
+
+  // When the first session changes, crossfade layers
+  useEffect(() => {
+    if (!nextHeroUrl) return;
+    if (useA) {
+      setBgB(nextHeroUrl);
+      // flip on next frame to ensure transition
+      requestAnimationFrame(() => setUseA(false));
+    } else {
+      setBgA(nextHeroUrl);
+      requestAnimationFrame(() => setUseA(true));
+    }
+  }, [nextHeroUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Parallax (respect reduced motion)
+  useEffect(() => {
+    const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (mql.matches) return; // no motion
+
+    const onScroll = () => {
+      // gentle parallax (cap for safety)
+      const y = Math.min(60, window.scrollY * 0.12);
+      setParallaxY(y);
+    };
+    onScroll(); // initialize
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const loadSnapshot = useCallback(async () => {
     try {
       const res = await fetch(`${apiBase}/now/snapshot`);
@@ -135,27 +176,33 @@ export default function NowPlaying() {
 
   return (
     <section className="relative">
-      {/* Backdrop (first active session only) */}
-      {sessions.length > 0 && sessions[0]?.item_id ? (
+      {/* Crossfading, parallaxed backdrop (only if we have any session) */}
+      {sessions.length > 0 && nextHeroUrl ? (
         <>
           <div
-            className="hero-bg"
+            className={`hero-layer ${useA ? "opacity-100" : "opacity-0"}`}
             style={{
-              backgroundImage: `url(${apiBase}/img/backdrop/${encodeURIComponent(
-                sessions[0].item_id
-              )})`,
+              backgroundImage: bgA ? `url(${bgA})` : "none",
+              transform: `translateY(${parallaxY}px) scale(1.05)`,
             }}
+            aria-hidden
           />
-          <div className="hero-overlay" />
+          <div
+            className={`hero-layer ${useA ? "opacity-0" : "opacity-100"}`}
+            style={{
+              backgroundImage: bgB ? `url(${bgB})` : "none",
+              transform: `translateY(${parallaxY}px) scale(1.05)`,
+            }}
+            aria-hidden
+          />
+          <div className="hero-overlay" aria-hidden />
         </>
       ) : null}
 
       {/* Foreground content */}
       <div className="relative z-10 space-y-4">
         <h2 className="ty-title">Now Playing</h2>
-
         {error && <div className="text-red-400 text-sm">{error}</div>}
-
         {sessions.length === 0 ? (
           <div className="ty-muted text-sm">Nobody is watching right now.</div>
         ) : (
