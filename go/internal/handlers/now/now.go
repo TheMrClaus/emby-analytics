@@ -53,8 +53,9 @@ type NowEntry struct {
 	TransAudioTo   string `json:"trans_audio_to,omitempty"`
 
 	// UI-friendly extras
-	VideoMethod  string `json:"video_method,omitempty"` // "Direct Play"/"Transcode"
-	AudioMethod  string `json:"audio_method,omitempty"`
+	VideoMethod string `json:"video_method,omitempty"` // "Direct Play"/"Transcode"
+	AudioMethod string `json:"audio_method,omitempty"`
+
 	StreamPath   string `json:"stream_path,omitempty"`   // e.g. HLS
 	StreamDetail string `json:"stream_detail,omitempty"` // e.g. "HLS (6.2 Mbps, 1483 fps)"
 	TransReason  string `json:"trans_reason,omitempty"`
