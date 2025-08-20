@@ -20,6 +20,9 @@ import (
 	nown "emby-analytics/internal/handlers/now"
 	"emby-analytics/internal/handlers/stats"
 	"emby-analytics/internal/tasks"
+
+	// WS middleware (Fiber v3 compatible)
+	ws "github.com/saveblush/gofiber3-contrib/websocket"
 )
 
 func main() {
@@ -47,21 +50,32 @@ func main() {
 	// ==========================================
 	// Background Tasks Setup
 	// ==========================================
-	go tasks.StartSyncLoop(sqlDB, em, cfg)     // Keep existing sync for real-time data
-	go tasks.StartUserSyncLoop(sqlDB, em, cfg) // Add new user data sync
+	go tasks.StartSyncLoop(sqlDB, em, cfg)
+	go tasks.StartUserSyncLoop(sqlDB, em, cfg)
 
 	// ==========================================
 	// Web Server Setup
 	// ==========================================
 	app := fiber.New()
+
 	// Static UI
 	app.Use("/", static.New(cfg.WebPath))
 
-	// Now-playing routes
+	// ---- WebSocket upgrade gate for /ws/* paths (Fiber v3 + saveblush) ----
+	app.Use("/ws", func(c fiber.Ctx) error {
+		if ws.IsWebSocketUpgrade(c) {
+			// You can stash data into locals to read in the WS handler
+			c.Locals("allowed", true)
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+
+	// Now-playing routes (snapshot + SSE + WS + controls)
 	app.Get("/now", nown.Snapshot)
 	app.Get("/now/stream", nown.Stream)
+	app.Get("/ws/nowplaying", nown.WS()) // <— WebSocket endpoint
 
-	// If not already present, also wire the control endpoints:
 	app.Post("/now/sessions/:id/pause", nown.PauseSession)
 	app.Post("/now/sessions/:id/stop", nown.StopSession)
 	app.Post("/now/sessions/:id/message", nown.MessageSession)
@@ -82,8 +96,8 @@ func main() {
 	app.Get("/stats/codecs", stats.Codecs(sqlDB))
 	app.Get("/stats/activity", stats.Activity(sqlDB))
 	app.Get("/stats/active-users-lifetime", stats.ActiveUsersLifetime(sqlDB))
-	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))      // FIXED: Moved before :id route
-	app.Get("/stats/users/:id", stats.UserDetailHandler(sqlDB)) // Keep this after /total
+	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))      // Keep before :id
+	app.Get("/stats/users/:id", stats.UserDetailHandler(sqlDB)) // After /total
 
 	// Items
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
@@ -112,7 +126,6 @@ func main() {
 	app.Get("/admin/debug/user-data", admin.DebugUserData(em))
 	app.Get("/admin/users", admin.ListUsers(sqlDB, em))
 	app.Post("/admin/users/force-sync", admin.ForceUserSync(sqlDB, em))
-	app.Post("/admin/cleanup-users", admin.CleanupUsers(sqlDB))
 	app.Post("/admin/cleanup-users", admin.CleanupUsers(sqlDB))
 	app.Post("/admin/reset-all-data", admin.ResetAllData(sqlDB, em))
 
