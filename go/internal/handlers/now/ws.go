@@ -76,7 +76,7 @@ func writeSnapshot(conn *ws.Conn, em *emby.Client) bool {
 			Subs:              s.SubLang,
 			Bitrate:           s.Bitrate,
 			ProgressPct:       pct,
-			Poster:            s.ItemID,
+			Poster:            "/img/primary/" + s.ItemID,
 			SessionID:         s.SessionID,
 			ItemID:            s.ItemID,
 			ItemType:          s.ItemType,
@@ -109,4 +109,5 @@ func writeSnapshot(conn *ws.Conn, em *emby.Client) bool {
 		return false // client disconnected
 	}
 	return true
+}
 }
