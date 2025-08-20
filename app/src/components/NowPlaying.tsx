@@ -1,7 +1,5 @@
 // app/src/components/NowPlaying.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNowStream } from "../hooks/useNowStream";
-
 
 type NowEntry = {
   timestamp: number;
@@ -76,7 +74,6 @@ export default function NowPlaying() {
     if (!nextHeroUrl) return;
     if (useA) {
       setBgB(nextHeroUrl);
-      // flip on next frame to ensure transition
       requestAnimationFrame(() => setUseA(false));
     } else {
       setBgA(nextHeroUrl);
@@ -90,7 +87,6 @@ export default function NowPlaying() {
     if (mql.matches) return; // no motion
 
     const onScroll = () => {
-      // gentle parallax (cap for safety)
       const y = Math.min(60, window.scrollY * 0.12);
       setParallaxY(y);
     };
@@ -121,14 +117,14 @@ export default function NowPlaying() {
         try {
           const data: NowEntry[] = JSON.parse(ev.data);
           setSessions(Array.isArray(data) ? data : []);
-        } catch {/* ignore parse errors */}
+        } catch {
+          /* ignore parse errors */
+        }
       };
       ws.onerror = () => {
-        // Leave a snapshot fallback so the section still shows something.
         if (!sessions.length) loadSnapshot();
       };
       ws.onclose = () => {
-        // simple reconnect with backoff
         setTimeout(connectWS, 2000);
       };
     } catch {
@@ -140,7 +136,9 @@ export default function NowPlaying() {
     loadSnapshot();
     connectWS();
     return () => {
-      try { wsRef.current?.close(); } catch {}
+      try {
+        wsRef.current?.close();
+      } catch {}
     };
   }, [loadSnapshot, connectWS]);
 
@@ -169,13 +167,13 @@ export default function NowPlaying() {
           }),
         });
       }
-    } catch {/* ignore */}
+    } catch {
+      /* ignore */
+    }
   };
 
-// app/src/components/NowPlaying.tsx
-
   return (
-    <section className="relative">
+    <section className="hero p-6">
       {/* Crossfading, parallaxed backdrop (only if we have any session) */}
       {sessions.length > 0 && nextHeroUrl ? (
         <>
@@ -200,9 +198,11 @@ export default function NowPlaying() {
       ) : null}
 
       {/* Foreground content */}
-      <div className="relative z-10 space-y-4">
+      <div className="hero-foreground space-y-4">
         <h2 className="ty-title">Now Playing</h2>
+
         {error && <div className="text-red-400 text-sm">{error}</div>}
+
         {sessions.length === 0 ? (
           <div className="ty-muted text-sm">Nobody is watching right now.</div>
         ) : (
