@@ -110,15 +110,15 @@ export default function NowPlaying() {
   ) => {
     try {
       if (action === "pause" || action === "unpause") {
-        await fetch(`${apiBase}/now/pause/${sessionId}`, {
+        await fetch(`${apiBase}/now/${sessionId}/pause`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ paused: action === "pause" }),
         });
       } else if (action === "stop") {
-        await fetch(`${apiBase}/now/stop/${sessionId}`, { method: "POST" });
+        await fetch(`${apiBase}/now/${sessionId}/stop`, { method: "POST" });
       } else if (action === "message") {
-        await fetch(`${apiBase}/now/message/${sessionId}`, {
+        await fetch(`${apiBase}/now/${sessionId}/message`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -138,16 +138,18 @@ export default function NowPlaying() {
       {error && <div className="text-red-400 text-sm">{error}</div>}
 
       {sessions.length === 0 ? (
-        <div className="card p-6">
-          <div className="ty-muted">Nobody is watching right now.</div>
-        </div>
+        <div className="ty-muted text-sm">Nobody is watching right now.</div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {sessions.map((s) => (
             <article key={s.session_id} className="card p-4 flex gap-4">
               {/* poster */}
               <img
-                src={s.poster || `${apiBase}/img/primary/${encodeURIComponent(s.item_id)}`}
+                src={
+                  s.poster?.startsWith("/img/")
+                    ? `${apiBase}${s.poster}`
+                    : `${apiBase}/img/primary/${encodeURIComponent(s.item_id)}`
+                }
                 alt={s.title}
                 className="w-20 h-28 object-cover rounded-lg border border-white/10"
               />
@@ -162,11 +164,33 @@ export default function NowPlaying() {
                   {s.app} • {s.device}
                 </div>
 
-                <div className="mt-2 text-sm">
-                  <div>Video: {s.video}</div>
-                  <div>Audio: {s.audio}</div>
-                  {s.subs && <div>Subs: {s.subs}</div>}
-                  {!!s.bitrate && <div>Bitrate: {(s.bitrate / 1_000_000).toFixed(1)} Mbps</div>}
+                <div className="mt-2 text-sm space-y-1">
+                  <div className="font-medium">Stream</div>
+                  <div>
+                    {s.container} ({(s.bitrate / 1_000_000).toFixed(1)} Mbps)
+                  </div>
+                  {s.trans_reason && (
+                    <div>{s.trans_reason}</div>
+                  )}
+
+                  <div className="font-medium mt-1">Video</div>
+                  <div>
+                    {s.width}x{s.height} {s.video} • {s.video_method || "Direct Play"}
+                  </div>
+
+                  <div className="font-medium mt-1">Audio</div>
+                  <div>
+                    {s.audio} • {s.audio_method || "Direct Play"}
+                  </div>
+
+                  {s.subs && (
+                    <>
+                      <div className="font-medium mt-1">Subs</div>
+                      <div>
+                        {s.subs} • {s.sub_codec || "—"}
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="mt-3">
@@ -186,31 +210,27 @@ export default function NowPlaying() {
                   <button
                     className="badge"
                     onClick={() => send(s.session_id, "pause")}
-                    title="Pause"
                   >
                     Pause
                   </button>
                   <button
                     className="badge"
                     onClick={() => send(s.session_id, "unpause")}
-                    title="Resume"
                   >
                     Resume
                   </button>
                   <button
                     className="badge"
                     onClick={() => send(s.session_id, "stop")}
-                    title="Stop"
                   >
                     Stop
                   </button>
                   <button
                     className="badge"
                     onClick={() => {
-                      const txt = prompt("Send a message to this session:", "Hello!");
+                      const txt = prompt("Send a message:", "Hello!");
                       if (txt != null) send(s.session_id, "message", txt);
                     }}
-                    title="Message"
                   >
                     Message
                   </button>
