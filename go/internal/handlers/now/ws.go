@@ -12,12 +12,8 @@ import (
 
 // WS returns a Fiber v3 handler that upgrades to WebSocket and streams Now Playing snapshots.
 func WS() fiber.Handler {
-	// We use the saveblush wrapper so we can still use c.Locals, c.Params, c.Query, c.Cookies
 	return ws.New(func(conn *ws.Conn) {
 		defer conn.Close()
-
-		// Example: read the flag set in the upgrade gate
-		_ = conn.Locals("allowed")
 
 		cfg := config.Load()
 		em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
@@ -46,11 +42,11 @@ func WS() fiber.Handler {
 func writeSnapshot(conn *ws.Conn, em *emby.Client) bool {
 	sessions, err := em.GetActiveSessions()
 	if err != nil {
-		_ = conn.WriteJSON(map[string]any{
-			"type":  "error",
-			"error": "failed to fetch sessions",
-		})
-		return true // keep connection; next tick may succeed
+		// On error: send empty list so UI just shows "no one playing"
+		if err := conn.WriteJSON([]NowEntry{}); err != nil {
+			return false
+		}
+		return true
 	}
 
 	now := time.Now().UnixMilli()
@@ -108,17 +104,8 @@ func writeSnapshot(conn *ws.Conn, em *emby.Client) bool {
 		})
 	}
 
-	payload := struct {
-		Type string     `json:"type"`
-		At   int64      `json:"at"`
-		Data []NowEntry `json:"data"`
-	}{
-		Type: "now",
-		At:   now,
-		Data: entries,
-	}
-
-	if err := conn.WriteJSON(payload); err != nil {
+	// Send the array directly (no wrapper object!)
+	if err := conn.WriteJSON(entries); err != nil {
 		return false // client disconnected
 	}
 	return true
