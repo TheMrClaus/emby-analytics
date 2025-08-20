@@ -24,4 +24,3 @@ export const fmtTooltipTime = (hours: number) => {
 };
 
 export const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
-
