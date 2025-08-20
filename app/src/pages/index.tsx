@@ -233,6 +233,32 @@ export default function Home(){
       }
     };
 
+    // Add this near your connectSSE / startPolling helpers
+    const connectWS = () => {
+      try {
+        const url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/nowplaying";
+        const ws = new WebSocket(url);
+
+        ws.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(ev.data);
+            if (msg?.type === "now" && Array.isArray(msg.data)) {
+              setNow(msg.data);
+            }
+          } catch {}
+        };
+        ws.onclose = () => {
+          connectSSE();
+        };
+        ws.onerror = () => {
+          try { ws.close(); } catch {}
+        };
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
     // Start with immediate data fetch, then try SSE
     fetchNowPlaying().then(() => {
       if (!cleanedUp) {
