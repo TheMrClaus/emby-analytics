@@ -4,73 +4,52 @@ import type { NowEntry } from "../types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
-/**
- * Uses SSE stream (/now/stream) if available. Falls back to polling snapshot.
- */
-export function useNowStream(pollFallbackMs = 5000) {
+export function useNowStream() {
   const [items, setItems] = useState<NowEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
-  const pollRef = useRef<number | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    let closed = false;
+    if (typeof window === "undefined") return;
 
-    const startPolling = () => {
-      // Avoid duplicate timers
-      if (pollRef.current) return;
-      const pollOnce = async () => {
-        try {
-          const res = await fetch(`${API_BASE}/now/snapshot`);
-          if (!res.ok) throw new Error(res.statusText);
-          const data = (await res.json()) as NowEntry[];
-          if (!closed) setItems(data ?? []);
-        } catch (e: any) {
-          if (!closed) setError(e?.message ?? "Polling error");
-        }
-      };
-      pollOnce();
-      pollRef.current = window.setInterval(pollOnce, pollFallbackMs) as unknown as number;
+    const proto = window.location.protocol === "https:" ? "wss" : "ws";
+    const url = `${proto}://${window.location.host}/now/ws`;
+
+    const ws = new WebSocket(url);
+    wsRef.current = ws;
+
+    ws.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        const arr = Array.isArray(data) ? data : [data];
+        setItems(arr);
+        setError(null);
+      } catch {
+        setError("Invalid data from server");
+      }
     };
 
-    try {
-      const es = new EventSource(`${API_BASE}/now/stream`);
-      esRef.current = es;
+    ws.onerror = () => {
+      setError("WebSocket error");
+    };
 
-      es.onmessage = (ev) => {
-        try {
-          const data = JSON.parse(ev.data);
-          // stream may send an array or single object; normalize
-       	  const arr = Array.isArray(data) ? data : [data];
-          setItems(arr);
-          setError(null);
-        } catch (e) {
-          // malformed event; ignore
+    ws.onclose = () => {
+      setError("WebSocket closed, retrying...");
+      // try to reconnect after 2s
+      setTimeout(() => {
+        if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED) {
+          // re-init by re-running the effect
+          setItems([]);
+          setError("Reconnecting...");
+          window.location.reload(); // simplest auto-reconnect
         }
-      };
-      es.onerror = () => {
-        setError("SSE disconnected; using polling");
-        es.close();
-        startPolling();
-      };
-    } catch {
-      setError("SSE not supported; using polling");
-      startPolling();
-    }
+      }, 2000);
+    };
 
     return () => {
-      closed = true;
-      if (esRef.current) {
-        esRef.current.close();
-        esRef.current = null;
-      }
-      if (pollRef.current) {
-        window.clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
+      ws.close();
     };
-  }, [pollFallbackMs]);
+  }, []);
 
   return { items, error };
 }
-
