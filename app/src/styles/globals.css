@@ -43,3 +43,10 @@ body {
 .table-dark td, .table-dark th { @apply py-2; }
 .table-dark tbody tr:hover { @apply bg-white/5; }
 .table-dark .num { @apply text-right; } /* add className="num" to numeric columns */
+
+/* Premium Hero for Now Playing */
+.hero {
+  @apply rounded-2xl shadow-[0_12px_32px_rgba(0,0,0,.25)] border border-emerald-500/20 bg-gradient-to-br from-[rgba(58,170,53,0.15)] to-[rgba(18,24,38,0.95)] p-6;
+}
+.hero h2.ty-title {
+  @apply text-3xl font-extrabold text-emerald

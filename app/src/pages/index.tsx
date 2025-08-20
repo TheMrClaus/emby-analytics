@@ -20,24 +20,25 @@ export default function Dashboard() {
       <main className="min-h-screen p-4 md:p-6 space-y-6">
         <div className="ty-display">Emby Analytics</div>
 
+        {/* PREMIUM HERO NOW PLAYING */}
+        <div className="hero">
+          <NowPlaying />
+        </div>
+
         <OverviewCards />
         <RefreshControls />
 
         <div className="grid lg:grid-cols-2 gap-4">
           <UsageChart days={14} />
-          <NowPlaying />
-        </div>
-
-        <div className="grid lg:grid-cols-2 gap-4">
           <TopUsers days={14} limit={10} />
-          <TopItems days={14} limit={10} />
         </div>
 
         <div className="grid lg:grid-cols-2 gap-4">
+          <TopItems days={14} limit={10} />
           <QualitiesChart />
-          <CodecsChart />
         </div>
 
+        <CodecsChart />
         <ActiveUsersLifetime limit={10} />
       </main>
     </>
