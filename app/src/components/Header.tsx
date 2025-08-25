@@ -1,8 +1,11 @@
 // app/src/components/Header.tsx
 import { useEffect, useState } from 'react';
-import { fetchUsage, fetchNowSnapshot } from '../lib/api';
-const [refreshing, setRefreshing] = useState(false);
-const [progress, setProgress] = useState(0);
+import {
+  fetchUsage,
+  fetchNowSnapshot,
+  startRefresh,          // <-- new
+  fetchRefreshStatus,    // <-- new
+} from '../lib/api';
 
 type SnapshotEntry = {
   play_method?: string;
@@ -14,16 +17,15 @@ export default function Header() {
   const [streamsTotal, setStreamsTotal] = useState<number>(0);
   const [directPlay, setDirectPlay] = useState<number>(0);
   const [transcoding, setTranscoding] = useState<number>(0);
-  // add refresh UI state
+
+  // refresh UI state
   const [refreshing, setRefreshing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
 
   // ----- clock -----
   useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setCurrentTime(now.toLocaleTimeString());
-    };
+    const updateTime = () => setCurrentTime(new Date().toLocaleTimeString());
     updateTime();
     const t = setInterval(updateTime, 1000);
     return () => clearInterval(t);
@@ -63,7 +65,7 @@ export default function Header() {
         setDirectPlay(d);
         setTranscoding(t);
       } catch {
-        // ignore errors, keep old values
+        /* keep previous values */
       }
     };
 
@@ -75,6 +77,56 @@ export default function Header() {
     };
   }, []);
 
+  // toast helper
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  // start refresh + poll progress
+  const handleRefresh = async () => {
+    if (refreshing) return;
+
+    try {
+      setRefreshing(true);
+      setProgress(0);
+
+      // kick off on the server
+      await startRefresh();
+
+      // poll status
+      const poll = setInterval(async () => {
+        try {
+          const s = await fetchRefreshStatus(); // RefreshState from your types
+          const pct = Math.max(0, Math.min(100, Number(s.progress ?? 0)));
+          setProgress(pct);
+
+          // consider complete on explicit status or 100%
+          if ((s as any).status === 'done' || pct >= 100) {
+            clearInterval(poll);
+            setRefreshing(false);
+            setProgress(100);
+            showToast('Refresh complete ✅');
+            // Optionally trigger light data refreshes right after:
+            // re-fetch usage to keep THIS WEEK fresh
+            fetchUsage(7)
+              .then(rows => setWeeklyHours(rows.reduce((acc, r) => acc + (r.hours || 0), 0)))
+              .catch(() => {});
+          }
+        } catch {
+          clearInterval(poll);
+          setRefreshing(false);
+          setProgress(0);
+          showToast('Refresh failed ❌');
+        }
+      }, 1000);
+    } catch {
+      setRefreshing(false);
+      setProgress(0);
+      showToast('Could not start refresh ❌');
+    }
+  };
+
   return (
     <header className="bg-black text-white p-4">
       {/* Top row */}
@@ -82,14 +134,8 @@ export default function Header() {
         {/* Left side - Logo and title */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-yellow-500 rounded flex items-center justify-center">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              className="text-black"
-            >
-              <path d="M8 5v14l11-7z" fill="currentColor" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-black">
+              <path d="M8 5v14l11-7z" fill="currentColor"/>
             </svg>
           </div>
           <div>
@@ -100,14 +146,32 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Right side - Weekly hours */}
-        <div className="text-right">
-          <div className="text-xs text-gray-400 uppercase tracking-wide">
-            THIS WEEK
+        {/* Right side - Weekly hours + refresh */}
+        <div className="flex items-end gap-4">
+          <div className="text-right">
+            <div className="text-xs text-gray-400 uppercase tracking-wide">THIS WEEK</div>
+            <div className="text-2xl font-bold text-yellow-400">
+              {weeklyHours == null ? '—' : `${weeklyHours.toFixed(1)}h`} watched
+            </div>
           </div>
-          <div className="text-2xl font-bold text-yellow-400">
-            {weeklyHours == null ? '—' : `${weeklyHours.toFixed(1)}h`} watched
-          </div>
+
+          {/* Unified Refresh button with inline progress */}
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className={`relative overflow-hidden min-w-[140px] rounded font-medium text-sm px-4 py-2 transition-colors
+              ${refreshing ? 'bg-yellow-700 text-black' : 'bg-yellow-600 hover:bg-yellow-700 text-black'}`}
+            aria-busy={refreshing}
+            aria-label="Refresh library"
+          >
+            <span className="relative z-10">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
+            {/* progress bar inside button */}
+            <span
+              className="absolute bottom-0 left-0 h-1 bg-yellow-300 transition-[width] duration-300"
+              style={{ width: `${progress}%` }}
+              aria-hidden
+            />
+          </button>
         </div>
       </div>
 
@@ -116,9 +180,7 @@ export default function Header() {
         <div>
           <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">
             ACTIVE STREAMS:{' '}
-            <span className="text-2xl font-bold text-white tabular-nums">
-              {streamsTotal}
-            </span>
+            <span className="text-2xl font-bold text-white tabular-nums">{streamsTotal}</span>
           </div>
           <div className="flex gap-4 mt-1">
             <span className="bg-teal-600 text-white px-2 py-1 rounded text-sm">
@@ -129,58 +191,14 @@ export default function Header() {
             </span>
           </div>
         </div>
-
-        {/* Refresh button */}
-        <button
-          onClick={async () => {
-            if (refreshing) return;
-            setRefreshing(true);
-            setProgress(0);
-
-            try {
-              // Start refresh
-              await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/refresh/start`, {
-                method: "POST",
-              });
-
-              // Poll status until complete
-              const interval = setInterval(async () => {
-                try {
-                  const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/refresh/status`);
-                  if (res.ok) {
-                    const data = await res.json();
-                    setProgress(data.progress ?? 0);
-
-                    if (data.status === "done" || data.progress >= 100) {
-                      clearInterval(interval);
-                      setRefreshing(false);
-                      setProgress(0);
-                    }
-                  } else {
-                    throw new Error("Bad status response");
-                  }
-                } catch {
-                  clearInterval(interval);
-                  setRefreshing(false);
-                  setProgress(0);
-                }
-              }, 1000);
-            } catch {
-              setRefreshing(false);
-              setProgress(0);
-            }
-          }}
-          className="relative bg-yellow-600 hover:bg-yellow-700 text-black px-4 py-2 rounded font-medium text-sm transition-colors overflow-hidden min-w-[120px]"
-        >
-          {refreshing ? "Refreshing…" : "Refresh"}
-          {progress > 0 && refreshing && (
-            <span
-              className="absolute bottom-0 left-0 h-1 bg-yellow-400 transition-all"
-              style={{ width: `${progress}%` }}
-            />
-          )}
-        </button>
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-4 right-4 bg-neutral-800 text-white border border-neutral-700 rounded-lg shadow px-4 py-2 text-sm">
+          {toast}
+        </div>
+      )}
     </header>
   );
 }
