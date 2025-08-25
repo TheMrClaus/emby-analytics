@@ -4,6 +4,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } fro
 import { fetchUsage } from "../lib/api";
 import type { UsageRow } from "../types";
 import { fmtAxisTime, fmtTooltipTime } from "../lib/format";
+import { colors } from '../theme/colors';
 
 type ChartRow = { day: string; [user: string]: string | number };
 
@@ -44,6 +45,8 @@ export default function UsageChart({ days = 14 }: { days?: number }) {
     return Array.from(s).sort();
   }, [rows]);
 
+const themed = [colors.gold600, '#7a7a7a', '#4d4d4d', '#b99d3a']; // gold + charcoals
+
   return (
     <div className="card p-4">
       <div className="h3 mb-2">Usage (hours per day by user)</div>
@@ -54,12 +57,15 @@ export default function UsageChart({ days = 14 }: { days?: number }) {
             <YAxis tickFormatter={(v) => fmtAxisTime(Number(v))} />
             <Tooltip formatter={(v: any) => fmtTooltipTime(Number(v))} />
             <Legend />
-            {users.map((u) => (
-              <Bar 
-                key={u} 
-                stackId="h" 
-                dataKey={u} 
-                fill={u === "Movie" ? "#FFD700" : "#000000"} 
+            {users.map((u, i) => (
+              <Bar
+                key={u}
+                dataKey={u}
+                stackId="h"
+                fill={themed[i % themed.length]}
+                radius={[6,6,0,0]}
+                stroke="rgba(255,255,255,0.08)"
+                strokeWidth={0.5}
               />
             ))}
           </BarChart>
