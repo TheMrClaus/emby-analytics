@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v3"
 
@@ -66,6 +69,63 @@ type NowEntry struct {
 	// For parentheses after lines when transcoding
 	TransAudioBitrate int64 `json:"trans_audio_bitrate,omitempty"`
 	TransVideoBitrate int64 `json:"trans_video_bitrate,omitempty"`
+}
+
+// sanitizeMessageInput cleans user input to prevent injection attacks
+func sanitizeMessageInput(input string, maxLength int) string {
+	if input == "" {
+		return ""
+	}
+
+	// Step 1: Trim whitespace
+	input = strings.TrimSpace(input)
+
+	// Step 2: Enforce length limit
+	if len(input) > maxLength {
+		// Use utf8 aware truncation
+		if utf8.ValidString(input) {
+			runes := []rune(input)
+			if len(runes) > maxLength {
+				input = string(runes[:maxLength])
+			}
+		} else {
+			// Fallback for invalid UTF-8
+			input = input[:maxLength]
+		}
+	}
+
+	// Step 3: HTML escape to prevent script injection
+	input = html.EscapeString(input)
+
+	// Step 4: Remove dangerous patterns that might still cause issues
+	// Remove any remaining script/HTML-like patterns (belt and suspenders)
+	patterns := []string{
+		`<script[^>]*>.*?</script>`,
+		`<iframe[^>]*>.*?</iframe>`,
+		`<object[^>]*>.*?</object>`,
+		`<embed[^>]*>`,
+		`<form[^>]*>.*?</form>`,
+		`javascript:`,
+		`vbscript:`,
+		`data:text/html`,
+		`<meta[^>]*>`,
+	}
+
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(`(?i)` + pattern)
+		input = re.ReplaceAllString(input, "")
+	}
+
+	// Step 5: Remove control characters except common ones (tab, newline)
+	var cleaned strings.Builder
+	for _, r := range input {
+		// Allow normal printable chars, space, tab, newline
+		if r >= 32 || r == '\t' || r == '\n' || r == '\r' {
+			cleaned.WriteRune(r)
+		}
+	}
+
+	return cleaned.String()
 }
 
 // Generic env-based Emby client (keeps things portable behind any proxy).
@@ -571,6 +631,7 @@ func StopSession(c fiber.Ctx) error {
 }
 
 // POST /now/sessions/:id/message  body: {header?, text, timeout_ms?}
+// POST /now/sessions/:id/message  body: {header?, text, timeout_ms?}
 func MessageSession(c fiber.Ctx) error {
 	id := c.Params("id")
 	var body struct {
@@ -579,32 +640,48 @@ func MessageSession(c fiber.Ctx) error {
 		TimeoutMs int    `json:"timeout_ms"`
 	}
 	if err := c.Bind().Body(&body); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON body"})
 	}
+
+	// Sanitize inputs
+	const maxHeaderLength = 100
+	const maxTextLength = 500
+
+	body.Header = sanitizeMessageInput(body.Header, maxHeaderLength)
+	body.Text = sanitizeMessageInput(body.Text, maxTextLength)
+
+	// Validate sanitized text
 	if strings.TrimSpace(body.Text) == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "text required"})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Message text required"})
+	}
+
+	// Validate timeout
+	if body.TimeoutMs < 1000 {
+		body.TimeoutMs = 5000 // Default 5 seconds
+	}
+	if body.TimeoutMs > 60000 {
+		body.TimeoutMs = 60000 // Max 60 seconds
 	}
 
 	em, err := getEmbyClient()
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 	}
-	header := body.Header
-	if header == "" {
-		header = "Emby Analytics"
+
+	// Set safe default header if empty after sanitization
+	if body.Header == "" {
+		body.Header = "Emby Analytics"
 	}
-	if err := em.SendMessage(id, header, body.Text, body.TimeoutMs); err != nil {
+
+	// Log the message attempt for security monitoring
+	log.Printf("[SECURITY] Message sent to session %s: header='%s' text='%s'",
+		id, body.Header, body.Text)
+
+	if err := em.SendMessage(id, body.Header, body.Text, body.TimeoutMs); err != nil {
 		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.SendStatus(fiber.StatusNoContent)
 }
-
-// Router wiring elsewhere should use fiber v3 style:
-//   app.Get("/now", Snapshot)
-//   app.Get("/now/stream", Stream)
-//   app.Post("/now/sessions/:id/pause", PauseSession)
-//   app.Post("/now/sessions/:id/stop", StopSession)
-//   app.Post("/now/sessions/:id/message", MessageSession)
 
 // Dummy references so the compiler keeps these imports if unneeded here.
 var _ = sql.ErrNoRows
