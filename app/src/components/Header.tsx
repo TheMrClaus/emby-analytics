@@ -165,8 +165,8 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Right side block: metric pinned top-left, refresh pinned bottom-right */}
-        <div className="relative min-h-[60px] pr-2">
+        {/* Right side block: metric pinned top-left, refresh stack pinned bottom-right */}
+        <div className="relative min-h-[112px] pr-2">
           {/* top-left metric */}
           <div className="text-left">
             <div className="text-xs text-gray-400 uppercase tracking-wide">THIS WEEK</div>
@@ -175,8 +175,15 @@ export default function Header() {
             </div>
           </div>
 
-          {/* bottom-right refresh + progress text */}
-          <div className="absolute right-0 -bottom-1 flex flex-col items-end gap-1">
+          {/* bottom-right: progress text (above) + button (flush bottom) */}
+          <div className="absolute right-0 bottom-0 flex flex-col items-end gap-1">
+            {refreshing && (
+              <div className="text-xs text-gray-400 tabular-nums">
+                {nf.format(imported)} of {typeof total === 'number' ? nf.format(total) : '…'} processed
+                {typeof page === 'number' ? ` • Page ${page + 1}` : ''}
+              </div>
+            )}
+
             <button
               onClick={handleRefresh}
               disabled={refreshing}
@@ -193,13 +200,6 @@ export default function Header() {
                 aria-hidden
               />
             </button>
-
-            {refreshing && (
-              <div className="text-xs text-gray-400 tabular-nums">
-                {nf.format(imported)} of {typeof total === 'number' ? nf.format(total) : '…'} processed
-                {typeof page === 'number' ? ` • Page ${page + 1}` : ''}
-              </div>
-            )}
           </div>
         </div>
       </div>
