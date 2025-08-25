@@ -30,31 +30,35 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 	// Step 1: active sessions
 	sessions, err := em.GetActiveSessions()
 	apiCalls++ // Count the GetActiveSessions API call
-
 	if err != nil {
 		log.Println("sync error:", err)
 	} else {
 		for _, s := range sessions {
-			upsertUserAndItem(db, s.UserID, s.UserName, s.ItemID, "", "")
-			// Convert ticks (100ns) -> ms
-			// Convert ticks (100ns) -> ms (clamped to runtime if present)
-			posMs := int64(posTicks / 10_000)        // ticks to ms
-			durMs := int64(s.DurationTicks / 10_000) // ticks to ms (if you store duration)
-			//			posMs := s.PosTicks / 10_000
-			if s.DurationTicks > 0 && s.PosTicks > s.DurationTicks {
-				posMs = s.DurationTicks / 10_000
+			// upsert user and current item
+			upsertUserAndItem(db, s.UserID, s.UserName, s.ItemID, s.ItemName, s.ItemType)
+
+			// Convert ticks (100ns) -> ms and clamp to runtime if present
+			posMs := int64(0)
+			if s.PosTicks > 0 {
+				posMs = s.PosTicks / 10_000
+			}
+			if s.DurationTicks > 0 {
+				rtMs := s.DurationTicks / 10_000
+				if posMs > rtMs {
+					posMs = rtMs
+				}
 			}
 			if posMs < 0 {
 				posMs = 0
 			}
+
 			if insertPlayEvent(db, s.UserID, s.ItemID, posMs) {
 				insertedEvents++
 			}
-
 		}
 	}
 
-	// Step 2: backfill from history
+	// Step 2: backfill from recent user history
 	rows, err := db.Query(`SELECT id, name FROM emby_user`)
 	if err != nil {
 		log.Println("sync user list error:", err)
@@ -68,7 +72,6 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 		if err := rows.Scan(&uid, &uname); err != nil {
 			continue
 		}
-
 		// Skip invalid user records
 		if !uid.Valid || strings.TrimSpace(uid.String) == "" {
 			continue
@@ -77,14 +80,24 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 		userCount++
 		history, err := em.GetUserPlayHistory(uid.String, cfg.HistoryDays)
 		apiCalls++ // Count each GetUserPlayHistory API call
-
 		if err != nil {
 			log.Printf("history error for %s: %v\n", uid.String, err)
 			continue
 		}
+
 		for _, h := range history {
+			// Enrich library info too
 			upsertUserAndItem(db, uid.String, uname.String, h.Id, h.Name, h.Type)
-			posMs := h.PlaybackPos / 10000
+
+			// PlaybackPositionTicks -> ms
+			posMs := int64(0)
+			if h.PlaybackPos > 0 {
+				posMs = h.PlaybackPos / 10_000
+			}
+			if posMs < 0 {
+				posMs = 0
+			}
+
 			if insertPlayEvent(db, uid.String, h.Id, posMs) {
 				insertedEvents++
 			}
@@ -106,8 +119,6 @@ func insertPlayEvent(db *sql.DB, userID, itemID string, posMs int64) bool {
 	if err != nil {
 		return false
 	}
-
-	// NOTE: No longer updating lifetime_watch here - that's handled by user sync
 	rowsAffected, _ := res.RowsAffected()
 	return rowsAffected > 0
 }
