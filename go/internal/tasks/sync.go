@@ -37,10 +37,18 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 		for _, s := range sessions {
 			upsertUserAndItem(db, s.UserID, s.UserName, s.ItemID, "", "")
 			// Convert ticks (100ns) -> ms
+			// Convert ticks (100ns) -> ms (clamped to runtime if present)
 			posMs := s.PosTicks / 10_000
+			if s.RunTimeTicks > 0 && s.PosTicks > s.RunTimeTicks {
+				posMs = s.RunTimeTicks / 10_000
+			}
+			if posMs < 0 {
+				posMs = 0
+			}
 			if insertPlayEvent(db, s.UserID, s.ItemID, posMs) {
 				insertedEvents++
 			}
+
 		}
 	}
 
