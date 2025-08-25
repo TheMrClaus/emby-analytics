@@ -3,6 +3,7 @@ package items
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
@@ -58,6 +59,9 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 			if err := rows.Scan(&r.ID, &r.Name, &r.Type); err != nil {
 				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 			}
+			// Debug logging
+			log.Printf("DB item %s: name='%s', type='%s'", r.ID, r.Name, r.Type)
+
 			// Default display = name for non-episodes (or unknown)
 			r.Display = r.Name
 			base[r.ID] = r
@@ -72,8 +76,13 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 		}
 		if len(episodeIDs) > 0 {
 			if em != nil {
+				log.Printf("Enriching %d episodes: %v", len(episodeIDs), episodeIDs)
 				if items, err := em.ItemsByIDs(episodeIDs); err == nil {
+					log.Printf("Emby API returned %d items", len(items))
 					for _, it := range items {
+						log.Printf("Emby item %s: name='%s', type='%s', series='%s'",
+							it.Id, it.Name, it.Type, it.SeriesName)
+
 						rec := base[it.Id]
 						// Prefer API name if DB name empty or if it's just the episode title
 						name := rec.Name
@@ -111,7 +120,11 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 						}
 						base[it.Id] = rec
 					}
+				} else {
+					log.Printf("Emby API error for episodes: %v", err)
 				}
+			} else {
+				log.Printf("Emby client is nil, cannot enrich episodes")
 			}
 		}
 
@@ -119,25 +132,58 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 		out := make([]ItemRow, 0, len(ids))
 		for _, id := range ids {
 			if r, ok := base[id]; ok {
-				// Ensure we have at least basic display info
+				// Ensure we have at least basic info
+				if r.Name == "" && r.Type == "" {
+					// Item exists in DB but has no data - try to get from Emby directly
+					log.Printf("Item %s has no name/type, attempting direct Emby lookup", id)
+					if em != nil {
+						if items, err := em.ItemsByIDs([]string{id}); err == nil && len(items) > 0 {
+							item := items[0]
+							r.Name = item.Name
+							r.Type = item.Type
+							if item.Type == "Episode" && item.SeriesName != "" {
+								// Build episode display
+								epcode := ""
+								if item.ParentIndexNumber != nil && item.IndexNumber != nil {
+									epcode = fmt.Sprintf("S%02dE%02d", *item.ParentIndexNumber, *item.IndexNumber)
+								}
+								if epcode != "" && item.Name != "" {
+									r.Display = fmt.Sprintf("%s - %s (%s)", item.SeriesName, item.Name, epcode)
+								} else {
+									r.Display = fmt.Sprintf("%s - %s", item.SeriesName, item.Name)
+								}
+								r.Type = "Series" // Show as Series in UI
+							} else {
+								r.Display = r.Name
+							}
+							log.Printf("Direct lookup success for %s: name='%s', display='%s'", id, r.Name, r.Display)
+						} else {
+							log.Printf("Direct Emby lookup failed for %s: %v", id, err)
+						}
+					}
+				}
+
+				// Final fallbacks
 				if r.Display == "" {
 					if r.Name != "" {
 						r.Display = r.Name
 					} else {
-						r.Display = "Unknown Item"
+						r.Display = fmt.Sprintf("Unknown Item (%s)", id)
 					}
 				}
 				if r.Type == "" {
 					r.Type = "Unknown"
 				}
+
 				out = append(out, r)
 			} else {
-				// Unknown ID: create a basic record with fallback info
+				// Unknown ID: not in database at all
+				log.Printf("Item %s not found in database", id)
 				out = append(out, ItemRow{
 					ID:      id,
-					Name:    "Unknown Item",
+					Name:    fmt.Sprintf("Missing Item (%s)", id),
 					Type:    "Unknown",
-					Display: "Unknown Item",
+					Display: fmt.Sprintf("Missing Item (%s)", id),
 				})
 			}
 		}

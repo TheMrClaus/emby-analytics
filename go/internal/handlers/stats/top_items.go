@@ -2,6 +2,7 @@ package stats
 
 import (
 	"database/sql"
+	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -61,6 +62,8 @@ func TopItems(db *sql.DB) fiber.Handler {
 			if err := rows.Scan(&ti.ItemID, &ti.Name, &ti.Type, &ti.Hours); err != nil {
 				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 			}
+			log.Printf("Top item: id=%s, name='%s', type='%s', hours=%.2f",
+				ti.ItemID, ti.Name, ti.Type, ti.Hours)
 			out = append(out, ti)
 		}
 		return c.JSON(out)
