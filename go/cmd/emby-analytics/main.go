@@ -12,7 +12,6 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/static"
 	"github.com/joho/godotenv"
 
-	"emby-analytics/internal/broadcaster"
 	"emby-analytics/internal/config"
 	"emby-analytics/internal/db"
 	"emby-analytics/internal/emby"
@@ -58,12 +57,12 @@ func main() {
 		pollInterval = 5 * time.Second
 	}
 
-	nowBroadcaster := broadcaster.NewNowBroadcaster(em, pollInterval)
-	now.SetBroadcaster(nowBroadcaster)
-	nowBroadcaster.Start()
+	broadcaster := now.NewBroadcaster(em, pollInterval)
+	now.SetBroadcaster(broadcaster)
+	broadcaster.Start()
 
 	// Graceful shutdown for broadcaster
-	defer nowBroadcaster.Stop()
+	defer broadcaster.Stop()
 
 	// ---- fiber v3 app ----
 	app := fiber.New(fiber.Config{
