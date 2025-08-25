@@ -1,12 +1,11 @@
 // app/src/components/Header.tsx
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   fetchUsage,
   fetchNowSnapshot,
   startRefresh,
   fetchRefreshStatus,
 } from '../lib/api';
-import type { RefreshState } from '../types';
 
 type SnapshotEntry = {
   play_method?: string;
@@ -19,15 +18,9 @@ export default function Header() {
   const [directPlay, setDirectPlay] = useState<number>(0);
   const [transcoding, setTranscoding] = useState<number>(0);
 
-  // refresh UI state
   const [refreshing, setRefreshing] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0); // %
-  const [imported, setImported] = useState(0);
-  const [total, setTotal] = useState<number | undefined>(undefined);
-  const [page, setPage] = useState<number | undefined>(undefined);
-
-  const nf = useMemo(() => new Intl.NumberFormat(), []);
 
   // ----- clock -----
   useEffect(() => {
@@ -37,29 +30,29 @@ export default function Header() {
     return () => clearInterval(t);
   }, []);
 
-  // ----- weekly usage (sum last 7 days from /stats/usage) -----
+  // ----- weekly usage -----
   useEffect(() => {
     (async () => {
       try {
         const rows = await fetchUsage(7);
-        const totalHours = rows.reduce((acc, r) => acc + (r.hours || 0), 0);
-        setWeeklyHours(totalHours);
+        const total = rows.reduce((acc, r) => acc + (r.hours || 0), 0);
+        setWeeklyHours(total);
       } catch {
         setWeeklyHours(null);
       }
     })();
   }, []);
 
-  // ----- live "now playing" snapshot (poll every 2s) -----
+  // ----- live "now playing" -----
   useEffect(() => {
-    let stopped = false;
+    let stop = false;
 
     const load = async () => {
       try {
         const sessions: SnapshotEntry[] = await fetchNowSnapshot();
-        if (stopped) return;
+        if (stop) return;
 
-        const totalCount = sessions.length;
+        const total = sessions.length;
         const d = sessions.filter(
           s => (s.play_method ?? '').toLowerCase().startsWith('direct')
         ).length;
@@ -67,68 +60,48 @@ export default function Header() {
           s => (s.play_method ?? '').toLowerCase().startsWith('trans')
         ).length;
 
-        setStreamsTotal(totalCount);
+        setStreamsTotal(total);
         setDirectPlay(d);
         setTranscoding(t);
       } catch {
-        /* keep previous values */
+        /* ignore */
       }
     };
 
     load();
     const id = setInterval(load, 2000);
     return () => {
-      stopped = true;
+      stop = true;
       clearInterval(id);
     };
   }, []);
 
-  // toast helper
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
 
-  // start refresh + poll progress
+  // refresh logic
   const handleRefresh = async () => {
     if (refreshing) return;
 
     try {
       setRefreshing(true);
       setProgress(0);
-      setImported(0);
-      setTotal(undefined);
-      setPage(undefined);
 
-      // kick off on the server
       await startRefresh();
 
-      // poll status
       const poll = setInterval(async () => {
         try {
-          const s: RefreshState = await fetchRefreshStatus(); // { running, imported, total, page, error }
-
-          // keep raw values for richer feedback
-          setImported(Number(s.imported ?? 0));
-          setTotal(typeof s.total === 'number' ? s.total : undefined);
-          setPage(typeof s.page === 'number' ? s.page : undefined);
-
-          // percentage derived from imported/total (RefreshState has no "progress")
-          const pct =
-            s.total && s.total > 0
-              ? Math.min(100, Math.max(0, Math.round((Number(s.imported ?? 0) / Number(s.total)) * 100)))
-              : (s.running ? 0 : 100);
-
+          const s = await fetchRefreshStatus();
+          const pct = Math.max(0, Math.min(100, Number((s as any).progress ?? 0)));
           setProgress(pct);
 
-          // Stop polling when backend reports it's not running anymore OR we hit 100%
-          if (!s.running || pct >= 100) {
+          if ((s as any).status === 'done' || pct >= 100) {
             clearInterval(poll);
             setRefreshing(false);
-            if (s.total && Number(s.imported ?? 0) >= s.total) setProgress(100);
+            setProgress(100);
             showToast('Refresh complete ✅');
-
-            // update THIS WEEK after refresh
             fetchUsage(7)
               .then(rows => setWeeklyHours(rows.reduce((acc, r) => acc + (r.hours || 0), 0)))
               .catch(() => {});
@@ -148,17 +121,17 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-black text-white px-4 py-3">
-      {/* Top row (balanced baseline) */}
+    <header className="bg-black text-white px-6 py-3">
+      {/* Top row */}
       <div className="flex items-center justify-between">
-        {/* Left: Logo + Title */}
+        {/* Left side */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-yellow-500 rounded flex items-center justify-center">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-black">
-              <path d="M8 5v14l11-7z" fill="currentColor" />
+              <path d="M8 5v14l11-7z" fill="currentColor"/>
             </svg>
           </div>
-          <div className="leading-tight">
+          <div>
             <h1 className="text-xl font-semibold text-white">Emby Analytics</h1>
             <p className="text-sm text-gray-400">
               <span className="tabular-nums">{currentTime}</span>
@@ -166,61 +139,50 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Right: tight vertical stack (THIS WEEK top-right, Refresh bottom-right) */}
-        <div className="flex flex-col items-end justify-between gap-1 self-stretch">
-          {/* This Week (top-right) */}
+        {/* Right side */}
+        <div className="flex items-center gap-6">
           <div className="text-right">
             <div className="text-xs text-gray-400 uppercase tracking-wide">THIS WEEK</div>
             <div className="text-2xl font-bold text-yellow-400">
               {weeklyHours == null ? '—' : `${weeklyHours.toFixed(1)}h`} watched
             </div>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className={`relative overflow-hidden mt-2 min-w-[140px] rounded font-medium text-sm px-4 py-2 transition-colors
+                ${refreshing ? 'bg-yellow-700 text-black' : 'bg-yellow-600 hover:bg-yellow-700 text-black'}`}
+              aria-busy={refreshing}
+              aria-label="Refresh library"
+            >
+              <span className="relative z-10">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
+              <span
+                className="absolute bottom-0 left-0 h-1 bg-yellow-300 transition-[width] duration-300"
+                style={{ width: `${progress}%` }}
+                aria-hidden
+              />
+            </button>
           </div>
-
-          {/* Progress text (only while refreshing) */}
-          {refreshing && (
-            <div className="text-xs text-gray-400 tabular-nums">
-              {nf.format(imported)} of {typeof total === 'number' ? nf.format(total) : '…'} processed
-              {typeof page === 'number' ? ` • Page ${page + 1}` : ''}
-            </div>
-          )}
-
-          {/* Refresh (bottom-right) */}
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className={`relative overflow-hidden min-w-[140px] rounded font-medium text-sm px-4 py-2 transition-colors
-              ${refreshing ? 'bg-yellow-700 text-black' : 'bg-yellow-600 hover:bg-yellow-700 text-black'}`}
-            aria-busy={refreshing}
-            aria-label="Refresh library"
-          >
-            <span className="relative z-10">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
-            {/* progress bar inside button */}
-            <span
-              className="absolute bottom-0 left-0 h-1 bg-yellow-300 transition-[width] duration-300"
-              style={{ width: `${progress}%` }}
-              aria-hidden
-            />
-          </button>
         </div>
       </div>
 
       {/* Bottom row */}
-      <div className="mt-2">
-        <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">
-          ACTIVE STREAMS:{' '}
-          <span className="text-2xl font-bold text-white tabular-nums">{streamsTotal}</span>
-        </div>
-        <div className="flex gap-4 mt-1">
-          <span className="bg-teal-600 text-white px-2 py-1 rounded text-sm">
-            DirectPlay {directPlay}
-          </span>
-          <span className="bg-orange-600 text-white px-2 py-1 rounded text-sm">
-            Transcoding {transcoding}
-          </span>
+      <div className="flex items-center justify-between mt-3">
+        <div>
+          <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">
+            ACTIVE STREAMS:{' '}
+            <span className="text-2xl font-bold text-white tabular-nums">{streamsTotal}</span>
+          </div>
+          <div className="flex gap-4 mt-1">
+            <span className="bg-teal-600 text-white px-2 py-1 rounded text-sm">
+              DirectPlay {directPlay}
+            </span>
+            <span className="bg-orange-600 text-white px-2 py-1 rounded text-sm">
+              Transcoding {transcoding}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Toast */}
       {toast && (
         <div className="fixed top-4 right-4 bg-neutral-800 text-white border border-neutral-700 rounded-lg shadow px-4 py-2 text-sm">
           {toast}
