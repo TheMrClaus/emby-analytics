@@ -4,6 +4,18 @@ import { fetchTopItems, imgPrimary } from "../lib/api";
 import type { TopItem, ItemRow } from "../types";
 import { fmtTooltipTime } from "../lib/format";
 
+// Helper function to fetch enriched item data
+async function fetchItemsByIds(ids: string[]): Promise<ItemRow[]> {
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+  const res = await fetch(`${API_BASE}/items/by-ids?ids=${encodeURIComponent(ids.join(","))}`, {
+    headers: { "Content-Type": "application/json" }
+  });
+  if (!res.ok) {
+    throw new Error(`${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export default function TopItems({ days = 14, limit = 10 }: { days?: number; limit?: number }) {
   const [rows, setRows] = useState<TopItem[]>([]);
   const [itemMapping, setItemMapping] = useState<Record<string, ItemRow>>({});
@@ -20,8 +32,7 @@ export default function TopItems({ days = 14, limit = 10 }: { days?: number; lim
       return;
     }
     
-    fetch(`/items/by-ids?ids=${encodeURIComponent(itemIds.join(","))}`)
-      .then(res => res.json())
+    fetchItemsByIds(itemIds)
       .then((items: ItemRow[]) => {
         const mapping: Record<string, ItemRow> = {};
         items.forEach(item => {
@@ -29,7 +40,22 @@ export default function TopItems({ days = 14, limit = 10 }: { days?: number; lim
         });
         setItemMapping(mapping);
       })
-      .catch(() => {});
+      .catch(err => {
+        console.error("Failed to fetch enriched item data:", err);
+        // Fallback: create basic mapping from original data
+        const fallbackMapping: Record<string, ItemRow> = {};
+        rows.forEach(r => {
+          if (r.item_id && r.name) {
+            fallbackMapping[r.item_id] = {
+              id: r.item_id,
+              name: r.name,
+              type: r.type,
+              display: r.name
+            };
+          }
+        });
+        setItemMapping(fallbackMapping);
+      });
   }, [rows]);
 
   return (
@@ -42,8 +68,24 @@ export default function TopItems({ days = 14, limit = 10 }: { days?: number; lim
         <tbody>
           {rows.map((r, i) => {
             const enriched = itemMapping[r.item_id];
-            const displayName = enriched?.display || enriched?.name || r.name || "Unknown";
-            const displayType = enriched?.type || r.type || "Unknown";
+            
+            // Determine display name with better fallbacks
+            let displayName = "Unknown Item";
+            if (enriched?.display && enriched.display !== "") {
+              displayName = enriched.display;
+            } else if (enriched?.name && enriched.name !== "") {
+              displayName = enriched.name;  
+            } else if (r.name && r.name !== "") {
+              displayName = r.name;
+            }
+            
+            // Determine type with fallbacks
+            let displayType = "Unknown";
+            if (enriched?.type && enriched.type !== "") {
+              displayType = enriched.type;
+            } else if (r.type && r.type !== "") {
+              displayType = r.type;
+            }
             
             return (
               <tr key={i}>
