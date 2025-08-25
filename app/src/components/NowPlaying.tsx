@@ -1,44 +1,6 @@
 // app/src/components/NowPlaying.tsx
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-type NowEntry = {
-  timestamp: number;
-  title: string;
-  user: string;
-  app: string;
-  device: string;
-  play_method: string;
-  video: string;
-  audio: string;
-  subs: string;
-  bitrate: number;
-  progress_pct: number;
-  poster: string;
-  session_id: string;
-  item_id: string;
-  item_type?: string;
-  container?: string;
-  width?: number;
-  height?: number;
-  dolby_vision?: boolean;
-  hdr10?: boolean;
-  audio_lang?: string;
-  audio_ch?: number;
-  sub_lang?: string;
-  sub_codec?: string;
-  trans_video_from?: string;
-  trans_video_to?: string;
-  trans_audio_from?: string;
-  trans_audio_to?: string;
-  video_method?: string;
-  audio_method?: string;
-  stream_path?: string;
-  stream_detail?: string;
-  trans_reason?: string;
-  trans_pct?: number;
-  trans_audio_bitrate?: number;
-  trans_video_bitrate?: number;
-};
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNowPlaying, type NowEntry } from "../contexts/NowPlayingContext";
 
 const apiBase =
   (typeof window !== "undefined" && (window as any).NEXT_PUBLIC_API_BASE) ||
@@ -46,20 +8,13 @@ const apiBase =
   "";
 
 export default function NowPlaying() {
-  const [sessions, setSessions] = useState<NowEntry[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-
-  const wsURL = useMemo(() => {
-    if (typeof window === "undefined") return "";
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    return `${proto}://${window.location.host}/now/ws`;
-  }, []);
+  // Get sessions from context instead of managing WebSocket locally
+  const { sessions, error } = useNowPlaying();
 
   // Crossfade + parallax state
   const [bgA, setBgA] = useState<string>("");
   const [bgB, setBgB] = useState<string>("");
-  const [useA, setUseA] = useState<boolean>(true);
+  const [useA, setUseA] = useState<boolean>(true); // which layer is "on"
   const [parallaxY, setParallaxY] = useState<number>(0);
 
   // Compute next hero URL from the first session
@@ -84,63 +39,16 @@ export default function NowPlaying() {
   // Parallax (respect reduced motion)
   useEffect(() => {
     const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (mql.matches) return;
+    if (mql.matches) return; // no motion
 
     const onScroll = () => {
       const y = Math.min(60, window.scrollY * 0.12);
       setParallaxY(y);
     };
-    onScroll();
+    onScroll(); // initialize
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-
-  const loadSnapshot = useCallback(async () => {
-    try {
-      const res = await fetch(`${apiBase}/now/snapshot`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: NowEntry[] = await res.json();
-      setSessions(data || []);
-      setError(null);
-    } catch (e: any) {
-      setError(`Failed to load now playing: ${e.message ?? e}`);
-    }
-  }, []);
-
-  const connectWS = useCallback(() => {
-    if (!wsURL) return;
-    try {
-      const ws = new WebSocket(wsURL);
-      wsRef.current = ws;
-
-      ws.onmessage = (ev) => {
-        try {
-          const data: NowEntry[] = JSON.parse(ev.data);
-          setSessions(Array.isArray(data) ? data : []);
-        } catch {
-          /* ignore parse errors */
-        }
-      };
-      ws.onerror = () => {
-        if (!sessions.length) loadSnapshot();
-      };
-      ws.onclose = () => {
-        setTimeout(connectWS, 2000);
-      };
-    } catch {
-      /* noop */
-    }
-  }, [wsURL, loadSnapshot, sessions.length]);
-
-  useEffect(() => {
-    loadSnapshot();
-    connectWS();
-    return () => {
-      try {
-        wsRef.current?.close();
-      } catch {}
-    };
-  }, [loadSnapshot, connectWS]);
 
   const send = async (
     sessionId: string,
@@ -221,7 +129,7 @@ export default function NowPlaying() {
       ) : null}
 
       {/* Foreground content */}
-      <div className="hero-foreground space-y-4">
+      <div className="hero-foreground space-y-5">
         <h2 className="ty-title text-emerald-400">Now Playing</h2>
 
         {error && <div className="text-red-400 text-sm">{error}</div>}
@@ -229,7 +137,7 @@ export default function NowPlaying() {
         {sessions.length === 0 ? (
           <div className="text-gray-500 text-sm">Nobody is watching right now.</div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-7">
             {sessions.map((s) => {
               const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
               const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
@@ -238,157 +146,128 @@ export default function NowPlaying() {
               return (
                 <article
                   key={s.session_id}
-                  className="card overflow-hidden flex flex-col p-5"
+                  className="card overflow-hidden flex flex-col min-h-[380px] p-5"
                 >
-                  {/* Top row: poster + title/meta */}
+                  {/* Top row: poster + title/meta arranged symmetrically */}
                   <div className="flex gap-5">
-                    {/* Poster */}
+                    {/* Poster column - fixed size to align all cards */}
                     <div className="shrink-0">
                       <img
                         src={
                           s.poster?.startsWith("/img/")
                             ? `${apiBase}${s.poster}`
-                            : `${apiBase}/img/primary/${encodeURIComponent(s.item_id)}`
+                            : s.poster || "/placeholder-poster.jpg"
                         }
-                        alt={s.title}
-                        className="w-24 h-36 object-cover rounded-xl border border-white/10"
+                        alt={s.title || "Unknown"}
+                        className="w-20 h-28 object-cover rounded shadow-sm"
                       />
                     </div>
 
-                    {/* Title + meta */}
-                    <div className="min-w-0 flex-1 flex flex-col">
-                      <div className="flex items-start justify-between gap-3">
-                        <h3 className="text-base font-semibold text-white leading-tight break-words">
-                          {s.title}
-                        </h3>
-                        <span className="badge shrink-0">{s.user}</span>
-                      </div>
-                      <div className="text-xs text-gray-400 mt-1 leading-snug break-words">
-                        {s.app} • {s.device}
+                    {/* Content column - variable width to balance card design */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-lg text-white leading-tight mb-2 line-clamp-2">
+                        {s.title || "Unknown Title"}
+                      </h3>
+                      <div className="text-sm text-gray-300 space-y-1 mb-3">
+                        <div>
+                          <span className="font-medium text-emerald-400">{s.user}</span>
+                        </div>
+                        <div>{s.app || s.device || "Unknown Client"}</div>
                       </div>
 
-                      {/* Stream line */}
-                      <div className="mt-2 text-sm text-gray-300 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-gray-200">Stream</span>
-                          <span className="text-gray-300">
-                            {s.container} ({(s.bitrate / 1_000_000).toFixed(1)} Mbps)
-                          </span>
+                      {/* Playback progress */}
+                      <div className="mt-auto">
+                        <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                          <span>Progress</span>
+                          <span>{progress}%</span>
                         </div>
-                        {s.trans_reason && (
-                          <div className="text-amber-300/90 text-xs break-words">
-                            {s.trans_reason}
-                          </div>
-                        )}
+                        <div className="h-2 bg-neutral-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-emerald-500 transition-all duration-300"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Divider */}
-                  <div className="my-4 h-px bg-white/10" />
-
-                  {/* Details grid */}
-                  <div className="grid grid-cols-2 gap-x-5 gap-y-3 text-sm">
-                    {/* Video */}
-                    <div className="space-y-1">
-                      <div className="text-gray-400 text-xs font-medium tracking-wide">
-                        VIDEO
-                      </div>
-                      <div className="text-gray-200 break-words">
-                        {s.width}x{s.height} {s.video}
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Chip tone={isVideoTrans ? "warn" : "ok"} label={s.video_method || "Direct Play"} />
-                        {s.dolby_vision && <span className="badge">Dolby Vision</span>}
-                        {s.hdr10 && <span className="badge">HDR10</span>}
-                      </div>
+                  {/* Quality indicators */}
+                  <div className="mt-4 space-y-3 flex-1">
+                    <div className="flex flex-wrap gap-2">
+                      <Chip tone="ok" label={s.play_method || "Unknown"} />
+                      {s.container && <Chip tone="ok" label={s.container.toUpperCase()} />}
+                      {s.width && s.height && (
+                        <Chip tone="ok" label={`${s.width}×${s.height}`} />
+                      )}
                     </div>
 
-                    {/* Audio */}
-                    <div className="space-y-1">
-                      <div className="text-gray-400 text-xs font-medium tracking-wide">
-                        AUDIO
+                    {/* Video & Audio streams */}
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400">Video:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white">{s.video || "Unknown"}</span>
+                          {isVideoTrans && <Chip tone="warn" label="Transcoding" />}
+                        </div>
                       </div>
-                      <div className="text-gray-200 break-words">
-                        {/* Audio details text, inline kbps if we have a transcode target bitrate */}
-                        {s.audio}
-                        {s.audio_ch ? ` • ${s.audio_ch}.0` : ""}
-                        {s.audio_lang ? ` • ${s.audio_lang.toUpperCase()}` : ""}
-                        {typeof s.trans_audio_bitrate === "number" && s.trans_audio_bitrate > 0
-                          ? ` • ${Math.round(s.trans_audio_bitrate / 1000)} kbps`
-                          : ""}
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400">Audio:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white">{s.audio || "Unknown"}</span>
+                          {isAudioTrans && <Chip tone="warn" label="Transcoding" />}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Chip tone={isAudioTrans ? "warn" : "ok"} label={s.audio_method || "Direct Play"} />
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400">Subtitles:</span>
+                        <span className="text-white">{s.subs || "None"}</span>
                       </div>
-                    </div>
-
-                    {/* Subs */}
-                    <div className="space-y-1">
-                      <div className="text-gray-400 text-xs font-medium tracking-wide">
-                        SUBS
-                      </div>
-                      <div className="text-gray-200 break-words">
-                        {s.subs
-                          ? `${s.subs}${s.sub_codec ? ` • ${s.sub_codec}` : ""}${
-                              s.sub_lang ? ` • ${s.sub_lang.toUpperCase()}` : ""
-                            }`
-                          : "—"}
-                      </div>
-                    </div>
-
-                    {/* Transcoding detail */}
-                    <div className="space-y-1">
-                      <div className="text-gray-400 text-xs font-medium tracking-wide">
-                        TRANSCODE
-                      </div>
-                      <div className="text-gray-200 break-words">
-                        {s.trans_video_from && s.trans_video_to
-                          ? `${s.trans_video_from} → ${s.trans_video_to}`
-                          : "—"}
-                      </div>
-                      {typeof s.trans_video_bitrate === "number" && (
-                        <div className="text-xs text-gray-400">
-                          ~{(s.trans_video_bitrate / 1_000_000).toFixed(1)} Mbps
+                      {s.bitrate > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-400">Bitrate:</span>
+                          <span className="text-white">
+                            {(s.bitrate / 1_000_000).toFixed(1)} Mbps
+                          </span>
                         </div>
                       )}
                     </div>
-                  </div>
 
-                  {/* Progress */}
-                  <div className="mt-5">
-                    <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
-                      <span>Progress</span>
-                      <span>{progress}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-neutral-700/80 rounded-full overflow-hidden">
-                      <div
-                        className="h-2 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600"
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-                  </div>
+                    {/* Transcoding progress bar (only if transcoding) */}
+                    {(isVideoTrans || isAudioTrans) && s.trans_pct !== undefined && (
+                      <div>
+                        <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                          <span>Transcoding</span>
+                          <span>{pct(s.trans_pct)}%</span>
+                        </div>
+                        <div className="h-1.5 bg-neutral-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-orange-500 transition-all duration-300"
+                            style={{ width: `${pct(s.trans_pct)}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
 
-                  {/* Controls pinned to bottom & centered */}
-                  <div className="mt-5 flex justify-center gap-2 pt-1 mt-auto">
-                    <button className="badge" onClick={() => send(s.session_id, "pause")}>
-                      Pause
-                    </button>
-                    <button className="badge" onClick={() => send(s.session_id, "unpause")}>
-                      Resume
-                    </button>
-                    <button className="badge" onClick={() => send(s.session_id, "stop")}>
-                      Stop
-                    </button>
-                    <button
-                      className="badge"
-                      onClick={() => {
-                        const txt = prompt("Send a message:", "Hello!");
-                        if (txt != null) send(s.session_id, "message", txt);
-                      }}
-                    >
-                      Message
-                    </button>
+                    {/* Admin controls */}
+                    <div className="flex gap-2 pt-2 border-t border-neutral-700">
+                      <button
+                        onClick={() => send(s.session_id, "pause")}
+                        className="flex-1 px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-xs font-medium transition-colors"
+                      >
+                        Pause
+                      </button>
+                      <button
+                        onClick={() => send(s.session_id, "unpause")}
+                        className="flex-1 px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-xs font-medium transition-colors"
+                      >
+                        Resume
+                      </button>
+                      <button
+                        onClick={() => send(s.session_id, "stop")}
+                        className="flex-1 px-3 py-1.5 bg-red-700 hover:bg-red-600 rounded text-xs font-medium transition-colors"
+                      >
+                        Stop
+                      </button>
+                    </div>
                   </div>
                 </article>
               );

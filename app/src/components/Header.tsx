@@ -43,39 +43,7 @@ export default function Header() {
     })();
   }, []);
 
-  // ----- live "now playing" -----
-  useEffect(() => {
-    let stop = false;
-
-    const load = async () => {
-      try {
-        const sessions: SnapshotEntry[] = await fetchNowSnapshot();
-        if (stop) return;
-
-        const total = sessions.length;
-        const d = sessions.filter(
-          s => (s.play_method ?? '').toLowerCase().startsWith('direct')
-        ).length;
-        const t = sessions.filter(
-          s => (s.play_method ?? '').toLowerCase().startsWith('trans')
-        ).length;
-
-        setStreamsTotal(total);
-        setDirectPlay(d);
-        setTranscoding(t);
-      } catch {
-        /* ignore */
-      }
-    };
-
-    load();
-    const id = setInterval(load, 2000);
-    return () => {
-      stop = true;
-      clearInterval(id);
-    };
-  }, []);
-
+  // ----- now playing snapshot -----
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
