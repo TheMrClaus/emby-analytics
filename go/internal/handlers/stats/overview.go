@@ -20,8 +20,8 @@ func Overview(db *sql.DB) fiber.Handler {
 		// Count total users
 		_ = db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&data.TotalUsers)
 
-		// Count total items
-		_ = db.QueryRow(`SELECT COUNT(*) FROM library_item`).Scan(&data.TotalItems)
+		// Count total items (excluding Live TV)
+		_ = db.QueryRow(`SELECT COUNT(*) FROM library_item WHERE type NOT IN ('TvChannel', 'LiveTv', 'Channel')`).Scan(&data.TotalItems)
 
 		// Count total plays (events)
 		_ = db.QueryRow(`SELECT COUNT(*) FROM play_event`).Scan(&data.TotalPlays)

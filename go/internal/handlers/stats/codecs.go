@@ -17,9 +17,9 @@ func Codecs(db *sql.DB) fiber.Handler {
 		q := `
 			SELECT li.codec, li.type, COUNT(*) as count
 			FROM library_item li
-			WHERE li.codec IS NOT NULL
+			WHERE li.type NOT IN ('TvChannel', 'LiveTv', 'Channel')
 			GROUP BY li.codec, li.type
-			ORDER BY count DESC
+			ORDER BY COUNT(*) DESC;
 		`
 		var rows *sql.Rows
 		var err error

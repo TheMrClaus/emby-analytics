@@ -37,7 +37,7 @@ func Activity(db *sql.DB) fiber.Handler {
 			FROM play_event pe
 			LEFT JOIN emby_user u ON u.id = pe.user_id
 			LEFT JOIN library_item li ON li.id = pe.item_id
-			WHERE pe.ts >= ?
+			WHERE pe.ts >= ? AND li.type NOT IN ('TvChannel', 'LiveTv', 'Channel')
 			ORDER BY pe.ts DESC
 			LIMIT ?;
 		`, fromMs, limit)

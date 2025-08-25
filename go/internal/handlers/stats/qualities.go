@@ -33,6 +33,7 @@ func Qualities(db *sql.DB) fiber.Handler {
 		rows, err := db.Query(`
 			SELECT li.height, li.type, COUNT(*) as count
 			FROM library_item li
+			WHERE li.type NOT IN ('TvChannel', 'LiveTv', 'Channel')
 			GROUP BY li.height, li.type
 			ORDER BY li.height DESC;
 		`)
