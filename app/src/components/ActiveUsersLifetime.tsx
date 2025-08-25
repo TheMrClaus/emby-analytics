@@ -1,13 +1,9 @@
 // app/src/components/ActiveUsersLifetime.tsx
-import { useEffect, useState } from "react";
-import { fetchActiveUsersLifetime } from "../lib/api";
+import { useActiveUsersLifetime } from "../hooks/useData";
 import type { ActiveUserLifetime } from "../types";
 
 export default function ActiveUsersLifetime({ limit = 10 }: { limit?: number }) {
-  const [rows, setRows] = useState<ActiveUserLifetime[]>([]);
-  useEffect(() => {
-    fetchActiveUsersLifetime(limit).then(setRows).catch(() => {});
-  }, [limit]);
+  const { data: rows = [], error, isLoading } = useActiveUsersLifetime(limit);
 
   const fmt = (r: ActiveUserLifetime) => {
     const parts = [];
@@ -17,9 +13,21 @@ export default function ActiveUsersLifetime({ limit = 10 }: { limit?: number }) 
     return parts.join(" ") || "0m";
   };
 
+  if (error) {
+    return (
+      <div className="bg-neutral-800 rounded-2xl p-4 shadow">
+        <div className="text-sm text-gray-400 mb-2">Most Active (lifetime)</div>
+        <div className="text-red-400">Failed to load active users data</div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-neutral-800 rounded-2xl p-4 shadow">
-      <div className="text-sm text-gray-400 mb-2">Most Active (lifetime)</div>
+      <div className="text-sm text-gray-400 mb-2">
+        Most Active (lifetime)
+        {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}
+      </div>
       <table className="w-full text-sm text-left text-gray-300">
         <thead className="text-gray-400 border-b border-neutral-700">
           <tr>
@@ -36,7 +44,9 @@ export default function ActiveUsersLifetime({ limit = 10 }: { limit?: number }) 
           ))}
         </tbody>
       </table>
+      {rows.length === 0 && !isLoading && (
+        <div className="text-gray-500 text-center py-4">No active users found</div>
+      )}
     </div>
   );
 }
-
