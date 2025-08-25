@@ -130,3 +130,65 @@ body {
   width: 14px; height: 14px; border-radius: 4px;
   box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset;
 }
+
+/* ===================== */
+/* Premium Buttons (UI)  */
+/* ===================== */
+.btn-premium {
+  @apply relative inline-flex items-center justify-center select-none
+         rounded-xl px-3 py-1.5 text-sm font-medium
+         transition-all duration-150 ease-out
+         outline-none;
+  color: var(--gold-500);
+  background: linear-gradient(#0f1116, #000000);
+  border: 1px solid rgba(245, 181, 21, 0.35); /* gold-ish */
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 8px 18px rgba(0, 0, 0, 0.35);
+}
+.btn-premium:hover {
+  filter: brightness(1.05);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 10px 22px rgba(0, 0, 0, 0.45);
+}
+.btn-premium:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+/* Focus ring (keyboard) */
+.btn-premium:focus-visible {
+  box-shadow:
+    0 0 0 2px rgba(11, 14, 19, 0.9),
+    0 0 0 4px rgba(245, 181, 21, 0.45);
+}
+
+/* Subtle pulse on click */
+.btn-premium::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: radial-gradient(circle at center, rgba(255, 200, 56, 0.35), transparent 60%);
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
+}
+.btn-premium:active::after {
+  animation: btn-bloom 380ms ease-out forwards;
+}
+
+@keyframes btn-bloom {
+  0%   { opacity: .55; transform: scale(.55); }
+  100% { opacity: 0;   transform: scale(1.55); }
+}
+
+/* Variant for destructive actions (Stop) while staying on brand */
+.btn-premium--danger {
+  color: #ffdede;
+  border-color: rgba(255, 70, 70, 0.55);
+  background: linear-gradient(#1a0e0e, #090000);
+}
+.btn-premium--danger:hover {
+  filter: brightness(1.05);
+}
