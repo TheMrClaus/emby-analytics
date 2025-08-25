@@ -124,7 +124,7 @@ export default function Header() {
     <header className="bg-black text-white px-6 py-3">
       {/* Top row */}
       <div className="flex items-center justify-between">
-        {/* Left side */}
+        {/* Left side: title + clock */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-yellow-500 rounded flex items-center justify-center">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-black">
@@ -139,34 +139,18 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Right side */}
-        <div className="flex items-center gap-6">
-          <div className="text-right">
-            <div className="text-xs text-gray-400 uppercase tracking-wide">THIS WEEK</div>
-            <div className="text-2xl font-bold text-yellow-400">
-              {weeklyHours == null ? '—' : `${weeklyHours.toFixed(1)}h`} watched
-            </div>
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className={`relative overflow-hidden mt-2 min-w-[140px] rounded font-medium text-sm px-4 py-2 transition-colors
-                ${refreshing ? 'bg-yellow-700 text-black' : 'bg-yellow-600 hover:bg-yellow-700 text-black'}`}
-              aria-busy={refreshing}
-              aria-label="Refresh library"
-            >
-              <span className="relative z-10">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
-              <span
-                className="absolute bottom-0 left-0 h-1 bg-yellow-300 transition-[width] duration-300"
-                style={{ width: `${progress}%` }}
-                aria-hidden
-              />
-            </button>
+        {/* Right side: THIS WEEK */}
+        <div className="text-right">
+          <div className="text-xs text-gray-400 uppercase tracking-wide">THIS WEEK</div>
+          <div className="text-2xl font-bold text-yellow-400">
+            {weeklyHours == null ? '—' : `${weeklyHours.toFixed(1)}h`} watched
           </div>
         </div>
       </div>
 
       {/* Bottom row */}
       <div className="flex items-center justify-between mt-3">
+        {/* Left: Active Streams */}
         <div>
           <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">
             ACTIVE STREAMS:{' '}
@@ -181,6 +165,23 @@ export default function Header() {
             </span>
           </div>
         </div>
+
+        {/* Right: Refresh button */}
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className={`relative overflow-hidden min-w-[140px] rounded font-medium text-sm px-4 py-2 transition-colors
+            ${refreshing ? 'bg-yellow-700 text-black' : 'bg-yellow-600 hover:bg-yellow-700 text-black'}`}
+          aria-busy={refreshing}
+          aria-label="Refresh library"
+        >
+          <span className="relative z-10">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
+          <span
+            className="absolute bottom-0 left-0 h-1 bg-yellow-300 transition-[width] duration-300"
+            style={{ width: `${progress}%` }}
+            aria-hidden
+          />
+        </button>
       </div>
 
       {toast && (
