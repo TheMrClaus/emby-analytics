@@ -16,7 +16,6 @@ export default function Dashboard() {
         <title>Emby Analytics</title>
         <meta name="viewport" content="initial-scale=1, width=device-width" />
       </Head>
-      {/* Page background switched from light gray to dark theme */}
       <div className="min-h-screen bg-neutral-900 text-white">
         <Header />
         <main className="p-4 md:p-6 space-y-6 border-t border-neutral-800">
