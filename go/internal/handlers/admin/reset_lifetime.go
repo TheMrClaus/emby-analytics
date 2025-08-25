@@ -66,12 +66,10 @@ func ResetLifetimeWatch(db *sql.DB) fiber.Handler {
 
 		for rows.Next() {
 			var userID string
-			var totalWatchMs int64
-			var itemsWatched int64
+			var totalWatchMs, itemsWatched int64
 			var avgItemWatchMs float64
 
 			if err := rows.Scan(&userID, &totalWatchMs, &itemsWatched, &avgItemWatchMs); err != nil {
-
 				log.Printf("Error scanning user data: %v", err)
 				continue
 			}
