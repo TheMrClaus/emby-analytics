@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS play_event (
 );
 CREATE INDEX IF NOT EXISTS idx_play_event_user ON play_event(user_id);
 CREATE INDEX IF NOT EXISTS idx_play_event_item ON play_event(item_id);
+CREATE INDEX IF NOT EXISTS idx_play_event_ts ON play_event(ts);
 `
 	_, err := db.Exec(schema)
 	return err
