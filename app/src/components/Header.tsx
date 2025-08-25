@@ -84,9 +84,6 @@ export default function Header() {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-white">Emby Analytics</h1>
-            <p className="text-sm text-gray-400">
-              Reimagined — Black/Yellow premium • <span className="tabular-nums">{currentTime}</span>
-            </p>
           </div>
         </div>
 
@@ -103,13 +100,6 @@ export default function Header() {
       <div className="flex items-center justify-between">
         {/* Status section */}
         <div className="flex items-center gap-8">
-          <div>
-            <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">STATUS</div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              <span className="text-sm text-gray-300">Auto-refresh: every 2s</span>
-            </div>
-          </div>
 
           <div className="text-2xl font-bold text-white tabular-nums">{streamsTotal}</div>
 
