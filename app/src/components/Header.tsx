@@ -1,6 +1,8 @@
 // app/src/components/Header.tsx
 import { useEffect, useState } from 'react';
 import { fetchUsage, fetchNowSnapshot } from '../lib/api';
+const [refreshing, setRefreshing] = useState(false);
+const [progress, setProgress] = useState(0);
 
 type SnapshotEntry = {
   play_method?: string;
@@ -131,29 +133,47 @@ export default function Header() {
         {/* Refresh button */}
         <button
           onClick={async () => {
+            if (refreshing) return;
             setRefreshing(true);
+            setProgress(0);
+
             try {
-              await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/refresh/start`, { method: "POST" });
-              // Poll until done (simulate progress)
-              let pct = 0;
+              // Start refresh
+              await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/refresh/start`, {
+                method: "POST",
+              });
+
+              // Poll status until complete
               const interval = setInterval(async () => {
-                pct += 10;
-                setProgress(pct);
-                if (pct >= 100) {
+                try {
+                  const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/refresh/status`);
+                  if (res.ok) {
+                    const data = await res.json();
+                    setProgress(data.progress ?? 0);
+
+                    if (data.status === "done" || data.progress >= 100) {
+                      clearInterval(interval);
+                      setRefreshing(false);
+                      setProgress(0);
+                    }
+                  } else {
+                    throw new Error("Bad status response");
+                  }
+                } catch {
                   clearInterval(interval);
                   setRefreshing(false);
                   setProgress(0);
                 }
-              }, 300);
+              }, 1000);
             } catch {
               setRefreshing(false);
               setProgress(0);
             }
           }}
-          className="relative bg-yellow-600 hover:bg-yellow-700 text-black px-4 py-2 rounded font-medium text-sm transition-colors overflow-hidden"
+          className="relative bg-yellow-600 hover:bg-yellow-700 text-black px-4 py-2 rounded font-medium text-sm transition-colors overflow-hidden min-w-[120px]"
         >
-          {refreshing ? "Refreshing..." : "Refresh"}
-          {progress > 0 && (
+          {refreshing ? "Refreshing…" : "Refresh"}
+          {progress > 0 && refreshing && (
             <span
               className="absolute bottom-0 left-0 h-1 bg-yellow-400 transition-all"
               style={{ width: `${progress}%` }}
