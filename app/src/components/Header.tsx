@@ -101,22 +101,24 @@ export default function Header() {
       // poll status
       const poll = setInterval(async () => {
         try {
-          const s = await fetchRefreshStatus(); // RefreshState from your types
+          const s = await fetchRefreshStatus(); // RefreshState
+          // compute percentage from imported/total because RefreshState has no "progress"
+          const pct =
+            s.total && s.total > 0
+              ? Math.max(0, Math.min(100, Math.floor((Number(s.imported ?? 0) / Number(s.total)) * 100)))
+              : (s.running ? 0 : 100);
 
-          const pct = (() => {
-            const imported = Number(s.imported ?? 0);
-            const total = Number(s.total ?? 0);
-            if (total > 0)
-              return Math.max(0, Math.min(100, Math.round((imported / total) * 100)));
-            // If the job is running but total is 0/unknown, show 0%; if not running, treat as 100%
-            return s.running ? 0 : 100;
-          })();
           setProgress(pct);
 
           // Stop polling when backend reports it's not running anymore OR we hit 100%
           if (!s.running || pct >= 100) {
             setPolling(false);
-            setStatus("done");
+            setStatus(prev => ({
+              ...prev,
+              running: false,
+              imported: Number(prev.total ?? prev.imported ?? 0),
+              error: null
+            }));
           }
           if ((s as any).status === 'done' || pct >= 100) {
             clearInterval(poll);
@@ -124,6 +126,7 @@ export default function Header() {
             setProgress(100);
             showToast('Refresh complete ✅');
             // Optionally trigger light data refreshes right after:
+            // re-fetch usage to keep THIS WEEK fresh
             fetchUsage(7)
               .then(rows => setWeeklyHours(rows.reduce((acc, r) => acc + (r.hours || 0), 0)))
               .catch(() => {});
