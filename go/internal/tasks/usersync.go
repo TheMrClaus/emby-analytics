@@ -16,7 +16,8 @@ func StartUserSyncLoop(db *sql.DB, em *emby.Client, cfg config.Config) {
 		return
 	}
 
-	log.Printf("[usersync] starting loop with interval %d seconds", cfg.UserSyncIntervalSec)
+	log.Printf("[usersync] starting loop with interval %d seconds (%d hours)",
+		cfg.UserSyncIntervalSec, cfg.UserSyncIntervalSec/3600)
 
 	// Run once immediately
 	runUserSync(db, em)
@@ -32,8 +33,12 @@ func StartUserSyncLoop(db *sql.DB, em *emby.Client, cfg config.Config) {
 
 func runUserSync(db *sql.DB, em *emby.Client) {
 	log.Println("[usersync] starting user sync...")
+	startTime := time.Now()
+	apiCalls := 0
 
 	users, err := em.GetUsers()
+	apiCalls++ // Count the GetUsers API call
+
 	if err != nil {
 		log.Printf("[usersync] ERROR fetching users from Emby: %v", err)
 		return
@@ -63,22 +68,27 @@ func runUserSync(db *sql.DB, em *emby.Client) {
 			log.Printf("[usersync] upserted user: %s (ID: %s)", user.Name, user.Id)
 		}
 
-		// Sync user watch data
-		syncUserWatchData(db, em, user.Id, user.Name)
+		// Sync user watch data - this makes heavy API calls
+		userApiCalls := syncUserWatchData(db, em, user.Id, user.Name)
+		apiCalls += userApiCalls
 	}
 
 	// Verify database count
 	var totalInDB int
 	db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&totalInDB)
 
-	log.Printf("[usersync] completed: upserted %d users, total in DB: %d", upserted, totalInDB)
+	duration := time.Since(startTime)
+	log.Printf("[usersync] completed in %v: %d API calls, upserted %d users, total in DB: %d",
+		duration.Round(time.Millisecond), apiCalls, upserted, totalInDB)
 }
 
-func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) {
+func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) int {
 	userDataItems, err := em.GetUserData(userID)
+	apiCalls := 1 // Count the GetUserData API call
+
 	if err != nil {
 		log.Printf("[usersync] failed to get user data for %s: %v", userName, err)
-		return
+		return apiCalls
 	}
 
 	// Calculate total watch time from completed items
@@ -105,6 +115,8 @@ func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) {
 		hours := totalWatchMs / 3600000
 		log.Printf("[usersync] updated %s: %d played items, %d hours total watch time", userName, playedCount, hours)
 	}
+
+	return apiCalls
 }
 
 // RunUserSyncOnce triggers a single user sync cycle immediately
