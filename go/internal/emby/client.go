@@ -2,12 +2,15 @@ package emby
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -67,19 +70,27 @@ func readJSON(resp *http.Response, dst any) error {
 //
 
 type Client struct {
-	BaseURL string
-	APIKey  string
-	http    *http.Client
+	BaseURL  string
+	APIKey   string
+	http     *http.Client
+	cache    sync.Map
+	cacheTTL time.Duration
 }
 
 func New(baseURL, apiKey string) *Client {
 	return &Client{
-		BaseURL: strings.TrimRight(baseURL, "/"),
-		APIKey:  apiKey,
+		BaseURL:  strings.TrimRight(baseURL, "/"),
+		APIKey:   apiKey,
+		cacheTTL: time.Hour, // 1 hour TTL
 		http: &http.Client{
 			Timeout: 15 * time.Second,
 		},
 	}
+}
+
+type cacheEntry struct {
+	data      []EmbyItem
+	timestamp time.Time
 }
 
 //
@@ -99,11 +110,73 @@ type embyItemsResp struct {
 	Items []EmbyItem `json:"Items"`
 }
 
+// generateCacheKey creates a consistent cache key from item IDs
+func (c *Client) generateCacheKey(ids []string) string {
+	if len(ids) == 0 {
+		return ""
+	}
+
+	// Sort IDs to ensure consistent cache keys regardless of order
+	sorted := make([]string, len(ids))
+	copy(sorted, ids)
+	sort.Strings(sorted)
+
+	// Create MD5 hash of sorted IDs
+	h := md5.New()
+	for _, id := range sorted {
+		h.Write([]byte(id))
+		h.Write([]byte(","))
+	}
+	return fmt.Sprintf("items_%x", h.Sum(nil))
+}
+
+// getCachedItems retrieves cached items if they exist and are not expired
+func (c *Client) getCachedItems(cacheKey string) ([]EmbyItem, bool) {
+	if cacheKey == "" {
+		return nil, false
+	}
+
+	if entry, exists := c.cache.Load(cacheKey); exists {
+		if cached, ok := entry.(cacheEntry); ok {
+			if time.Since(cached.timestamp) < c.cacheTTL {
+				return cached.data, true
+			}
+			// Entry is expired, remove it
+			c.cache.Delete(cacheKey)
+		}
+	}
+	return nil, false
+}
+
+// setCachedItems stores items in cache
+func (c *Client) setCachedItems(cacheKey string, items []EmbyItem) {
+	if cacheKey == "" {
+		return
+	}
+
+	entry := cacheEntry{
+		data:      items,
+		timestamp: time.Now(),
+	}
+	c.cache.Store(cacheKey, entry)
+}
+
+// ItemsByIDs fetches item details for a set of IDs (used to prettify Episode display)
 // ItemsByIDs fetches item details for a set of IDs (used to prettify Episode display)
 func (c *Client) ItemsByIDs(ids []string) ([]EmbyItem, error) {
 	if c == nil || c.BaseURL == "" || c.APIKey == "" || len(ids) == 0 {
 		return []EmbyItem{}, nil
 	}
+
+	// Generate cache key
+	cacheKey := c.generateCacheKey(ids)
+
+	// Check cache first
+	if cachedItems, found := c.getCachedItems(cacheKey); found {
+		return cachedItems, nil
+	}
+
+	// Cache miss - fetch from API
 	endpoint := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
@@ -121,6 +194,10 @@ func (c *Client) ItemsByIDs(ids []string) ([]EmbyItem, error) {
 	if err := readJSON(resp, &out); err != nil {
 		return nil, err
 	}
+
+	// Cache the result
+	c.setCachedItems(cacheKey, out.Items)
+
 	return out.Items, nil
 }
 
