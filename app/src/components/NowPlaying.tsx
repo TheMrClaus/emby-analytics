@@ -178,7 +178,6 @@ export default function NowPlaying() {
               const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
               const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
               const progress = pct(s.progress_pct);
-
               const top = topBadge(s);
               const v = videoStatus(s);
               const a = audioStatus(s);
