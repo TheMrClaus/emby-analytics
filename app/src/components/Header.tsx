@@ -12,6 +12,9 @@ export default function Header() {
   const [streamsTotal, setStreamsTotal] = useState<number>(0);
   const [directPlay, setDirectPlay] = useState<number>(0);
   const [transcoding, setTranscoding] = useState<number>(0);
+  // add refresh UI state
+  const [refreshing, setRefreshing] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   // ----- clock -----
   useEffect(() => {
@@ -127,10 +130,35 @@ export default function Header() {
 
         {/* Refresh button */}
         <button
-          className="bg-yellow-600 hover:bg-yellow-700 text-black px-4 py-2 rounded font-medium text-sm transition-colors"
-          onClick={() => window.location.reload()}
+          onClick={async () => {
+            setRefreshing(true);
+            try {
+              await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/refresh/start`, { method: "POST" });
+              // Poll until done (simulate progress)
+              let pct = 0;
+              const interval = setInterval(async () => {
+                pct += 10;
+                setProgress(pct);
+                if (pct >= 100) {
+                  clearInterval(interval);
+                  setRefreshing(false);
+                  setProgress(0);
+                }
+              }, 300);
+            } catch {
+              setRefreshing(false);
+              setProgress(0);
+            }
+          }}
+          className="relative bg-yellow-600 hover:bg-yellow-700 text-black px-4 py-2 rounded font-medium text-sm transition-colors overflow-hidden"
         >
-          Refresh now
+          {refreshing ? "Refreshing..." : "Refresh"}
+          {progress > 0 && (
+            <span
+              className="absolute bottom-0 left-0 h-1 bg-yellow-400 transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          )}
         </button>
       </div>
     </header>

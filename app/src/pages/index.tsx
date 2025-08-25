@@ -22,7 +22,6 @@ export default function Dashboard() {
         <Header />
         <main className="p-4 md:p-6 space-y-6 border-t border-neutral-800">
           <OverviewCards />
-          <RefreshControls />
 
           <div className="grid lg:grid-cols-2 gap-4">
             <UsageChart days={14} />
