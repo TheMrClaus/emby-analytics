@@ -59,7 +59,7 @@ export default function NowPlaying() {
   // Crossfade + parallax state
   const [bgA, setBgA] = useState<string>("");
   const [bgB, setBgB] = useState<string>("");
-  const [useA, setUseA] = useState<boolean>(true); // which layer is "on"
+  const [useA, setUseA] = useState<boolean>(true);
   const [parallaxY, setParallaxY] = useState<number>(0);
 
   // Compute next hero URL from the first session
@@ -84,13 +84,13 @@ export default function NowPlaying() {
   // Parallax (respect reduced motion)
   useEffect(() => {
     const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (mql.matches) return; // no motion
+    if (mql.matches) return;
 
     const onScroll = () => {
       const y = Math.min(60, window.scrollY * 0.12);
       setParallaxY(y);
     };
-    onScroll(); // initialize
+    onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
@@ -221,7 +221,7 @@ export default function NowPlaying() {
       ) : null}
 
       {/* Foreground content */}
-      <div className="hero-foreground space-y-5">
+      <div className="hero-foreground space-y-4">
         <h2 className="ty-title text-emerald-400">Now Playing</h2>
 
         {error && <div className="text-red-400 text-sm">{error}</div>}
@@ -229,7 +229,7 @@ export default function NowPlaying() {
         {sessions.length === 0 ? (
           <div className="text-gray-500 text-sm">Nobody is watching right now.</div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-7">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {sessions.map((s) => {
               const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
               const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
@@ -238,11 +238,11 @@ export default function NowPlaying() {
               return (
                 <article
                   key={s.session_id}
-                  className="card overflow-hidden flex flex-col min-h-[380px] p-5"
+                  className="card overflow-hidden flex flex-col p-5"
                 >
-                  {/* Top row: poster + title/meta arranged symmetrically */}
+                  {/* Top row: poster + title/meta */}
                   <div className="flex gap-5">
-                    {/* Poster column - fixed size to align all cards */}
+                    {/* Poster */}
                     <div className="shrink-0">
                       <img
                         src={
@@ -258,25 +258,25 @@ export default function NowPlaying() {
                     {/* Title + meta */}
                     <div className="min-w-0 flex-1 flex flex-col">
                       <div className="flex items-start justify-between gap-3">
-                        <h3 className="text-base font-semibold text-white truncate">
+                        <h3 className="text-base font-semibold text-white leading-tight break-words">
                           {s.title}
                         </h3>
                         <span className="badge shrink-0">{s.user}</span>
                       </div>
-                      <div className="text-xs text-gray-400 truncate">
+                      <div className="text-xs text-gray-400 mt-1 leading-snug break-words">
                         {s.app} • {s.device}
                       </div>
 
-                      {/* Stream + reasons */}
+                      {/* Stream line */}
                       <div className="mt-2 text-sm text-gray-300 space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-gray-200">Stream</span>
-                          <span className="text-gray-300 truncate">
+                          <span className="text-gray-300">
                             {s.container} ({(s.bitrate / 1_000_000).toFixed(1)} Mbps)
                           </span>
                         </div>
                         {s.trans_reason && (
-                          <div className="text-amber-300/90 text-xs">
+                          <div className="text-amber-300/90 text-xs break-words">
                             {s.trans_reason}
                           </div>
                         )}
@@ -287,21 +287,18 @@ export default function NowPlaying() {
                   {/* Divider */}
                   <div className="my-4 h-px bg-white/10" />
 
-                  {/* Details grid keeps things aligned and tidy */}
+                  {/* Details grid */}
                   <div className="grid grid-cols-2 gap-x-5 gap-y-3 text-sm">
                     {/* Video */}
                     <div className="space-y-1">
                       <div className="text-gray-400 text-xs font-medium tracking-wide">
                         VIDEO
                       </div>
-                      <div className="text-gray-200">
+                      <div className="text-gray-200 break-words">
                         {s.width}x{s.height} {s.video}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Chip
-                          tone={isVideoTrans ? "warn" : "ok"}
-                          label={s.video_method || "Direct Play"}
-                        />
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Chip tone={isVideoTrans ? "warn" : "ok"} label={s.video_method || "Direct Play"} />
                         {s.dolby_vision && <span className="badge">Dolby Vision</span>}
                         {s.hdr10 && <span className="badge">HDR10</span>}
                       </div>
@@ -312,21 +309,17 @@ export default function NowPlaying() {
                       <div className="text-gray-400 text-xs font-medium tracking-wide">
                         AUDIO
                       </div>
-                      <div className="text-gray-200">
+                      <div className="text-gray-200 break-words">
+                        {/* Audio details text, inline kbps if we have a transcode target bitrate */}
                         {s.audio}
                         {s.audio_ch ? ` • ${s.audio_ch}.0` : ""}
                         {s.audio_lang ? ` • ${s.audio_lang.toUpperCase()}` : ""}
+                        {typeof s.trans_audio_bitrate === "number" && s.trans_audio_bitrate > 0
+                          ? ` • ${Math.round(s.trans_audio_bitrate / 1000)} kbps`
+                          : ""}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Chip
-                          tone={isAudioTrans ? "warn" : "ok"}
-                          label={s.audio_method || "Direct Play"}
-                        />
-                        {typeof s.trans_audio_bitrate === "number" && (
-                          <span className="badge">
-                            {Math.round(s.trans_audio_bitrate / 1000)} kbps
-                          </span>
-                        )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Chip tone={isAudioTrans ? "warn" : "ok"} label={s.audio_method || "Direct Play"} />
                       </div>
                     </div>
 
@@ -335,7 +328,7 @@ export default function NowPlaying() {
                       <div className="text-gray-400 text-xs font-medium tracking-wide">
                         SUBS
                       </div>
-                      <div className="text-gray-200">
+                      <div className="text-gray-200 break-words">
                         {s.subs
                           ? `${s.subs}${s.sub_codec ? ` • ${s.sub_codec}` : ""}${
                               s.sub_lang ? ` • ${s.sub_lang.toUpperCase()}` : ""
@@ -344,12 +337,12 @@ export default function NowPlaying() {
                       </div>
                     </div>
 
-                    {/* Transcoding detail (if available) */}
+                    {/* Transcoding detail */}
                     <div className="space-y-1">
                       <div className="text-gray-400 text-xs font-medium tracking-wide">
                         TRANSCODE
                       </div>
-                      <div className="text-gray-200">
+                      <div className="text-gray-200 break-words">
                         {s.trans_video_from && s.trans_video_to
                           ? `${s.trans_video_from} → ${s.trans_video_to}`
                           : "—"}
@@ -376,20 +369,19 @@ export default function NowPlaying() {
                     </div>
                   </div>
 
-                  {/* Push controls to the bottom and center them */}
-                  <div className="mt-6 flex-1" />
-                  <div className="pb-1 flex items-center justify-center gap-3">
-                    <button className="badge px-3 py-1" onClick={() => send(s.session_id, "pause")}>
+                  {/* Controls pinned to bottom & centered */}
+                  <div className="mt-5 flex justify-center gap-2 pt-1 mt-auto">
+                    <button className="badge" onClick={() => send(s.session_id, "pause")}>
                       Pause
                     </button>
-                    <button className="badge px-3 py-1" onClick={() => send(s.session_id, "unpause")}>
+                    <button className="badge" onClick={() => send(s.session_id, "unpause")}>
                       Resume
                     </button>
-                    <button className="badge px-3 py-1" onClick={() => send(s.session_id, "stop")}>
+                    <button className="badge" onClick={() => send(s.session_id, "stop")}>
                       Stop
                     </button>
                     <button
-                      className="badge px-3 py-1"
+                      className="badge"
                       onClick={() => {
                         const txt = prompt("Send a message:", "Hello!");
                         if (txt != null) send(s.session_id, "message", txt);
