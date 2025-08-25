@@ -165,25 +165,18 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Right side block: metric pinned top-left, refresh stack pinned bottom-right */}
-        <div className="relative min-h-[112px] pr-2">
-          {/* top-left metric */}
-          <div className="text-left">
+        {/* Right side block: THIS WEEK top-right, Refresh bottom-right */}
+        <div className="relative min-h-[100px] w-[200px]">
+          {/* THIS WEEK pinned top-right */}
+          <div className="absolute top-0 right-0 text-right">
             <div className="text-xs text-gray-400 uppercase tracking-wide">THIS WEEK</div>
             <div className="text-2xl font-bold text-yellow-400">
               {weeklyHours == null ? '—' : `${weeklyHours.toFixed(1)}h`} watched
             </div>
           </div>
 
-          {/* bottom-right: progress text (above) + button (flush bottom) */}
-          <div className="absolute right-0 bottom-0 flex flex-col items-end gap-1">
-            {refreshing && (
-              <div className="text-xs text-gray-400 tabular-nums">
-                {nf.format(imported)} of {typeof total === 'number' ? nf.format(total) : '…'} processed
-                {typeof page === 'number' ? ` • Page ${page + 1}` : ''}
-              </div>
-            )}
-
+          {/* Refresh pinned bottom-right */}
+          <div className="absolute bottom-0 right-0">
             <button
               onClick={handleRefresh}
               disabled={refreshing}
@@ -193,7 +186,6 @@ export default function Header() {
               aria-label="Refresh library"
             >
               <span className="relative z-10">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
-              {/* progress bar inside button */}
               <span
                 className="absolute bottom-0 left-0 h-1 bg-yellow-300 transition-[width] duration-300"
                 style={{ width: `${progress}%` }}
