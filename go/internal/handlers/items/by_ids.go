@@ -132,15 +132,17 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 
 // zero-pad to 2 digits
 func two(n int) string {
-	switch {
-	case n < 0:
+	if n < 0 {
 		return "00"
-	case n < 10:
-		return "0" + string('0' + n)[:0] // cheap; replaced below with proper format
-	default:
 	}
-	// simple safe format (avoids fmt import)
-	d1 := n / 10
-	d2 := n % 10
-	return string('0'+d1) + string('0'+d2)
+	if n < 10 {
+		return "0" + string(rune('0'+n))
+	}
+	if n < 100 {
+		d1 := n / 10
+		d2 := n % 10
+		return string(rune('0'+d1)) + string(rune('0'+d2))
+	}
+	// For numbers >= 100, just return as string (shouldn't happen for season/episode numbers)
+	return string(rune('0'+(n/10)%10)) + string(rune('0'+n%10))
 }
