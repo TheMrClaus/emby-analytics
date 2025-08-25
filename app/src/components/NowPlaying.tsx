@@ -172,6 +172,29 @@ export default function NowPlaying() {
     }
   };
 
+  // ---------- UI helpers ----------
+  const Chip = ({
+    tone,
+    label,
+  }: {
+    tone: "ok" | "warn";
+    label: string;
+  }) => (
+    <span
+      className={[
+        "px-2 py-0.5 rounded-full text-xs font-medium border",
+        tone === "ok"
+          ? "bg-green-500/20 text-green-400 border-green-400/30"
+          : "bg-orange-500/20 text-orange-400 border-orange-400/30",
+      ].join(" ")}
+    >
+      {label}
+    </span>
+  );
+
+  const pct = (n: number) =>
+    Math.min(100, Math.max(0, Math.floor(Number.isFinite(n) ? n : 0)));
+
   return (
     <section className="hero p-6">
       {/* Crossfading, parallaxed backdrop (only if we have any session) */}
@@ -198,115 +221,175 @@ export default function NowPlaying() {
       ) : null}
 
       {/* Foreground content */}
-      <div className="hero-foreground space-y-4">
-        <h2 className="text-sm text-gray-400">Now Playing</h2>
+      <div className="hero-foreground space-y-5">
+        <h2 className="ty-title text-emerald-400">Now Playing</h2>
 
         {error && <div className="text-red-400 text-sm">{error}</div>}
 
         {sessions.length === 0 ? (
           <div className="text-gray-500 text-sm">Nobody is watching right now.</div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {sessions.map((s) => (
-              <article
-                key={s.session_id}
-                className="bg-neutral-800 rounded-2xl p-4 shadow flex gap-4"
-              >
-                {/* poster */}
-                <img
-                  src={
-                    s.poster?.startsWith("/img/")
-                      ? `${apiBase}${s.poster}`
-                      : `${apiBase}/img/primary/${encodeURIComponent(s.item_id)}`
-                  }
-                  alt={s.title}
-                  className="w-20 h-28 object-cover rounded-lg border border-white/10"
-                />
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-7">
+            {sessions.map((s) => {
+              const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
+              const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
+              const progress = pct(s.progress_pct);
 
-                {/* details */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <div className="text-lg font-semibold text-white truncate">
-                      {s.title}
-                    </div>
-                    <span className="badge">{s.user}</span>
-                  </div>
-                  <div className="text-gray-400 truncate">
-                    {s.app} • {s.device}
-                  </div>
-
-                  <div className="mt-2 text-sm space-y-1 text-gray-300">
-                    <div className="font-medium">Stream</div>
-                    <div>
-                      {s.container} ({(s.bitrate / 1_000_000).toFixed(1)} Mbps)
-                    </div>
-                    {s.trans_reason && <div>{s.trans_reason}</div>}
-
-                    <div className="font-medium mt-1">Video</div>
-                    <div>
-                      {s.width}x{s.height} {s.video} •{" "}
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          (s.video_method || "Direct Play") === "Transcode"
-                            ? "bg-orange-500/20 text-orange-400 border border-orange-400/30"
-                            : "bg-green-500/20 text-green-400 border border-green-400/30"
-                        }`}
-                      >
-                        {s.video_method || "Direct Play"}
-                      </span>
+              return (
+                <article
+                  key={s.session_id}
+                  className="card overflow-hidden flex flex-col min-h-[380px] p-5"
+                >
+                  {/* Top row: poster + title/meta arranged symmetrically */}
+                  <div className="flex gap-5">
+                    {/* Poster column - fixed size to align all cards */}
+                    <div className="shrink-0">
+                      <img
+                        src={
+                          s.poster?.startsWith("/img/")
+                            ? `${apiBase}${s.poster}`
+                            : `${apiBase}/img/primary/${encodeURIComponent(s.item_id)}`
+                        }
+                        alt={s.title}
+                        className="w-24 h-36 object-cover rounded-xl border border-white/10"
+                      />
                     </div>
 
-                    <div className="font-medium mt-1">Audio</div>
-                    <div>
-                      {s.audio} •{" "}
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          (s.audio_method || "Direct Play") === "Transcode"
-                            ? "bg-orange-500/20 text-orange-400 border border-orange-400/30"
-                            : "bg-green-500/20 text-green-400 border border-green-400/30"
-                        }`}
-                      >
-                        {s.audio_method || "Direct Play"}
-                      </span>
-                    </div>
+                    {/* Title + meta */}
+                    <div className="min-w-0 flex-1 flex flex-col">
+                      <div className="flex items-start justify-between gap-3">
+                        <h3 className="text-base font-semibold text-white truncate">
+                          {s.title}
+                        </h3>
+                        <span className="badge shrink-0">{s.user}</span>
+                      </div>
+                      <div className="text-xs text-gray-400 truncate">
+                        {s.app} • {s.device}
+                      </div>
 
-                    {s.subs && (
-                      <>
-                        <div className="font-medium mt-1">Subs</div>
-                        <div>
-                          {s.subs} • {s.sub_codec || "—"}
+                      {/* Stream + reasons */}
+                      <div className="mt-2 text-sm text-gray-300 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-200">Stream</span>
+                          <span className="text-gray-300 truncate">
+                            {s.container} ({(s.bitrate / 1_000_000).toFixed(1)} Mbps)
+                          </span>
                         </div>
-                      </>
-                    )}
+                        {s.trans_reason && (
+                          <div className="text-amber-300/90 text-xs">
+                            {s.trans_reason}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="mt-3">
-                    <div className="text-xs text-gray-400 mb-1">
-                      Progress {Math.floor(s.progress_pct)}%
+                  {/* Divider */}
+                  <div className="my-4 h-px bg-white/10" />
+
+                  {/* Details grid keeps things aligned and tidy */}
+                  <div className="grid grid-cols-2 gap-x-5 gap-y-3 text-sm">
+                    {/* Video */}
+                    <div className="space-y-1">
+                      <div className="text-gray-400 text-xs font-medium tracking-wide">
+                        VIDEO
+                      </div>
+                      <div className="text-gray-200">
+                        {s.width}x{s.height} {s.video}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Chip
+                          tone={isVideoTrans ? "warn" : "ok"}
+                          label={s.video_method || "Direct Play"}
+                        />
+                        {s.dolby_vision && <span className="badge">Dolby Vision</span>}
+                        {s.hdr10 && <span className="badge">HDR10</span>}
+                      </div>
                     </div>
-                    <div className="w-full h-2 bg-neutral-700 rounded-full overflow-hidden">
+
+                    {/* Audio */}
+                    <div className="space-y-1">
+                      <div className="text-gray-400 text-xs font-medium tracking-wide">
+                        AUDIO
+                      </div>
+                      <div className="text-gray-200">
+                        {s.audio}
+                        {s.audio_ch ? ` • ${s.audio_ch}.0` : ""}
+                        {s.audio_lang ? ` • ${s.audio_lang.toUpperCase()}` : ""}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Chip
+                          tone={isAudioTrans ? "warn" : "ok"}
+                          label={s.audio_method || "Direct Play"}
+                        />
+                        {typeof s.trans_audio_bitrate === "number" && (
+                          <span className="badge">
+                            {Math.round(s.trans_audio_bitrate / 1000)} kbps
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Subs */}
+                    <div className="space-y-1">
+                      <div className="text-gray-400 text-xs font-medium tracking-wide">
+                        SUBS
+                      </div>
+                      <div className="text-gray-200">
+                        {s.subs
+                          ? `${s.subs}${s.sub_codec ? ` • ${s.sub_codec}` : ""}${
+                              s.sub_lang ? ` • ${s.sub_lang.toUpperCase()}` : ""
+                            }`
+                          : "—"}
+                      </div>
+                    </div>
+
+                    {/* Transcoding detail (if available) */}
+                    <div className="space-y-1">
+                      <div className="text-gray-400 text-xs font-medium tracking-wide">
+                        TRANSCODE
+                      </div>
+                      <div className="text-gray-200">
+                        {s.trans_video_from && s.trans_video_to
+                          ? `${s.trans_video_from} → ${s.trans_video_to}`
+                          : "—"}
+                      </div>
+                      {typeof s.trans_video_bitrate === "number" && (
+                        <div className="text-xs text-gray-400">
+                          ~{(s.trans_video_bitrate / 1_000_000).toFixed(1)} Mbps
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Progress */}
+                  <div className="mt-5">
+                    <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                      <span>Progress</span>
+                      <span>{progress}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-neutral-700/80 rounded-full overflow-hidden">
                       <div
-                        className="h-2 bg-yellow-500"
-                        style={{
-                          width: `${Math.min(100, Math.max(0, s.progress_pct))}%`,
-                        }}
+                        className="h-2 rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600"
+                        style={{ width: `${progress}%` }}
                       />
                     </div>
                   </div>
 
-                  {/* controls */}
-                  <div className="mt-3 flex gap-2">
-                    <button className="badge" onClick={() => send(s.session_id, "pause")}>
+                  {/* Push controls to the bottom and center them */}
+                  <div className="mt-6 flex-1" />
+                  <div className="pb-1 flex items-center justify-center gap-3">
+                    <button className="badge px-3 py-1" onClick={() => send(s.session_id, "pause")}>
                       Pause
                     </button>
-                    <button className="badge" onClick={() => send(s.session_id, "unpause")}>
+                    <button className="badge px-3 py-1" onClick={() => send(s.session_id, "unpause")}>
                       Resume
                     </button>
-                    <button className="badge" onClick={() => send(s.session_id, "stop")}>
+                    <button className="badge px-3 py-1" onClick={() => send(s.session_id, "stop")}>
                       Stop
                     </button>
                     <button
-                      className="badge"
+                      className="badge px-3 py-1"
                       onClick={() => {
                         const txt = prompt("Send a message:", "Hello!");
                         if (txt != null) send(s.session_id, "message", txt);
@@ -315,9 +398,9 @@ export default function NowPlaying() {
                       Message
                     </button>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </div>
