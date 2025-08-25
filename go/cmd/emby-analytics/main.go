@@ -92,10 +92,11 @@ func main() {
 		}
 		return fiber.ErrUpgradeRequired
 	}, now.WS())
+
 	// Controls
-	app.Post("/now/:sessionId/pause", now.PauseSession(em))
-	app.Post("/now/:sessionId/stop", now.StopSession(em))
-	app.Post("/now/:sessionId/message", now.MessageSession(em))
+	app.Post("/now/:id/pause", now.PauseSession)
+	app.Post("/now/:id/stop", now.StopSession)
+	app.Post("/now/:id/message", now.MessageSession)
 
 	// ---- admin endpoints (opt-in, keep but unexposed publicly in prod proxies) ----
 	rm := admin.NewRefreshManager()
