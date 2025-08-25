@@ -38,9 +38,11 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 			upsertUserAndItem(db, s.UserID, s.UserName, s.ItemID, "", "")
 			// Convert ticks (100ns) -> ms
 			// Convert ticks (100ns) -> ms (clamped to runtime if present)
-			posMs := s.PosTicks / 10_000
-			if s.RunTimeTicks > 0 && s.PosTicks > s.RunTimeTicks {
-				posMs = s.RunTimeTicks / 10_000
+			posMs := int64(posTicks / 10_000)        // ticks to ms
+			durMs := int64(s.DurationTicks / 10_000) // ticks to ms (if you store duration)
+			//			posMs := s.PosTicks / 10_000
+			if s.DurationTicks > 0 && s.PosTicks > s.DurationTicks {
+				posMs = s.DurationTicks / 10_000
 			}
 			if posMs < 0 {
 				posMs = 0
