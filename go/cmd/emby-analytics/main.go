@@ -41,6 +41,7 @@ func main() {
 	cfg := config.Load()
 	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
 	sqlDB, err := db.Open(cfg.SQLitePath)
+
 	if err != nil {
 		log.Fatalf("open db: %v", err)
 	}
@@ -92,9 +93,9 @@ func main() {
 		return fiber.ErrUpgradeRequired
 	}, now.WS())
 	// Controls
-	app.Post("/now/:sessionId/pause", now.PauseSession)
-	app.Post("/now/:sessionId/stop", now.StopSession)
-	app.Post("/now/:sessionId/message", now.MessageSession)
+	app.Post("/now/:sessionId/pause", now.PauseSession(em))
+	app.Post("/now/:sessionId/stop", now.StopSession(em))
+	app.Post("/now/:sessionId/message", now.MessageSession(em))
 
 	// ---- admin endpoints (opt-in, keep but unexposed publicly in prod proxies) ----
 	rm := admin.NewRefreshManager()
