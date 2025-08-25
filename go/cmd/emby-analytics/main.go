@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"os"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/logger"
@@ -11,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/static"
 	"github.com/joho/godotenv"
 
+	"emby-analytics/internal/broadcaster"
 	"emby-analytics/internal/config"
 	"emby-analytics/internal/db"
 	"emby-analytics/internal/emby"
@@ -49,6 +51,19 @@ func main() {
 	if err := db.EnsureSchema(sqlDB); err != nil {
 		log.Fatalf("ensure schema: %v", err)
 	}
+
+	// ---- create broadcaster for now playing ----
+	pollInterval := time.Duration(cfg.NowPollSec) * time.Second
+	if pollInterval <= 0 {
+		pollInterval = 5 * time.Second
+	}
+
+	nowBroadcaster := broadcaster.NewNowBroadcaster(em, pollInterval)
+	now.SetBroadcaster(nowBroadcaster)
+	nowBroadcaster.Start()
+
+	// Graceful shutdown for broadcaster
+	defer nowBroadcaster.Stop()
 
 	// ---- fiber v3 app ----
 	app := fiber.New(fiber.Config{
