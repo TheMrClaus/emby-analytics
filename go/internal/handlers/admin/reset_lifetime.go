@@ -88,9 +88,12 @@ func ResetLifetimeWatch(db *sql.DB) fiber.Handler {
 			totalWatchHours += watchHours
 
 			// Log detailed info for verification
-			avgMinutesPerItem := avgItemWatchMs / 60000.0
 			log.Printf("User %s: %.1f hours actual watch time (%d items, avg %.1f min per item)",
-				userID, watchHours, itemsWatched, avgMinutesPerItem)
+				userID,
+				watchHours,
+				itemsWatched,
+				avgItemWatchMs/(1000.0*60.0),
+			)
 		}
 
 		if err := rows.Err(); err != nil {
