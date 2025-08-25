@@ -25,6 +25,11 @@ export default function Header() {
   ).length;
   const transcoding = streamsTotal - directPlay;
 
+  // Calculate progress percentage from refreshStatus
+  const progress = refreshStatus && refreshStatus.total && refreshStatus.total > 0
+    ? Math.max(0, Math.min(100, (refreshStatus.imported / refreshStatus.total) * 100))
+    : 0;
+
   // Clock update effect
   useEffect(() => {
     const updateTime = () => setCurrentTime(new Date().toLocaleTimeString());
@@ -36,11 +41,14 @@ export default function Header() {
   // Monitor refresh status
   useEffect(() => {
     if (refreshStatus && refreshing) {
-      const progress = Math.max(0, Math.min(100, Number(refreshStatus.progress ?? 0)));
-      
       if (refreshStatus.running === false) {
         setRefreshing(false);
         showToast('Refresh completed successfully!');
+      }
+      
+      if (refreshStatus.error) {
+        setRefreshing(false);
+        showToast(`Refresh failed: ${refreshStatus.error}`);
       }
     }
   }, [refreshStatus, refreshing]);
@@ -63,9 +71,6 @@ export default function Header() {
       console.error('Refresh error:', err);
     }
   };
-
-  // Calculate progress percentage
-  const progress = refreshStatus ? Math.max(0, Math.min(100, Number(refreshStatus.progress ?? 0))) : 0;
 
   return (
     <header className="bg-neutral-900 border-b border-neutral-700 px-6 py-4">
@@ -123,7 +128,18 @@ export default function Header() {
                   : 'bg-blue-600 hover:bg-blue-700 text-white'
               }`}
             >
-              {refreshing ? `Refreshing... ${progress.toFixed(0)}%` : 'Refresh Library'}
+              {refreshing ? (
+                <span>
+                  Refreshing... {progress.toFixed(0)}%
+                  {refreshStatus && refreshStatus.total && (
+                    <span className="text-xs ml-1">
+                      ({refreshStatus.imported}/{refreshStatus.total})
+                    </span>
+                  )}
+                </span>
+              ) : (
+                'Refresh Library'
+              )}
             </button>
             
             {/* Progress Bar */}
