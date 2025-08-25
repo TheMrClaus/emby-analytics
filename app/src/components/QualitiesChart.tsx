@@ -54,7 +54,8 @@ export default function QualitiesChart() {
             <Tooltip
               wrapperStyle={{ borderRadius: 12, overflow: 'hidden' }}
               contentStyle={{ background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}` }}
-              labelStyle={{ color: colors.tooltipText }}
+              labelStyle={{ color: colors.gold500 }}
+              itemStyle={{ color: '#fff' }}
               formatter={(value: any) => [fmtInt(Number(value)), '']}
             />
             <Legend />
@@ -68,7 +69,7 @@ export default function QualitiesChart() {
             />
             <Bar
               dataKey="Episode"
-              fill={colors.charcoal}
+              fill={colors.ink}
               radius={[6, 6, 0, 0]}
               stroke="rgba(255,255,255,0.08)"
               strokeWidth={0.5}
