@@ -100,20 +100,18 @@ export default function Header() {
       <div className="flex items-center justify-between">
         {/* Status section */}
         <div className="flex items-center gap-8">
-
-          <div className="text-2xl font-bold text-white tabular-nums">{streamsTotal}</div>
-
-          <div>
+        <div>
             <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">ACTIVE STREAMS</div>
-            <div className="flex gap-4">
-              <span className="bg-teal-600 text-white px-2 py-1 rounded text-sm">
+            <div className="flex items-center gap-4">
+            <div className="text-2xl font-bold text-white tabular-nums">{streamsTotal}</div>
+            <span className="bg-teal-600 text-white px-2 py-1 rounded text-sm">
                 DirectPlay {directPlay}
-              </span>
-              <span className="bg-orange-600 text-white px-2 py-1 rounded text-sm">
+            </span>
+            <span className="bg-orange-600 text-white px-2 py-1 rounded text-sm">
                 Transcoding {transcoding}
-              </span>
+            </span>
             </div>
-          </div>
+        </div>
         </div>
 
         {/* Refresh button */}
