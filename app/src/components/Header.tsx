@@ -22,14 +22,13 @@ export default function Header() {
   // refresh UI state
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0); // %
+  const [progress, setProgress] = useState(0);
   const [imported, setImported] = useState(0);
   const [total, setTotal] = useState<number | undefined>(undefined);
   const [page, setPage] = useState<number | undefined>(undefined);
 
   const nf = useMemo(() => new Intl.NumberFormat(), []);
 
-  // ----- clock -----
   useEffect(() => {
     const updateTime = () => setCurrentTime(new Date().toLocaleTimeString());
     updateTime();
@@ -37,7 +36,6 @@ export default function Header() {
     return () => clearInterval(t);
   }, []);
 
-  // ----- weekly usage -----
   useEffect(() => {
     (async () => {
       try {
@@ -50,7 +48,6 @@ export default function Header() {
     })();
   }, []);
 
-  // ----- live snapshot -----
   useEffect(() => {
     let stopped = false;
     const load = async () => {
@@ -70,7 +67,7 @@ export default function Header() {
         setDirectPlay(d);
         setTranscoding(t);
       } catch {
-        /* keep previous values */
+        /* ignore */
       }
     };
     load();
@@ -81,16 +78,13 @@ export default function Header() {
     };
   }, []);
 
-  // toast helper
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
 
-  // start refresh + poll progress
   const handleRefresh = async () => {
     if (refreshing) return;
-
     try {
       setRefreshing(true);
       setProgress(0);
@@ -103,7 +97,6 @@ export default function Header() {
       const poll = setInterval(async () => {
         try {
           const s: RefreshState = await fetchRefreshStatus();
-
           setImported(Number(s.imported ?? 0));
           setTotal(typeof s.total === 'number' ? s.total : undefined);
           setPage(typeof s.page === 'number' ? s.page : undefined);
@@ -112,7 +105,6 @@ export default function Header() {
             s.total && s.total > 0
               ? Math.min(100, Math.max(0, Math.round((Number(s.imported ?? 0) / Number(s.total)) * 100)))
               : (s.running ? 0 : 100);
-
           setProgress(pct);
 
           if (!s.running || pct >= 100) {
@@ -139,10 +131,10 @@ export default function Header() {
   };
 
   return (
-    <header className="bg-black text-white p-4">
+    <header className="bg-black text-white px-4 py-3">
       {/* Top row */}
-      <div className="flex items-center justify-between mb-4">
-        {/* Left side - Logo and title */}
+      <div className="flex items-start justify-between">
+        {/* Left side */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-yellow-500 rounded flex items-center justify-center">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-black">
@@ -150,72 +142,65 @@ export default function Header() {
             </svg>
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-white">Emby Analytics</h1>
-            <p className="text-sm text-gray-400">
+            <h1 className="text-lg font-semibold text-white leading-tight">Emby Analytics</h1>
+            <p className="text-xs text-gray-400 leading-tight">
               <span className="tabular-nums">{currentTime}</span>
             </p>
           </div>
         </div>
 
-        {/* Right side block: THIS WEEK top-right, Refresh bottom-right */}
-        <div className="relative min-h-[110px] w-[220px] pr-2">
-          {/* THIS WEEK pinned top-right */}
-          <div className="absolute top-0 right-0 text-right">
-            <div className="text-xs text-gray-400 uppercase tracking-wide">THIS WEEK</div>
-            <div className="text-2xl font-bold text-yellow-400">
+        {/* Right side */}
+        <div className="flex flex-col items-end gap-2">
+          <div className="text-right">
+            <div className="text-[10px] text-gray-400 uppercase tracking-wide">THIS WEEK</div>
+            <div className="text-lg font-bold text-yellow-400">
               {weeklyHours == null ? '—' : `${weeklyHours.toFixed(1)}h`} watched
             </div>
           </div>
 
-          {/* Refresh pinned bottom-right */}
-          <div className="absolute bottom-0 right-0 flex flex-col items-end gap-1">
-            {refreshing && (
-              <div className="text-xs text-gray-400 tabular-nums">
-                {nf.format(imported)} of {typeof total === 'number' ? nf.format(total) : '…'} processed
-                {typeof page === 'number' ? ` • Page ${page + 1}` : ''}
-              </div>
-            )}
+          {refreshing && (
+            <div className="text-[11px] text-gray-400 tabular-nums">
+              {nf.format(imported)} of {typeof total === 'number' ? nf.format(total) : '…'} processed
+              {typeof page === 'number' ? ` • Page ${page + 1}` : ''}
+            </div>
+          )}
 
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className={`relative overflow-hidden min-w-[140px] rounded font-medium text-sm px-4 py-2 transition-colors
-                ${refreshing ? 'bg-yellow-700 text-black' : 'bg-yellow-600 hover:bg-yellow-700 text-black'}`}
-              aria-busy={refreshing}
-              aria-label="Refresh library"
-            >
-              <span className="relative z-10">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
-              <span
-                className="absolute bottom-0 left-0 h-1 bg-yellow-300 transition-[width] duration-300"
-                style={{ width: `${progress}%` }}
-                aria-hidden
-              />
-            </button>
-          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className={`relative overflow-hidden rounded font-medium text-xs px-3 py-1.5 transition-colors
+              ${refreshing ? 'bg-yellow-700 text-black' : 'bg-yellow-600 hover:bg-yellow-700 text-black'}`}
+            aria-busy={refreshing}
+            aria-label="Refresh library"
+          >
+            <span className="relative z-10">{refreshing ? 'Refreshing…' : 'Refresh'}</span>
+            <span
+              className="absolute bottom-0 left-0 h-0.5 bg-yellow-300 transition-[width] duration-300"
+              style={{ width: `${progress}%` }}
+              aria-hidden
+            />
+          </button>
         </div>
       </div>
 
       {/* Bottom row */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">
-            ACTIVE STREAMS:{' '}
-            <span className="text-2xl font-bold text-white tabular-nums">{streamsTotal}</span>
-          </div>
-          <div className="flex gap-4 mt-1">
-            <span className="bg-teal-600 text-white px-2 py-1 rounded text-sm">
-              DirectPlay {directPlay}
-            </span>
-            <span className="bg-orange-600 text-white px-2 py-1 rounded text-sm">
-              Transcoding {transcoding}
-            </span>
-          </div>
+      <div className="mt-3">
+        <div className="text-[11px] text-gray-400 uppercase tracking-wide mb-1">
+          ACTIVE STREAMS:{' '}
+          <span className="text-lg font-bold text-white tabular-nums">{streamsTotal}</span>
+        </div>
+        <div className="flex gap-3 mt-1">
+          <span className="bg-teal-600 text-white px-2 py-0.5 rounded text-xs">
+            DirectPlay {directPlay}
+          </span>
+          <span className="bg-orange-600 text-white px-2 py-0.5 rounded text-xs">
+            Transcoding {transcoding}
+          </span>
         </div>
       </div>
 
-      {/* Toast */}
       {toast && (
-        <div className="fixed top-4 right-4 bg-neutral-800 text-white border border-neutral-700 rounded-lg shadow px-4 py-2 text-sm">
+        <div className="fixed top-4 right-4 bg-neutral-800 text-white border border-neutral-700 rounded-lg shadow px-3 py-1.5 text-xs">
           {toast}
         </div>
       )}
