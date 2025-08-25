@@ -7,7 +7,6 @@ import TopItems from "../components/TopItems";
 import QualitiesChart from "../components/QualitiesChart";
 import CodecsChart from "../components/CodecsChart";
 import ActiveUsersLifetime from "../components/ActiveUsersLifetime";
-import RefreshControls from "../components/RefreshControls";
 import NowPlaying from "../components/NowPlaying";
 
 export default function Dashboard() {
