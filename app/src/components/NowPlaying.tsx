@@ -277,7 +277,12 @@ export default function NowPlaying() {
                         </div>
                       )}
                     </div>
-
+                    {/* If anything is transcoding, show the reason */}
+                    {(isVideoTrans || isAudioTrans) && s.trans_reason && (
+                      <div className="text-xs text-gray-400">
+                        Reason: <span className="text-white">{s.trans_reason}</span>
+                      </div>
+                    )}
                     {/* Transcoding progress bar (only if transcoding) */}
                     {(isVideoTrans || isAudioTrans) && s.trans_pct !== undefined && (
                       <div>
