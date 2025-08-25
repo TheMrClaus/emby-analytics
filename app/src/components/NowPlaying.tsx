@@ -199,16 +199,19 @@ export default function NowPlaying() {
 
       {/* Foreground content */}
       <div className="hero-foreground space-y-4">
-        <h2 className="ty-title">Now Playing</h2>
+        <h2 className="text-sm text-gray-400">Now Playing</h2>
 
         {error && <div className="text-red-400 text-sm">{error}</div>}
 
         {sessions.length === 0 ? (
-          <div className="ty-muted text-sm">Nobody is watching right now.</div>
+          <div className="text-gray-500 text-sm">Nobody is watching right now.</div>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {sessions.map((s) => (
-              <article key={s.session_id} className="card p-4 flex gap-4">
+              <article
+                key={s.session_id}
+                className="bg-neutral-800 rounded-2xl p-4 shadow flex gap-4"
+              >
                 {/* poster */}
                 <img
                   src={
@@ -223,14 +226,16 @@ export default function NowPlaying() {
                 {/* details */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <div className="h3 truncate">{s.title}</div>
+                    <div className="text-lg font-semibold text-white truncate">
+                      {s.title}
+                    </div>
                     <span className="badge">{s.user}</span>
                   </div>
-                  <div className="ty-muted truncate">
+                  <div className="text-gray-400 truncate">
                     {s.app} • {s.device}
                   </div>
 
-                  <div className="mt-2 text-sm space-y-1">
+                  <div className="mt-2 text-sm space-y-1 text-gray-300">
                     <div className="font-medium">Stream</div>
                     <div>
                       {s.container} ({(s.bitrate / 1_000_000).toFixed(1)} Mbps)
@@ -276,12 +281,12 @@ export default function NowPlaying() {
                   </div>
 
                   <div className="mt-3">
-                    <div className="ty-caption mb-1">
+                    <div className="text-xs text-gray-400 mb-1">
                       Progress {Math.floor(s.progress_pct)}%
                     </div>
-                    <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                    <div className="w-full h-2 bg-neutral-700 rounded-full overflow-hidden">
                       <div
-                        className="h-2 bg-white/60"
+                        className="h-2 bg-yellow-500"
                         style={{
                           width: `${Math.min(100, Math.max(0, s.progress_pct))}%`,
                         }}

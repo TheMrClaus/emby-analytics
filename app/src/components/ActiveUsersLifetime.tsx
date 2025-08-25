@@ -18,17 +18,20 @@ export default function ActiveUsersLifetime({ limit = 10 }: { limit?: number }) 
   };
 
   return (
-    <div className="card p-4">
-      <div className="h3 mb-2">Most Active (lifetime)</div>
-      <table className="table-dark">
-        <thead>
-          <tr><th>User</th><th className="num">Watch Time</th></tr>
+    <div className="bg-neutral-800 rounded-2xl p-4 shadow">
+      <div className="text-sm text-gray-400 mb-2">Most Active (lifetime)</div>
+      <table className="w-full text-sm text-left text-gray-300">
+        <thead className="text-gray-400 border-b border-neutral-700">
+          <tr>
+            <th>User</th>
+            <th className="text-right">Watch Time</th>
+          </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
-            <tr key={i}>
+            <tr key={i} className="border-b border-neutral-700 last:border-0">
               <td>{r.user}</td>
-              <td className="num">{fmt(r)}</td>
+              <td className="text-right tabular-nums">{fmt(r)}</td>
             </tr>
           ))}
         </tbody>
