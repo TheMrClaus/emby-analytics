@@ -1,3 +1,4 @@
+// app/src/components/Header.tsx
 import { useEffect, useMemo, useState } from 'react';
 import {
   fetchUsage,
@@ -36,7 +37,7 @@ export default function Header() {
     return () => clearInterval(t);
   }, []);
 
-  // ----- weekly usage (sum last 7 days from /stats/usage) -----
+  // ----- weekly usage -----
   useEffect(() => {
     (async () => {
       try {
@@ -49,10 +50,9 @@ export default function Header() {
     })();
   }, []);
 
-  // ----- live "now playing" snapshot (poll every 2s) -----
+  // ----- live snapshot -----
   useEffect(() => {
     let stopped = false;
-
     const load = async () => {
       try {
         const sessions: SnapshotEntry[] = await fetchNowSnapshot();
@@ -73,7 +73,6 @@ export default function Header() {
         /* keep previous values */
       }
     };
-
     load();
     const id = setInterval(load, 2000);
     return () => {
@@ -99,20 +98,16 @@ export default function Header() {
       setTotal(undefined);
       setPage(undefined);
 
-      // kick off on the server
       await startRefresh();
 
-      // poll status
       const poll = setInterval(async () => {
         try {
-          const s: RefreshState = await fetchRefreshStatus(); // { running, imported, total, page, error }
+          const s: RefreshState = await fetchRefreshStatus();
 
-          // keep raw values for richer feedback
           setImported(Number(s.imported ?? 0));
           setTotal(typeof s.total === 'number' ? s.total : undefined);
           setPage(typeof s.page === 'number' ? s.page : undefined);
 
-          // compute percentage from imported/total because RefreshState has no "progress"
           const pct =
             s.total && s.total > 0
               ? Math.min(100, Math.max(0, Math.round((Number(s.imported ?? 0) / Number(s.total)) * 100)))
@@ -120,14 +115,11 @@ export default function Header() {
 
           setProgress(pct);
 
-          // Stop polling when backend reports it's not running anymore OR we hit 100%
           if (!s.running || pct >= 100) {
             clearInterval(poll);
             setRefreshing(false);
             if (s.total && Number(s.imported ?? 0) >= s.total) setProgress(100);
             showToast('Refresh complete ✅');
-
-            // light post-refresh update to keep THIS WEEK fresh
             fetchUsage(7)
               .then(rows => setWeeklyHours(rows.reduce((acc, r) => acc + (r.hours || 0), 0)))
               .catch(() => {});
@@ -166,7 +158,7 @@ export default function Header() {
         </div>
 
         {/* Right side block: THIS WEEK top-right, Refresh bottom-right */}
-        <div className="relative min-h-[100px] w-[200px]">
+        <div className="relative min-h-[110px] w-[220px] pr-2">
           {/* THIS WEEK pinned top-right */}
           <div className="absolute top-0 right-0 text-right">
             <div className="text-xs text-gray-400 uppercase tracking-wide">THIS WEEK</div>
@@ -176,7 +168,14 @@ export default function Header() {
           </div>
 
           {/* Refresh pinned bottom-right */}
-          <div className="absolute bottom-0 right-0">
+          <div className="absolute bottom-0 right-0 flex flex-col items-end gap-1">
+            {refreshing && (
+              <div className="text-xs text-gray-400 tabular-nums">
+                {nf.format(imported)} of {typeof total === 'number' ? nf.format(total) : '…'} processed
+                {typeof page === 'number' ? ` • Page ${page + 1}` : ''}
+              </div>
+            )}
+
             <button
               onClick={handleRefresh}
               disabled={refreshing}
