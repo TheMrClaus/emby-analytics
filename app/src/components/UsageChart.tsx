@@ -55,7 +55,12 @@ export default function UsageChart({ days = 14 }: { days?: number }) {
             <Tooltip formatter={(v: any) => fmtTooltipTime(Number(v))} />
             <Legend />
             {users.map((u) => (
-              <Bar key={u} stackId="h" dataKey={u} />
+              <Bar 
+                key={u} 
+                stackId="h" 
+                dataKey={u} 
+                fill={u === "Movie" ? "#FFD700" : "#000000"} 
+              />
             ))}
           </BarChart>
         </ResponsiveContainer>

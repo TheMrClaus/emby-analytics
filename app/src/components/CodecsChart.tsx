@@ -30,8 +30,8 @@ export default function CodecsChart() {
             <YAxis tickFormatter={fmtInt} />
             <Tooltip />
             <Legend />
-            <Bar dataKey="Movie" />
-            <Bar dataKey="Episode" />
+            <Bar dataKey="Movie" fill="#FFD700" />
+            <Bar dataKey="Episode" fill="#000000" />
           </BarChart>
         </ResponsiveContainer>
       </div>
