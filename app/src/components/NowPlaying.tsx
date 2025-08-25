@@ -1,5 +1,5 @@
 // app/src/components/NowPlaying.tsx
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNowPlaying, type NowEntry } from "../contexts/NowPlayingContext";
 
 const apiBase =
@@ -8,20 +8,23 @@ const apiBase =
   "";
 
 export default function NowPlaying() {
+  // Get sessions from context instead of managing WebSocket locally
   const { sessions, error } = useNowPlaying();
 
   // Crossfade + parallax state
   const [bgA, setBgA] = useState<string>("");
   const [bgB, setBgB] = useState<string>("");
-  const [useA, setUseA] = useState<boolean>(true);
+  const [useA, setUseA] = useState<boolean>(true); // which layer is "on"
   const [parallaxY, setParallaxY] = useState<number>(0);
 
+  // Compute next hero URL from the first session
   const nextHeroUrl = useMemo(() => {
     const first = sessions[0];
     if (!first?.item_id) return "";
     return `${apiBase}/img/backdrop/${encodeURIComponent(first.item_id)}`;
   }, [sessions]);
 
+  // When the first session changes, crossfade layers
   useEffect(() => {
     if (!nextHeroUrl) return;
     if (useA) {
@@ -33,14 +36,15 @@ export default function NowPlaying() {
     }
   }, [nextHeroUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Parallax (respect reduced motion)
   useEffect(() => {
     const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (mql.matches) return;
+    if (mql.matches) return; // no motion
     const onScroll = () => {
       const y = Math.min(60, window.scrollY * 0.12);
       setParallaxY(y);
     };
-    onScroll();
+    onScroll(); // initialize
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
@@ -85,7 +89,7 @@ export default function NowPlaying() {
   }) => (
     <span
       className={[
-        "px-2 py-0.5 rounded-full text-xs font-medium border",
+        "px-2 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap",
         tone === "ok"
           ? "bg-green-500/20 text-green-400 border-green-400/30"
           : "bg-orange-500/20 text-orange-400 border-orange-400/30",
@@ -98,8 +102,46 @@ export default function NowPlaying() {
   const pct = (n: number) =>
     Math.min(100, Math.max(0, Math.floor(Number.isFinite(n) ? n : 0)));
 
+  const topBadge = (s: NowEntry): { label: string; tone: "ok" | "warn" } => {
+    const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
+    const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
+    if (isVideoTrans) return { label: "Video Transcode", tone: "warn" };
+    if (isAudioTrans) return { label: "Audio Transcode", tone: "warn" };
+    return { label: "Direct Play", tone: "ok" };
+  };
+
+  // Build labels for per-stream status
+  const videoStatus = (s: NowEntry) => {
+    const trans = (s.video_method || "Direct Play") === "Transcode";
+    if (trans) {
+      const to = s.trans_video_to?.toUpperCase();
+      return { label: to ? `Transcode → ${to}` : "Transcoding", tone: "warn" as const };
+    }
+    return { label: "Direct Play", tone: "ok" as const };
+  };
+
+  const audioStatus = (s: NowEntry) => {
+    const trans = (s.audio_method || "Direct Play") === "Transcode";
+    if (trans) {
+      const to = s.trans_audio_to?.toUpperCase();
+      return { label: to ? `Transcode → ${to}` : "Transcoding", tone: "warn" as const };
+    }
+    return { label: "Direct Play", tone: "ok" as const };
+  };
+
+  // Heuristic: subtitles count as "burn‑in/transcoding" if video is transcoding
+  // AND the reason mentions subs/burn, otherwise assume direct.
+  const subsStatus = (s: NowEntry) => {
+    const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
+    const reason = (s.trans_reason || "").toLowerCase();
+    const burnIn = isVideoTrans && /(sub|subtitle|burn)/.test(reason);
+    if (burnIn) return { label: "Burn‑in", tone: "warn" as const };
+    return { label: "Direct", tone: "ok" as const };
+  };
+
   return (
     <section className="hero p-6">
+      {/* Crossfading, parallaxed backdrop (only if we have any session) */}
       {sessions.length > 0 && nextHeroUrl ? (
         <>
           <div
@@ -122,6 +164,7 @@ export default function NowPlaying() {
         </>
       ) : null}
 
+      {/* Foreground content */}
       <div className="hero-foreground space-y-5">
         <h2 className="ty-title text-emerald-400">Now Playing</h2>
 
@@ -136,23 +179,19 @@ export default function NowPlaying() {
               const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
               const progress = pct(s.progress_pct);
 
-              // NEW: decide top-level playback status chip
-              let topLabel = "Direct Play";
-              let topTone: "ok" | "warn" = "ok";
-              if (isVideoTrans) {
-                topLabel = "Video Transcode";
-                topTone = "warn";
-              } else if (!isVideoTrans && isAudioTrans) {
-                topLabel = "Audio Transcode";
-                topTone = "warn";
-              }
+              const top = topBadge(s);
+              const v = videoStatus(s);
+              const a = audioStatus(s);
+              const sub = subsStatus(s);
 
               return (
                 <article
                   key={s.session_id}
                   className="card overflow-hidden flex flex-col min-h-[380px] p-5"
                 >
+                  {/* Top row: poster + title/meta arranged symmetrically */}
                   <div className="flex gap-5">
+                    {/* Poster column - fixed size to align all cards */}
                     <div className="shrink-0">
                       <img
                         src={
@@ -165,6 +204,7 @@ export default function NowPlaying() {
                       />
                     </div>
 
+                    {/* Content column - variable width to balance card design */}
                     <div className="flex-1 min-w-0">
                       <h3 className="font-bold text-lg text-white leading-tight mb-2 line-clamp-2">
                         {s.title || "Unknown Title"}
@@ -176,14 +216,16 @@ export default function NowPlaying() {
                         <div>{s.app || s.device || "Unknown Client"}</div>
                       </div>
 
+                      {/* NEW: top status + tech chips */}
                       <div className="flex flex-wrap gap-2 mb-3">
-                        <Chip tone={topTone} label={topLabel} />
+                        <Chip tone={top.tone} label={top.label} />
                         {s.container && <Chip tone="ok" label={s.container.toUpperCase()} />}
                         {s.width && s.height && (
                           <Chip tone="ok" label={`${s.width}×${s.height}`} />
                         )}
                       </div>
 
+                      {/* Playback progress */}
                       <div className="mt-auto">
                         <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
                           <span>Progress</span>
@@ -199,26 +241,34 @@ export default function NowPlaying() {
                     </div>
                   </div>
 
+                  {/* Quality indicators */}
                   <div className="mt-4 space-y-3 flex-1">
+                    {/* Video & Audio & Subtitles with explicit badges */}
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center justify-between">
                         <span className="text-gray-400">Video:</span>
                         <div className="flex items-center gap-2">
                           <span className="text-white">{s.video || "Unknown"}</span>
-                          {isVideoTrans && <Chip tone="warn" label="Transcoding" />}
+                          <Chip tone={v.tone} label={v.label} />
                         </div>
                       </div>
+
                       <div className="flex items-center justify-between">
                         <span className="text-gray-400">Audio:</span>
                         <div className="flex items-center gap-2">
                           <span className="text-white">{s.audio || "Unknown"}</span>
-                          {isAudioTrans && <Chip tone="warn" label="Transcoding" />}
+                          <Chip tone={a.tone} label={a.label} />
                         </div>
                       </div>
+
                       <div className="flex items-center justify-between">
                         <span className="text-gray-400">Subtitles:</span>
-                        <span className="text-white">{s.subs || "None"}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white">{s.subs || "None"}</span>
+                          <Chip tone={sub.tone} label={sub.label} />
+                        </div>
                       </div>
+
                       {s.bitrate > 0 && (
                         <div className="flex items-center justify-between">
                           <span className="text-gray-400">Bitrate:</span>
@@ -229,6 +279,7 @@ export default function NowPlaying() {
                       )}
                     </div>
 
+                    {/* Transcoding progress bar (only if transcoding) */}
                     {(isVideoTrans || isAudioTrans) && s.trans_pct !== undefined && (
                       <div>
                         <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
@@ -244,6 +295,7 @@ export default function NowPlaying() {
                       </div>
                     )}
 
+                    {/* Admin controls */}
                     <div className="flex gap-2 pt-2 border-t border-neutral-700">
                       <button
                         onClick={() => send(s.session_id, "pause")}
