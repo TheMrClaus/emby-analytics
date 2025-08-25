@@ -47,7 +47,6 @@ func TopItems(db *sql.DB) fiber.Handler {
 			FROM play_event pe
 			LEFT JOIN library_item li ON li.id = pe.item_id
 			WHERE pe.ts >= ? AND pe.item_id != '' AND li.type NOT IN ('TvChannel', 'LiveTv', 'Channel') 
-				AND li.type NOT IN ('TvChannel', 'LiveTv', 'Channel')
 			GROUP BY li.id, li.name, li.type
 			ORDER BY hours DESC
 			LIMIT ?;
