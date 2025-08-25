@@ -1,17 +1,14 @@
 // app/src/components/CodecsChart.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ResponsiveContainer, CartesianGrid, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
-import { fetchCodecs } from "../lib/api";
+import { useCodecs } from "../hooks/useData";
 import type { CodecBuckets } from "../types";
 import { fmtInt } from "../lib/format";
 import ChartLegend from './charts/Legend';
 import { colors } from '../theme/colors';
 
 export default function CodecsChart() {
-  const [data, setData] = useState<CodecBuckets | null>(null);
-  useEffect(() => {
-    fetchCodecs().then(setData).catch(() => {});
-  }, []);
+  const { data, error, isLoading } = useCodecs();
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -22,9 +19,21 @@ export default function CodecsChart() {
     }));
   }, [data]);
 
+  if (error) {
+    return (
+      <div className="bg-neutral-800 rounded-2xl p-4 shadow">
+        <div className="text-sm text-gray-400 mb-2">Codecs</div>
+        <div className="text-red-400">Failed to load codecs data</div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-neutral-800 rounded-2xl p-4 shadow">
-      <div className="text-sm text-gray-400 mb-2">Codecs</div>
+      <div className="text-sm text-gray-400 mb-2">
+        Codecs
+        {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}
+      </div>
       <div style={{ height: 280 }}>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={rows} barCategoryGap={10} barGap={4} maxBarSize={38}>
@@ -36,34 +45,47 @@ export default function CodecsChart() {
             </defs>
 
             <CartesianGrid vertical={false} stroke={colors.grid} />
-            <XAxis dataKey="codec" tick={{ fill: colors.axis }} axisLine={{ stroke: colors.grid }} tickLine={{ stroke: colors.grid }} interval={0} angle={0} height={48}/>
-            <YAxis tick={{ fill: colors.axis }} axisLine={{ stroke: colors.grid }} tickLine={{ stroke: colors.grid }} />
+            <XAxis 
+              dataKey="codec" 
+              tick={{ fill: colors.axis }} 
+              axisLine={{ stroke: colors.grid }} 
+              tickLine={{ stroke: colors.grid }} 
+              interval={0} 
+              angle={0} 
+              height={48}
+            />
+            <YAxis 
+              tick={{ fill: colors.axis }} 
+              axisLine={{ stroke: colors.grid }} 
+              tickLine={{ stroke: colors.grid }} 
+            />
             <Tooltip
               wrapperStyle={{ borderRadius: 12, overflow: 'hidden' }}
               contentStyle={{ background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}` }}
               labelStyle={{ color: colors.gold500 }}
               itemStyle={{ color: '#fff' }}
+              formatter={(value: any) => [fmtInt(Number(value)), '']}
             />
 
-            <Bar dataKey="Movie"   fill="url(#barGoldCodecs)" radius={[8,8,0,0]} stroke="rgba(0,0,0,0.1)" strokeWidth={0.5}/>
-            <Bar dataKey="Episode" fill={colors.ink}          radius={[8,8,0,0]} stroke="var(--ink-raise)"  strokeWidth={1}/>
-
-            <Legend
-              verticalAlign="bottom"
-              align="center"
-              content={
-                <ChartLegend
-                  items={[
-                    { label: 'Movie', color: colors.gold500, gradientId: 'barGoldCodecs' },
-                    { label: 'Episode', color: colors.ink },
-                  ]}
-                />
-              }
+            <Bar 
+              dataKey="Movie"   
+              fill="url(#barGoldCodecs)" 
+              radius={[8,8,0,0]} 
+              stroke="rgba(255,255,255,0.1)" 
+              strokeWidth={0.5}
             />
+            <Bar 
+              dataKey="Episode" 
+              fill={colors.ink}          
+              radius={[8,8,0,0]} 
+              stroke="rgba(255,255,255,0.08)"  
+              strokeWidth={0.5}
+            />
+
+            <Legend />
           </BarChart>
         </ResponsiveContainer>
       </div>
     </div>
   );
 }
-
