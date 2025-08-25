@@ -87,7 +87,7 @@ func main() {
 	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))
 	app.Get("/stats/user/:id", stats.UserDetailHandler(sqlDB))
 
-	app.All("/admin/fix-pos-units", admin.FixPosUnits(db))
+	app.All("/admin/fix-pos-units", admin.FixPosUnits(sqlDB))
 
 	// ---- item helpers ----
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
