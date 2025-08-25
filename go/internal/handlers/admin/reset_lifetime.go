@@ -65,14 +65,12 @@ func ResetLifetimeWatch(db *sql.DB) fiber.Handler {
 		totalWatchHours := float64(0)
 
 		for rows.Next() {
-			var (
-				userID         string
-				totalWatchMs   int64
-				itemsWatched   int64
-				avgItemWatchMs float64 // <-- AVG() is FLOAT in SQLite; scan into float64
-			)
+			var userID string
+			var totalWatchMs, itemsWatched int64
+			var avgItemWatchMs float64
 
 			if err := rows.Scan(&userID, &totalWatchMs, &itemsWatched, &avgItemWatchMs); err != nil {
+
 				log.Printf("Error scanning user data: %v", err)
 				continue
 			}
