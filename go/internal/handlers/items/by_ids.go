@@ -88,7 +88,7 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 						// Sxx:Eyy or fallback if missing
 						epcode := ""
 						if season != nil || ep != nil {
-							// zero padding like S01:E03
+							// zero padding like S01E03 (no colon)
 							sv := 0
 							ev := 0
 							if season != nil {
@@ -97,14 +97,18 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 							if ep != nil {
 								ev = *ep
 							}
-							epcode = "S" + two(sv) + ":E" + two(ev)
+							epcode = "S" + two(sv) + "E" + two(ev)
 						}
 						if series != "" && epcode != "" && epname != "" {
-							rec.Display = series + " - " + epcode + " - " + epname
+							rec.Display = series + " - " + epname + " (" + epcode + ")"
 						} else if series != "" && epname != "" {
 							rec.Display = series + " - " + epname
 						} else {
 							rec.Display = epname
+						}
+						// Change type from "Episode" to "Series" for better display
+						if rec.Type == "Episode" {
+							rec.Type = "Series"
 						}
 						base[it.Id] = rec
 					}
