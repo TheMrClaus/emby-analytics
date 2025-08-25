@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   fetchUsage,
   fetchNowSnapshot,
   startRefresh,
   fetchRefreshStatus,
 } from '../lib/api';
+import type { RefreshState } from '../types';
 
 type SnapshotEntry = {
   play_method?: string;
@@ -21,6 +22,10 @@ export default function Header() {
   const [refreshing, setRefreshing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+
+  // added missing state
+  const [polling, setPolling] = useState(false);
+  const [status, setStatus] = useState<RefreshState | null>(null);
 
   // ----- clock -----
   useEffect(() => {
@@ -98,11 +103,14 @@ export default function Header() {
         try {
           const s = await fetchRefreshStatus(); // RefreshState from your types
 
-          // Compute progress from imported/total (since RefreshState has no `progress`)
-          let pct = 0;
-          if (typeof s.total === "number" && s.total > 0) {
-            pct = Math.max(0, Math.min(100, Math.round((s.imported / s.total) * 100)));
-          }
+          const pct = (() => {
+            const imported = Number(s.imported ?? 0);
+            const total = Number(s.total ?? 0);
+            if (total > 0)
+              return Math.max(0, Math.min(100, Math.round((imported / total) * 100)));
+            // If the job is running but total is 0/unknown, show 0%; if not running, treat as 100%
+            return s.running ? 0 : 100;
+          })();
           setProgress(pct);
 
           // Stop polling when backend reports it's not running anymore OR we hit 100%
@@ -116,7 +124,6 @@ export default function Header() {
             setProgress(100);
             showToast('Refresh complete ✅');
             // Optionally trigger light data refreshes right after:
-            // re-fetch usage to keep THIS WEEK fresh
             fetchUsage(7)
               .then(rows => setWeeklyHours(rows.reduce((acc, r) => acc + (r.hours || 0), 0)))
               .catch(() => {});
