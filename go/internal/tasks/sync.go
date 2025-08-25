@@ -11,6 +11,8 @@ import (
 )
 
 func StartSyncLoop(db *sql.DB, em *emby.Client, cfg config.Config) {
+	log.Printf("[sync] starting play sync loop with interval %d seconds", cfg.SyncIntervalSec)
+
 	ticker := time.NewTicker(time.Duration(cfg.SyncIntervalSec) * time.Second)
 	defer ticker.Stop()
 
@@ -22,9 +24,13 @@ func StartSyncLoop(db *sql.DB, em *emby.Client, cfg config.Config) {
 
 func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 	insertedEvents := 0
+	apiCalls := 0
+	startTime := time.Now()
 
 	// Step 1: active sessions
 	sessions, err := em.GetActiveSessions()
+	apiCalls++ // Count the GetActiveSessions API call
+
 	if err != nil {
 		log.Println("sync error:", err)
 	} else {
@@ -35,7 +41,6 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 			if insertPlayEvent(db, s.UserID, s.ItemID, posMs) {
 				insertedEvents++
 			}
-
 		}
 	}
 
@@ -47,6 +52,7 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 	}
 	defer rows.Close()
 
+	userCount := 0
 	for rows.Next() {
 		var uid, uname sql.NullString
 		if err := rows.Scan(&uid, &uname); err != nil {
@@ -58,7 +64,10 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 			continue
 		}
 
+		userCount++
 		history, err := em.GetUserPlayHistory(uid.String, cfg.HistoryDays)
+		apiCalls++ // Count each GetUserPlayHistory API call
+
 		if err != nil {
 			log.Printf("history error for %s: %v\n", uid.String, err)
 			continue
@@ -72,8 +81,10 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 		}
 	}
 
-	if insertedEvents > 0 {
-		log.Printf("[sync] inserted %d play events\n", insertedEvents)
+	duration := time.Since(startTime)
+	if insertedEvents > 0 || apiCalls > 1 {
+		log.Printf("[sync] completed in %v: %d API calls, %d users processed, %d play events inserted",
+			duration.Round(time.Millisecond), apiCalls, userCount, insertedEvents)
 	}
 }
 
@@ -109,7 +120,7 @@ func upsertUserAndItem(db *sql.DB, userID, userName, itemID, itemName, itemType 
 	}
 }
 
-// RunOnce triggers a single sync cycle immediately.
+// RunOnce triggers a single sync cycle immediately
 func RunOnce(db *sql.DB, em *emby.Client, cfg config.Config) {
 	runSync(db, em, cfg)
 }
