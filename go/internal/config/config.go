@@ -19,11 +19,11 @@ type Config struct {
 	NowPollSec   int
 
 	// Background sync
-	SyncIntervalSec int // e.g. 60
+	SyncIntervalSec int // e.g. 300 (5 minutes)
 	HistoryDays     int // e.g. 2
 
 	// User sync
-	UserSyncIntervalSec int `env:"USERSYNC_INTERVAL" envDefault:"3600"` // 1 hour
+	UserSyncIntervalSec int `env:"USERSYNC_INTERVAL" envDefault:"43200"` // 12 hours
 
 	// Images
 	ImgQuality          int // e.g. 90
@@ -55,7 +55,7 @@ func Load() Config {
 		WebPath:             webPath,
 		KeepAliveSec:        envInt("KEEPALIVE_SEC", 15),
 		NowPollSec:          envInt("NOW_POLL_SEC", 5),
-		SyncIntervalSec:     envInt("SYNC_INTERVAL", 60),
+		SyncIntervalSec:     envInt("SYNC_INTERVAL", 300), // Changed from 60 to 300 (5 minutes)
 		HistoryDays:         envInt("HISTORY_DAYS", 2),
 		ImgQuality:          envInt("IMG_QUALITY", 90),
 		ImgPrimaryMaxWidth:  envInt("IMG_PRIMARY_MAX_WIDTH", 300),
@@ -63,7 +63,7 @@ func Load() Config {
 		RefreshChunkSize:    envInt("REFRESH_CHUNK_SIZE", 200),
 		NowSseDebug:         envBool("NOW_SSE_DEBUG", false),
 		RefreshSseDebug:     envBool("REFRESH_SSE_DEBUG", false),
-		UserSyncIntervalSec: envInt("USERSYNC_INTERVAL", 3600),
+		UserSyncIntervalSec: envInt("USERSYNC_INTERVAL", 43200), // Changed from 3600 to 43200 (12 hours)
 	}
 
 	fmt.Printf("[INFO] Using SQLite DB at: %s\n", dbPath)
