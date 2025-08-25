@@ -27,7 +27,7 @@ export default function CodecsChart() {
       <div className="h3 mb-2">Codecs</div>
       <div style={{ height: 280 }}>
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={data} barCategoryGap={10} barGap={4} maxBarSize={38}>
+          <BarChart data={rows} barCategoryGap={10} barGap={4} maxBarSize={38}>
             <defs>
               <linearGradient id="barGoldCodecs" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={colors.gold600} />
