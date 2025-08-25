@@ -1,10 +1,9 @@
-// app/src/components/Header.tsx
 import { useEffect, useState } from 'react';
 import {
   fetchUsage,
   fetchNowSnapshot,
-  startRefresh,          // <-- new
-  fetchRefreshStatus,    // <-- new
+  startRefresh,
+  fetchRefreshStatus,
 } from '../lib/api';
 
 type SnapshotEntry = {
@@ -98,10 +97,19 @@ export default function Header() {
       const poll = setInterval(async () => {
         try {
           const s = await fetchRefreshStatus(); // RefreshState from your types
-          const pct = Math.max(0, Math.min(100, Number(s.progress ?? 0)));
+
+          // Compute progress from imported/total (since RefreshState has no `progress`)
+          let pct = 0;
+          if (typeof s.total === "number" && s.total > 0) {
+            pct = Math.max(0, Math.min(100, Math.round((s.imported / s.total) * 100)));
+          }
           setProgress(pct);
 
-          // consider complete on explicit status or 100%
+          // Stop polling when backend reports it's not running anymore OR we hit 100%
+          if (!s.running || pct >= 100) {
+            setPolling(false);
+            setStatus("done");
+          }
           if ((s as any).status === 'done' || pct >= 100) {
             clearInterval(poll);
             setRefreshing(false);
