@@ -2,6 +2,7 @@
 import {
   ActiveUserLifetime,
   CodecBuckets,
+  ItemRow,
   NowEntry,
   OverviewData,
   QualityBuckets,
@@ -42,6 +43,8 @@ export const fetchCodecs = () => j<CodecBuckets>("/stats/codecs");
 export const fetchActiveUsersLifetime = (limit = 10) =>
   j<ActiveUserLifetime[]>(`/stats/active-users?limit=${limit}`);
 export const fetchTotalUsers = () => j<number>("/stats/users/total");
+export const fetchItemsByIds = (ids: string[]) =>
+  j<ItemRow[]>(`/items/by-ids?ids=${encodeURIComponent(ids.join(","))}`);
 
 // Admin refresh
 export const startRefresh = () =>
