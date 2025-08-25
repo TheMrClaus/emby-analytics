@@ -1,5 +1,5 @@
 // app/src/components/Header.tsx
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { fetchUsage, fetchNowSnapshot } from '../lib/api';
 
 type SnapshotEntry = {
@@ -58,11 +58,10 @@ export default function Header() {
         setDirectPlay(d);
         setTranscoding(t);
       } catch {
-        // if it fails, just keep previous values
+        // ignore errors, keep old values
       }
     };
 
-    // initial + interval
     load();
     const id = setInterval(load, 2000);
     return () => {
@@ -78,18 +77,29 @@ export default function Header() {
         {/* Left side - Logo and title */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-yellow-500 rounded flex items-center justify-center">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-black">
-              <path d="M8 5v14l11-7z" fill="currentColor"/>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              className="text-black"
+            >
+              <path d="M8 5v14l11-7z" fill="currentColor" />
             </svg>
           </div>
           <div>
             <h1 className="text-xl font-semibold text-white">Emby Analytics</h1>
+            <p className="text-sm text-gray-400">
+              <span className="tabular-nums">{currentTime}</span>
+            </p>
           </div>
         </div>
 
-        {/* Right side - Statistics */}
+        {/* Right side - Weekly hours */}
         <div className="text-right">
-          <div className="text-xs text-gray-400 uppercase tracking-wide">THIS WEEK</div>
+          <div className="text-xs text-gray-400 uppercase tracking-wide">
+            THIS WEEK
+          </div>
           <div className="text-2xl font-bold text-yellow-400">
             {weeklyHours == null ? '—' : `${weeklyHours.toFixed(1)}h`} watched
           </div>
@@ -98,20 +108,21 @@ export default function Header() {
 
       {/* Bottom row */}
       <div className="flex items-center justify-between">
-        {/* Status section */}
-        <div className="flex items-center gap-8">
         <div>
-            <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">ACTIVE STREAMS</div>
-            <div className="flex items-center gap-4">
-            <div className="text-2xl font-bold text-white tabular-nums">{streamsTotal}</div>
+          <div className="text-xs text-gray-400 uppercase tracking-wide mb-1">
+            ACTIVE STREAMS:{' '}
+            <span className="text-2xl font-bold text-white tabular-nums">
+              {streamsTotal}
+            </span>
+          </div>
+          <div className="flex gap-4 mt-1">
             <span className="bg-teal-600 text-white px-2 py-1 rounded text-sm">
-                DirectPlay {directPlay}
+              DirectPlay {directPlay}
             </span>
             <span className="bg-orange-600 text-white px-2 py-1 rounded text-sm">
-                Transcoding {transcoding}
+              Transcoding {transcoding}
             </span>
-            </div>
-        </div>
+          </div>
         </div>
 
         {/* Refresh button */}
