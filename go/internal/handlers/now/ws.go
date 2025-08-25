@@ -1,6 +1,8 @@
 package now
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"emby-analytics/internal/config"
@@ -110,4 +112,152 @@ func writeSnapshot(conn *ws.Conn, em *emby.Client) bool {
 	}
 	return true
 }
+
+// Helper functions (copied from now.go to avoid circular imports)
+
+// videoDetailFromSession builds strings like "4K Dolby Vision HEVC"
+func videoDetailFromSession(s emby.EmbySession) string {
+	parts := []string{}
+
+	// Resolution
+	if s.Height >= 2160 {
+		parts = append(parts, "4K")
+	} else if s.Height >= 1440 {
+		parts = append(parts, "1440p")
+	} else if s.Height >= 1080 {
+		parts = append(parts, "1080p")
+	} else if s.Height >= 720 {
+		parts = append(parts, "720p")
+	}
+
+	// HDR / DV
+	if s.DolbyVision {
+		parts = append(parts, "Dolby Vision")
+	} else if s.HDR10 {
+		parts = append(parts, "HDR")
+	}
+
+	// Codec
+	if s.VideoCodec != "" {
+		parts = append(parts, strings.ToUpper(s.VideoCodec))
+	}
+
+	if len(parts) == 0 {
+		return s.VideoCodec // fallback
+	}
+	return strings.Join(parts, " ")
+}
+
+// audioDetailFromSession builds strings like "English AC3 5.1 (Default)"
+func audioDetailFromSession(s emby.EmbySession) string {
+	parts := []string{}
+	if s.AudioLang != "" {
+		parts = append(parts, s.AudioLang) // keep casing from Emby
+	}
+	if s.AudioCodec != "" {
+		parts = append(parts, strings.ToUpper(s.AudioCodec))
+	}
+	if s.AudioCh > 0 {
+		ch := ""
+		switch s.AudioCh {
+		case 1:
+			ch = "1.0"
+		case 2:
+			ch = "2.0"
+		case 3:
+			ch = "2.1"
+		case 4:
+			ch = "4.0"
+		case 5:
+			ch = "5.0"
+		case 6:
+			ch = "5.1"
+		case 7:
+			ch = "6.1"
+		case 8:
+			ch = "7.1"
+		default:
+			ch = fmt.Sprintf("%d.0", s.AudioCh)
+		}
+		parts = append(parts, ch)
+	}
+	out := strings.TrimSpace(strings.Join(parts, " "))
+	if s.AudioDefault {
+		if out == "" {
+			return "(Default)"
+		}
+		return out + " (Default)"
+	}
+	if out == "" {
+		return s.AudioCodec
+	}
+	return out
+}
+
+// Map container -> streaming path label
+func streamPathLabel(container string) string {
+	c := strings.ToLower(container)
+	switch c {
+	case "ts", "mpegts", "hls", "fmp4":
+		return "HLS"
+	case "dash":
+		return "DASH"
+	default:
+		if c == "" {
+			return "Transcode"
+		}
+		return strings.ToUpper(container)
+	}
+}
+
+func mbps(bps int64) string {
+	if bps <= 0 {
+		return "—"
+	}
+	f := float64(bps) / 1_000_000.0
+	return fmt.Sprintf("%.1f Mbps", f)
+}
+
+// Human text for primary reason (borrowed from Emby wording)
+func reasonText(videoMethod, audioMethod string, reasons []string) string {
+	if len(reasons) == 0 {
+		// fallback: infer from which track is transcoding
+		switch {
+		case videoMethod == "Transcode" && audioMethod == "Transcode":
+			return "Converting video and audio to compatible codecs"
+		case videoMethod == "Transcode":
+			return "Converting video to compatible codec"
+		case audioMethod == "Transcode":
+			return "Converting audio to compatible codec"
+		default:
+			return ""
+		}
+	}
+	rset := map[string]bool{}
+	for _, r := range reasons {
+		rset[strings.ToLower(r)] = true
+	}
+	switch {
+	case rset["audiocodecnotsupported"]:
+		return "Converting audio to compatible codec"
+	case rset["videocodecnotsupported"]:
+		return "Converting video to compatible codec"
+	case rset["containernotsupported"]:
+		// often remux/HLS with copy for video
+		if audioMethod == "Transcode" && videoMethod != "Transcode" {
+			return "Remuxing stream; converting audio to compatible codec"
+		}
+		return "Remuxing stream to a compatible container"
+	case rset["subtitlecodecnotsupported"]:
+		return "Burning/transforming subtitles to compatible format"
+	default:
+		// generic
+		if audioMethod == "Transcode" && videoMethod != "Transcode" {
+			return "Converting audio to compatible codec"
+		}
+		if videoMethod == "Transcode" && audioMethod != "Transcode" {
+			return "Converting video to compatible codec"
+		}
+		return "Transcoding stream"
+	}
 }
