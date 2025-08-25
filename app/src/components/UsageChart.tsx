@@ -1,7 +1,7 @@
 // app/src/components/UsageChart.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
-import { fetchUsage } from "../lib/api";
+import { useUsage } from "../hooks/useData";
 import type { UsageRow } from "../types";
 import { fmtAxisTime, fmtTooltipTime } from "../lib/format";
 import { colors } from '../theme/colors';
@@ -9,10 +9,7 @@ import { colors } from '../theme/colors';
 type ChartRow = { day: string; [user: string]: string | number };
 
 export default function UsageChart({ days = 14 }: { days?: number }) {
-  const [rows, setRows] = useState<UsageRow[]>([]);
-  useEffect(() => {
-    fetchUsage(days).then(setRows).catch(() => {});
-  }, [days]);
+  const { data: rows = [], error, isLoading } = useUsage(days);
 
   // pivot to stacked-per-day
   const data = useMemo<ChartRow[]>(() => {
@@ -45,11 +42,23 @@ export default function UsageChart({ days = 14 }: { days?: number }) {
     return Array.from(s).sort();
   }, [rows]);
 
-const themed = [colors.gold600, '#7a7a7a', '#4d4d4d', '#b99d3a']; // gold + charcoals
+  const themed = [colors.gold600, '#7a7a7a', '#4d4d4d', '#b99d3a']; // gold + charcoals
+
+  if (error) {
+    return (
+      <div className="bg-neutral-800 rounded-2xl p-4 shadow">
+        <div className="text-sm text-gray-400 mb-2">Usage (hours per day by user)</div>
+        <div className="text-red-400">Failed to load usage data</div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-neutral-800 rounded-2xl p-4 shadow">
-      <div className="text-sm text-gray-400 mb-2">Usage (hours per day by user)</div>
+      <div className="text-sm text-gray-400 mb-2">
+        Usage (hours per day by user)
+        {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}
+      </div>
       <div style={{ width: "100%", height: 300 }}>
         <ResponsiveContainer>
           <BarChart data={data}>
