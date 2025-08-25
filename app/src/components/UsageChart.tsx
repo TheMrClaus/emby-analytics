@@ -48,8 +48,8 @@ export default function UsageChart({ days = 14 }: { days?: number }) {
 const themed = [colors.gold600, '#7a7a7a', '#4d4d4d', '#b99d3a']; // gold + charcoals
 
   return (
-    <div className="card p-4">
-      <div className="h3 mb-2">Usage (hours per day by user)</div>
+    <div className="bg-neutral-800 rounded-2xl p-4 shadow">
+      <div className="text-sm text-gray-400 mb-2">Usage (hours per day by user)</div>
       <div style={{ width: "100%", height: 300 }}>
         <ResponsiveContainer>
           <BarChart data={data}>

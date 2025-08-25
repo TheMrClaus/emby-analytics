@@ -59,34 +59,36 @@ export default function TopItems({ days = 14, limit = 10 }: { days?: number; lim
   }, [rows]);
 
   return (
-    <div className="card p-4">
-      <div className="h3 mb-2">Top Items (last {days} days)</div>
-      <table className="table-dark">
-        <thead>
-          <tr><th>Item</th><th>Type</th><th className="num">Hours</th></tr>
+    <div className="bg-neutral-800 rounded-2xl p-4 shadow">
+      <div className="text-sm text-gray-400 mb-2">Top Items (last {days} days)</div>
+      <table className="w-full text-sm text-left text-gray-300">
+        <thead className="text-gray-400 border-b border-neutral-700">
+          <tr>
+            <th>Item</th>
+            <th>Type</th>
+            <th className="text-right">Hours</th>
+          </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => {
             const enriched = itemMapping[r.item_id];
-            
-            // Determine display name with better fallbacks
+
             let displayName = "Unknown Item";
             if (enriched?.display && enriched.display !== "") {
               displayName = enriched.display;
             } else if (enriched?.name && enriched.name !== "") {
-              displayName = enriched.name;  
+              displayName = enriched.name;
             } else if (r.name && r.name !== "") {
               displayName = r.name;
             }
-            
-            // Determine type with fallbacks
+
             let displayType = "Unknown";
             if (enriched?.type && enriched.type !== "") {
               displayType = enriched.type;
             } else if (r.type && r.type !== "") {
               displayType = r.type;
             }
-            
+
             return (
               <tr key={i}>
                 <td className="flex items-center gap-3">
@@ -94,7 +96,9 @@ export default function TopItems({ days = 14, limit = 10 }: { days?: number; lim
                   <span>{displayName}</span>
                 </td>
                 <td>{displayType}</td>
-                <td className="num" title={fmtTooltipTime(r.hours)}>{r.hours.toFixed(2)}</td>
+                <td className="text-right" title={fmtTooltipTime(r.hours)}>
+                  {r.hours.toFixed(2)}
+                </td>
               </tr>
             );
           })}

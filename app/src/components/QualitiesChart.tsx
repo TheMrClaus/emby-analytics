@@ -25,8 +25,8 @@ const rows = useMemo<QualityRow[]>(() => {
 }, [data]);
 
   return (
-    <div className="card p-4">
-      <div className="h3 mb-2">Media Quality</div>
+    <div className="bg-neutral-800 rounded-2xl p-4 shadow">
+      <div className="text-sm text-gray-400 mb-2">Media Quality</div>
       <div style={{ height: 280 }}>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={rows} barCategoryGap={12} barGap={4} maxBarSize={44}>
