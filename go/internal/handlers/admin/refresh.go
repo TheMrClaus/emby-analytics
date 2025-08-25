@@ -89,7 +89,28 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 					height=excluded.height,
 					codec=excluded.codec
 			`, entry.Id, entry.Name, entry.Type, entry.Height, entry.Codec)
-
+			// For episodes, ensure we have proper series info
+			if entry.Type == "Episode" && em != nil {
+				// Enrich episode data immediately during refresh
+				if episodeItems, err := em.ItemsByIDs([]string{entry.Id}); err == nil && len(episodeItems) > 0 {
+					ep := episodeItems[0]
+					if ep.SeriesName != "" {
+						// Build proper display name
+						display := ep.Name
+						if ep.ParentIndexNumber != nil && ep.IndexNumber != nil {
+							season := *ep.ParentIndexNumber
+							episode := *ep.IndexNumber
+							epcode := fmt.Sprintf("S%02dE%02d", season, episode)
+							if ep.SeriesName != "" && ep.Name != "" {
+								display = fmt.Sprintf("%s - %s (%s)", ep.SeriesName, ep.Name, epcode)
+							}
+						}
+						// Update the database with enriched info
+						db.Exec(`UPDATE library_item SET name = ?, type = ? WHERE id = ?`,
+							display, "Series", entry.Id)
+					}
+				}
+			}
 			if err == nil {
 				if rowsAffected, _ := result.RowsAffected(); rowsAffected > 0 {
 					dbEntriesInserted++

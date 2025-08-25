@@ -2,6 +2,7 @@ package items
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
@@ -74,41 +75,39 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 				if items, err := em.ItemsByIDs(episodeIDs); err == nil {
 					for _, it := range items {
 						rec := base[it.Id]
-						// Prefer API name if DB name empty
+						// Prefer API name if DB name empty or if it's just the episode title
 						name := rec.Name
-						if name == "" && it.Name != "" {
+						if (name == "" || name == it.Name) && it.Name != "" {
 							name = it.Name
 							rec.Name = name
 						}
-						// Build display
+						// Build display with better fallbacks
 						season := it.ParentIndexNumber
 						ep := it.IndexNumber
 						series := it.SeriesName
 						epname := name
-						// Sxx:Eyy or fallback if missing
-						epcode := ""
-						if season != nil || ep != nil {
-							// zero padding like S01E03 (no colon)
-							sv := 0
-							ev := 0
-							if season != nil {
-								sv = *season
-							}
-							if ep != nil {
-								ev = *ep
-							}
-							epcode = "S" + two(sv) + "E" + two(ev)
-						}
-						if series != "" && epcode != "" && epname != "" {
-							rec.Display = series + " - " + epname + " (" + epcode + ")"
-						} else if series != "" && epname != "" {
-							rec.Display = series + " - " + epname
-						} else {
+
+						// Handle cases where we have partial data
+						if series == "" {
+							// Try to get series name from the episode's parent
 							rec.Display = epname
-						}
-						// Change type from "Episode" to "Series" for better display
-						if rec.Type == "Episode" {
-							rec.Type = "Series"
+							if epname != "" {
+								rec.Type = "Episode" // Keep as Episode if no series info
+							}
+						} else {
+							// We have series info, build full display
+							epcode := ""
+							if season != nil && ep != nil {
+								epcode = fmt.Sprintf("S%02dE%02d", *season, *ep)
+							}
+							if epcode != "" && epname != "" {
+								rec.Display = fmt.Sprintf("%s - %s (%s)", series, epname, epcode)
+							} else if epname != "" {
+								rec.Display = fmt.Sprintf("%s - %s", series, epname)
+							} else {
+								rec.Display = series
+							}
+							rec.Type = "Series" // Change type to Series for display
 						}
 						base[it.Id] = rec
 					}
@@ -120,10 +119,26 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 		out := make([]ItemRow, 0, len(ids))
 		for _, id := range ids {
 			if r, ok := base[id]; ok {
+				// Ensure we have at least basic display info
+				if r.Display == "" {
+					if r.Name != "" {
+						r.Display = r.Name
+					} else {
+						r.Display = "Unknown Item"
+					}
+				}
+				if r.Type == "" {
+					r.Type = "Unknown"
+				}
 				out = append(out, r)
 			} else {
-				// Unknown ID: still return a placeholder record
-				out = append(out, ItemRow{ID: id})
+				// Unknown ID: create a basic record with fallback info
+				out = append(out, ItemRow{
+					ID:      id,
+					Name:    "Unknown Item",
+					Type:    "Unknown",
+					Display: "Unknown Item",
+				})
 			}
 		}
 		return c.JSON(out)

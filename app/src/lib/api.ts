@@ -48,7 +48,7 @@ export const fetchItemsByIds = (ids: string[]) =>
 
 // Admin refresh
 export const startRefresh = () =>
-  j<{ ok: boolean }>("/admin/refresh", { method: "POST" });
+  j<{ started: boolean }>("/admin/refresh/start", { method: "POST" });
 
 export const fetchRefreshStatus = () => j<RefreshState>("/admin/refresh/status");
 
