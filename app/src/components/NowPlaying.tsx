@@ -239,12 +239,30 @@ export default function NowPlaying() {
 
                     <div className="font-medium mt-1">Video</div>
                     <div>
-                      {s.width}x{s.height} {s.video} • {s.video_method || "Direct Play"}
+                      {s.width}x{s.height} {s.video} •{" "}
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          (s.video_method || "Direct Play") === "Transcode"
+                            ? "bg-orange-500/20 text-orange-400 border border-orange-400/30"
+                            : "bg-green-500/20 text-green-400 border border-green-400/30"
+                        }`}
+                      >
+                        {s.video_method || "Direct Play"}
+                      </span>
                     </div>
 
                     <div className="font-medium mt-1">Audio</div>
                     <div>
-                      {s.audio} • {s.audio_method || "Direct Play"}
+                      {s.audio} •{" "}
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          (s.audio_method || "Direct Play") === "Transcode"
+                            ? "bg-orange-500/20 text-orange-400 border border-orange-400/30"
+                            : "bg-green-500/20 text-green-400 border border-green-400/30"
+                        }`}
+                      >
+                        {s.audio_method || "Direct Play"}
+                      </span>
                     </div>
 
                     {s.subs && (
