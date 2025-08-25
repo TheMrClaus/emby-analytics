@@ -21,8 +21,8 @@ export default function OverviewCards() {
 
   // Default values while loading or if data is missing
   const overview = data || {
-    users: 0,
-    library_items: 0,
+    total_users: 0,
+    total_items: 0,
     total_plays: 0,
     unique_plays: 0
   };
@@ -31,11 +31,11 @@ export default function OverviewCards() {
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <Card 
         label="Users" 
-        value={isLoading ? "..." : fmtInt(overview.users)}
+        value={isLoading ? "..." : fmtInt(overview.total_users)}
       />
       <Card 
         label="Library Items" 
-        value={isLoading ? "..." : fmtInt(overview.library_items)}
+        value={isLoading ? "..." : fmtInt(overview.total_items)}
       />
       <Card 
         label="Total Plays" 
