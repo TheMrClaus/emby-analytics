@@ -7,27 +7,29 @@ import { fmtInt } from "../lib/format";
 import ChartLegend from "./charts/Legend";
 import { colors } from '../theme/colors';
 
+type QualityRow = { label: string; Movie: number; Episode: number };
+
 export default function QualitiesChart() {
   const [data, setData] = useState<QualityBuckets | null>(null);
   useEffect(() => {
     fetchQualities().then(setData).catch(() => {});
   }, []);
 
-  const rows = useMemo(() => {
-    if (!data) return [];
-    return Object.entries(data.buckets).map(([label, v]) => ({
-      label,
-      Movie: v.Movie,
-      Episode: v.Episode,
-    }));
-  }, [data]);
+const rows = useMemo<QualityRow[]>(() => {
+  if (!data) return [];
+  return Object.entries(data.buckets).map(([label, v]) => ({
+    label,
+    Movie: v.Movie,
+    Episode: v.Episode,
+  }));
+}, [data]);
 
   return (
     <div className="card p-4">
       <div className="h3 mb-2">Media Quality</div>
       <div style={{ height: 280 }}>
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={data} barCategoryGap={12} barGap={4} maxBarSize={44}>
+          <BarChart data={rows} barCategoryGap={12} barGap={4} maxBarSize={44}>
             {/* Premium defs */}
             <defs>
               {/* rich gold gradient for Movie */}
