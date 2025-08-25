@@ -136,7 +136,7 @@ export default function NowPlaying() {
     const reason = (s.trans_reason || "").toLowerCase();
     const burnIn = isVideoTrans && /(sub|subtitle|burn)/.test(reason);
     if (burnIn) return { label: "Burn‑in", tone: "warn" as const };
-    return { label: "Direct", tone: "ok" as const };
+    return { label: "Direct Play", tone: "ok" as const };
   };
 
   return (
