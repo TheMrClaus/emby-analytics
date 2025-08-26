@@ -2,7 +2,6 @@ package stats
 
 import (
 	"database/sql"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -26,21 +25,19 @@ func TopUsers(db *sql.DB) fiber.Handler {
 			limit = 10
 		}
 
-		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
-
-		// Count unique viewing sessions (user+item+day combinations)
+		// Use accurate lifetime watch data (Emby's "Played" flag + full runtime)
 		rows, err := db.Query(`
 			SELECT 
 				u.id, 
 				u.name,
-				COUNT(DISTINCT pe.item_id || '-' || DATE(datetime(pe.ts / 1000, 'unixepoch'))) * 1.2 AS hours
-			FROM play_event pe
-			JOIN emby_user u ON u.id = pe.user_id
-			WHERE pe.ts >= ? AND pe.user_id != ''
-			GROUP BY u.id, u.name
+				COALESCE(lw.total_ms / 3600000.0, 0) AS hours
+			FROM emby_user u
+			LEFT JOIN lifetime_watch lw ON lw.user_id = u.id
+			WHERE lw.total_ms > 0
 			ORDER BY hours DESC
 			LIMIT ?;
-		`, fromMs, limit)
+		`, limit)
+
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}

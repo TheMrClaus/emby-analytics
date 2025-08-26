@@ -23,16 +23,16 @@ func Usage(db *sql.DB) fiber.Handler {
 		}
 		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
 
-		// Count unique items watched per day and estimate reasonable session time
+		// Use simple daily usage approximation based on lifetime totals
 		rows, err := db.Query(`
 			SELECT
 				strftime('%Y-%m-%d', datetime(pe.ts / 1000, 'unixepoch')) AS day,
 				COALESCE(u.name, pe.user_id) AS user,
-				COUNT(DISTINCT pe.item_id) * 1.0 AS hours
+				COUNT(DISTINCT pe.item_id) * 0.6 AS hours  -- Conservative daily estimate
 			FROM play_event pe
 			LEFT JOIN emby_user u ON u.id = pe.user_id
-			WHERE pe.ts >= ? AND pe.user_id != ''
-			GROUP BY day, user
+			WHERE pe.ts >= ? AND pe.user_id != '' AND pe.pos_ms > 120000  -- 2+ minutes
+			GROUP BY day, pe.user_id, u.name
 			ORDER BY day ASC, user ASC;
 		`, fromMs)
 		if err != nil {

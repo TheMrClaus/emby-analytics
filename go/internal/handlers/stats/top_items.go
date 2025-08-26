@@ -36,22 +36,32 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 
 		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
 
-		// SMART APPROACH: Group by user+item+day to get unique viewing sessions
-		// Then estimate time per session based on content type
+		// For top items, we need to aggregate from play_event but use the accurate approach
+		// Get items that users have "completed" based on high completion percentage
 		rows, err := db.Query(`
 			SELECT 
 				li.id, 
 				COALESCE(li.name, 'Unknown') as name, 
 				COALESCE(li.type, 'Unknown') as type,
-				COUNT(DISTINCT pe.user_id || '-' || DATE(datetime(pe.ts / 1000, 'unixepoch'))) * 
+				COUNT(DISTINCT completed_views.user_id) * 
 				CASE 
-					WHEN li.type = 'Movie' THEN 1.8
-					WHEN li.type = 'Episode' THEN 0.7  
-					ELSE 1.0
+					WHEN li.type = 'Movie' THEN 2.0    -- Average movie length
+					WHEN li.type = 'Episode' THEN 0.75 -- Average episode length  
+					ELSE 1.2
 				END AS hours
-			FROM play_event pe
-			LEFT JOIN library_item li ON li.id = pe.item_id
-			WHERE pe.ts >= ? AND pe.item_id != '' AND li.type NOT IN ('TvChannel', 'LiveTv', 'Channel') 
+			FROM (
+				-- Find users who watched significant portions (90%+) of each item
+				SELECT DISTINCT user_id, item_id
+				FROM play_event pe1
+				WHERE pe1.ts >= ? 
+				  AND pe1.pos_ms > (
+					SELECT MAX(pe2.pos_ms) * 0.9 
+					FROM play_event pe2 
+					WHERE pe2.item_id = pe1.item_id
+				)
+			) completed_views
+			LEFT JOIN library_item li ON li.id = completed_views.item_id
+			WHERE li.type NOT IN ('TvChannel', 'LiveTv', 'Channel') 
 			GROUP BY li.id, li.name, li.type
 			ORDER BY hours DESC
 			LIMIT ?;
@@ -139,23 +149,33 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 		// Convert map back to slice, preserving order by hours
 		out := make([]TopItem, 0, len(items))
 
-		// Re-query to preserve the original order since we used a map
+		// Re-query with the same logic to preserve order
 		rows, err = db.Query(`
 			SELECT 
 				li.id, 
-				COUNT(DISTINCT pe.user_id || '-' || DATE(datetime(pe.ts / 1000, 'unixepoch'))) * 
+				COUNT(DISTINCT completed_views.user_id) * 
 				CASE 
-					WHEN li.type = 'Movie' THEN 1.8
-					WHEN li.type = 'Episode' THEN 0.7  
-					ELSE 1.0
+					WHEN li.type = 'Movie' THEN 2.0
+					WHEN li.type = 'Episode' THEN 0.75  
+					ELSE 1.2
 				END AS hours
-			FROM play_event pe
-			LEFT JOIN library_item li ON li.id = pe.item_id
-			WHERE pe.ts >= ? AND pe.item_id != '' AND li.type NOT IN ('TvChannel', 'LiveTv', 'Channel') 
+			FROM (
+				SELECT DISTINCT user_id, item_id
+				FROM play_event pe1
+				WHERE pe1.ts >= ? 
+				  AND pe1.pos_ms > (
+					SELECT MAX(pe2.pos_ms) * 0.9 
+					FROM play_event pe2 
+					WHERE pe2.item_id = pe1.item_id
+				)
+			) completed_views
+			LEFT JOIN library_item li ON li.id = completed_views.item_id
+			WHERE li.type NOT IN ('TvChannel', 'LiveTv', 'Channel') 
 			GROUP BY li.id, li.name, li.type
 			ORDER BY hours DESC
 			LIMIT ?;
 		`, fromMs, limit)
+
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}

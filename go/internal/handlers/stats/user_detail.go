@@ -62,25 +62,38 @@ func UserDetailHandler(db *sql.DB) fiber.Handler {
 		// user name
 		_ = db.QueryRow(`SELECT name FROM emby_user WHERE id = ?`, userID).Scan(&detail.UserName)
 
-		// totals in window - use session count instead of position sum
+		// Use accurate lifetime watch data for user totals
 		_ = db.QueryRow(`
-			SELECT COUNT(*) * 0.75 AS hours,
-			       COUNT(*) AS plays
-			FROM play_event
-			WHERE user_id = ? AND ts >= ?
-		`, userID, fromMs).Scan(&detail.TotalHours, &detail.Plays)
+			SELECT 
+				COALESCE(lw.total_ms / 3600000.0, 0) AS hours,
+				COALESCE(
+					(SELECT COUNT(DISTINCT item_id) 
+					 FROM play_event pe 
+					 WHERE pe.user_id = ? AND pe.ts >= ? AND pe.pos_ms > 30000), 
+					0
+				) AS plays
+			FROM emby_user u
+			LEFT JOIN lifetime_watch lw ON lw.user_id = u.id
+			WHERE u.id = ?
+		`, userID, fromMs, userID).Scan(&detail.TotalHours, &detail.Plays)
 
-		// top items - use event count instead of position sum
+		// Use completion-based approach for user's top items
 		if rows, err := db.Query(`
-			SELECT li.id, li.name, li.type,
-			       COUNT(*) * 0.5 AS hours
-			FROM play_event pe
-			JOIN library_item li ON li.id = pe.item_id
-			WHERE pe.user_id = ? AND pe.ts >= ?
-			GROUP BY li.id, li.name, li.type
-			ORDER BY hours DESC
-			LIMIT ?;
-		`, userID, fromMs, limit); err == nil {
+            SELECT 
+                li.id, 
+                li.name, 
+                li.type,
+                COUNT(*) * 0.8 AS hours  -- Simplified for user detail
+            FROM play_event pe
+            JOIN library_item li ON li.id = pe.item_id
+            WHERE pe.user_id = ? AND pe.ts >= ? AND pe.pos_ms > (
+                SELECT MAX(pos_ms) * 0.85 FROM play_event pe2 
+                WHERE pe2.item_id = pe.item_id
+            )
+            GROUP BY li.id, li.name, li.type
+            ORDER BY hours DESC
+            LIMIT ?;
+        `, userID, fromMs, limit); err == nil {
 			defer rows.Close()
 			for rows.Next() {
 				var ti UserTopItem
