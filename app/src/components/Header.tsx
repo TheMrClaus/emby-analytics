@@ -1,5 +1,5 @@
 // app/src/components/Header.tsx
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUsage, useNowSnapshot, useRefreshStatus } from '../hooks/useData';
 import { startRefresh } from '../lib/api';
 
@@ -14,7 +14,7 @@ export default function Header() {
   // SWR-powered data
   const { data: weeklyUsage = [], error: usageError } = useUsage(7);
   const { data: nowPlaying = [], error: snapshotError } = useNowSnapshot();
-  const { data: refreshStatus } = useRefreshStatus(refreshing);
+  const { data: refreshStatus } = useRefreshStatus(true); // poll regularly
 
   // Derived UI counters
   const weeklyHours = weeklyUsage.reduce((acc, r) => acc + (r.hours || 0), 0);
@@ -30,6 +30,10 @@ export default function Header() {
   const progress =
     total > 0 ? Math.max(0, Math.min(100, (imported / total) * 100)) : 0;
 
+  // The backend is running if it says so; otherwise fall back to our local state
+  const isBackendRunning = Boolean(refreshStatus?.running);
+  const isRunning = isBackendRunning || refreshing;
+
   // Clock
   useEffect(() => {
     const updateTime = () => setCurrentTime(new Date().toLocaleTimeString());
@@ -38,25 +42,34 @@ export default function Header() {
     return () => clearInterval(t);
   }, []);
 
-  // Stop refreshing when backend says it stopped (or errored)
+  // When backend says it stopped (or errored), end our local "refreshing" state.
   useEffect(() => {
     if (!refreshing) return;
     if (refreshStatus?.running === false) {
       setRefreshing(false);
     }
     if (refreshStatus?.error) {
-      // Stop showing the spinner but keep the button available again
       setRefreshing(false);
-      // Optional: log for dev tools
       console.error('Refresh failed:', refreshStatus.error);
     }
   }, [refreshStatus, refreshing]);
 
+  // ---- Double-click / spam click guard ----
+  const clickLockRef = useRef(false);
+
   const handleRefresh = async () => {
-    if (refreshing) return;
+    // Block if lock engaged, UI already refreshing, or backend says it's running.
+    if (clickLockRef.current || isRunning) return;
+
+    // Engage a very short lock so rapid multiple clicks can't queue multiple jobs.
+    clickLockRef.current = true;
+    setTimeout(() => {
+      clickLockRef.current = false;
+    }, 1200);
+
     try {
-      setRefreshing(true);
-      await startRefresh(); // Fiber v3 endpoint; polling handled by SWR hook
+      setRefreshing(true); // disable instantly
+      await startRefresh(); // Fiber v3: kicks off the job; progress read via useRefreshStatus
     } catch (err) {
       setRefreshing(false);
       console.error('Failed to start refresh:', err);
@@ -112,18 +125,19 @@ export default function Header() {
           <div className="relative">
             <button
               onClick={handleRefresh}
-              disabled={refreshing}
+              disabled={isRunning} // disable if either local or backend says running
               className={[
                 'relative rounded-lg px-4 py-2 font-semibold text-black',
                 'bg-amber-600 hover:bg-amber-500 active:translate-y-[1px]',
                 'shadow-md transition-colors',
-                'h-10'
+                'h-10',
+                isRunning ? 'opacity-90 cursor-not-allowed' : ''
               ].join(' ')}
               style={{ minWidth: 220 }}
             >
               <span className="relative z-10">
-                {!refreshing && 'Refresh Library Index'}
-                {refreshing && (
+                {!isRunning && 'Refresh Library Index'}
+                {isRunning && (
                   <>
                     {'Refreshing… '}
                     {Math.round(progress)}%
@@ -137,7 +151,7 @@ export default function Header() {
               </span>
 
               {/* Inline progress bar, only while refreshing */}
-              {refreshing && (
+              {isRunning && (
                 <span
                   className="absolute left-1 right-1 bottom-1 h-1 rounded-sm bg-amber-900/40"
                   aria-hidden="true"
