@@ -96,7 +96,7 @@ func CleanupUnknownItems(db *sql.DB, em *emby.Client) fiber.Handler {
 		}
 
 		// Try to fix valid GUID items via Emby API
-		if em != nil {
+		if em != nil && len(validGUIDs) > 0 {
 			if embyItems, err := em.ItemsByIDs(validGUIDs); err == nil {
 				embyMap := make(map[string]*emby.EmbyItem)
 				for _, item := range embyItems {
@@ -115,14 +115,39 @@ func CleanupUnknownItems(db *sql.DB, em *emby.Client) fiber.Handler {
 							result.FixedItems++
 							log.Printf("[cleanup] Fixed item %s: %s (%s)", id, embyItem.Name, embyItem.Type)
 						}
+					} else {
+						// Item not found in Emby (probably deleted)
+						var recentEvents int
+						thirtyDaysAgo := time.Now().AddDate(0, 0, -30).UnixMilli()
+						db.QueryRow(`SELECT COUNT(*) FROM play_event WHERE item_id = ? AND ts > ?`,
+							id, thirtyDaysAgo).Scan(&recentEvents)
+
+						if recentEvents == 0 {
+							// No recent activity - safe to delete
+							_, err := db.Exec(`DELETE FROM library_item WHERE id = ?`, id)
+							if err == nil {
+								result.DeletedItems++
+								log.Printf("[cleanup] Deleted unused GUID item %s", id)
+							}
+						} else {
+							result.UnreachableItems++
+							log.Printf("[cleanup] Keeping GUID item %s (has recent activity)", id)
+						}
 					}
 				}
 			} else {
-				log.Printf("[cleanup] Emby API failed: %v", err)
-				result.UnreachableItems = len(validGUIDs)
+				log.Printf("[cleanup] Emby API failed for valid GUIDs: %v", err)
+				for range validGUIDs {
+					result.UnreachableItems++
+				}
 			}
 		} else {
-			result.UnreachableItems = len(validGUIDs)
+			if len(validGUIDs) > 0 {
+				log.Printf("[cleanup] No Emby client available")
+				for range validGUIDs {
+					result.UnreachableItems++
+				}
+			}
 		}
 
 		log.Printf("[cleanup] Completed: %d fixed, %d deleted, %d unreachable",
