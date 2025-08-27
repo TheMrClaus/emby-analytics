@@ -42,11 +42,17 @@ func main() {
 	}
 	defer func(dbh *sql.DB) { _ = dbh.Close() }(sqlDB)
 
-	// Run migrations on startup to ensure schema is up-to-date.
 	migrationPath := filepath.Join(".", "internal", "db", "migrations")
 	if err := db.RunMigrations(sqlDB, migrationPath); err != nil {
 		log.Fatalf("failed to run migrations: %v", err)
 	}
+
+	// ---- CRITICAL FIX: Perform initial sync AFTER migrations ----
+	// Run the first user sync synchronously to ensure the database is populated
+	// before any other tasks or API calls need the user data.
+	log.Println("Performing initial user sync...")
+	tasks.RunUserSyncOnce(sqlDB, em)
+	log.Println("Initial user sync complete.")
 
 	// ---- Real-time Analytics via WebSocket ----
 	embyWS := &emby.EmbyWS{
@@ -63,8 +69,9 @@ func main() {
 	embyWS.Handler = intervalizer.Handle
 	embyWS.Start(context.Background())
 
-	// Background sweeper to clean up timed-out sessions.
-	go func() {
+	// ---- Background Tasks (Now started AFTER initial sync) ----
+	go tasks.StartUserSyncLoop(sqlDB, em, cfg) // This will handle periodic future syncs.
+	go func() {                                // Background sweeper for timed-out sessions.
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -73,7 +80,8 @@ func main() {
 		}
 	}()
 
-	// ---- Real-time UI Broadcaster (for Now Playing page) ----
+	// ... (The rest of the file remains the same)
+	// ---- Real-time UI Broadcaster ----
 	pollInterval := time.Duration(cfg.NowPollSec) * time.Second
 	if pollInterval <= 0 {
 		pollInterval = 5 * time.Second
@@ -83,7 +91,7 @@ func main() {
 	broadcaster.Start()
 	defer broadcaster.Stop()
 
-	// ---- Fiber v3 App ----
+	// ---- Fiber App and Routes ----
 	app := fiber.New(fiber.Config{
 		EnableIPValidation: true,
 		ProxyHeader:        fiber.HeaderXForwardedFor,
@@ -91,11 +99,11 @@ func main() {
 	app.Use(recover.New())
 	app.Use(logger.New())
 
-	// ---- Health Routes ----
+	// Health Routes
 	app.Get("/health", health.Health(sqlDB))
 	app.Get("/health/emby", health.Emby(em))
 
-	// ---- Stats API Routes ----
+	// Stats API Routes
 	app.Get("/stats/overview", stats.Overview(sqlDB))
 	app.Get("/stats/usage", stats.Usage(sqlDB))
 	app.Get("/stats/top/users", stats.TopUsers(sqlDB))
@@ -107,13 +115,13 @@ func main() {
 	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))
 	app.Get("/stats/user/:id", stats.UserDetailHandler(sqlDB))
 
-	// ---- Item & Image Routes ----
+	// Item & Image Routes
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
 	imgOpts := images.NewOpts(cfg)
 	app.Get("/img/primary/:id", images.Primary(imgOpts))
 	app.Get("/img/backdrop/:id", images.Backdrop(imgOpts))
 
-	// ---- Now Playing Routes ----
+	// Now Playing Routes
 	app.Get("/now/snapshot", now.Snapshot)
 	app.Get("/now/ws", func(c fiber.Ctx) error {
 		if ws.IsWebSocketUpgrade(c) {
@@ -125,7 +133,7 @@ func main() {
 	app.Post("/now/:id/stop", now.StopSession)
 	app.Post("/now/:id/message", now.MessageSession)
 
-	// ---- Admin Routes ----
+	// Admin Routes
 	rm := admin.NewRefreshManager()
 	app.Post("/admin/refresh/start", admin.StartPostHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
 	app.Get("/admin/refresh/status", admin.StatusHandler(rm))
@@ -143,23 +151,16 @@ func main() {
 	app.Get("/admin/debug/all", admin.DebugUserAllData(em))
 	app.All("/admin/fix-pos-units", admin.FixPosUnits(sqlDB))
 
-	// ---- Background Tasks ----
-	// The WebSocket listener has replaced the old polling-based sync task.
-	// The UserSyncLoop is kept as it populates the lifetime_watch table for "all-time" stats.
-	go tasks.StartUserSyncLoop(sqlDB, em, cfg)
-
-	// ---- Static UI Serving ----
+	// Static UI Serving
 	app.Use("/", static.New(cfg.WebPath))
-
-	// SPA Fallback: for any GET request that is not an API/image call, serve the index.html.
 	app.Use(func(c fiber.Ctx) error {
-		if c.Method() == fiber.MethodGet && !startsWithAny(c.Path(), "/health", "/stats", "/admin", "/now", "/img", "/items") {
+		if c.Method() == fiber.MethodGet && !strings.HasPrefix(c.Path(), "/api") {
 			return c.SendFile(filepath.Join(cfg.WebPath, "index.html"))
 		}
 		return c.Next()
 	})
 
-	// ---- Start Server ----
+	// Start Server
 	addr := ":8080"
 	if p := os.Getenv("PORT"); p != "" {
 		addr = ":" + p
