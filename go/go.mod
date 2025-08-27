@@ -4,7 +4,9 @@ go 1.25
 
 require (
 	github.com/gofiber/fiber/v3 v3.0.0-beta.5
+	github.com/gorilla/websocket v1.5.1
 	github.com/joho/godotenv v1.5.1
+	github.com/saveblush/gofiber3-contrib/websocket v0.1.1
 	modernc.org/sqlite v1.38.2
 )
 
@@ -21,7 +23,6 @@ require (
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/saveblush/gofiber3-contrib/websocket v0.1.1 // indirect
 	github.com/savsgio/gotils v0.0.0-20240704082632-aef3928b8a38 // indirect
 	github.com/tinylib/msgp v1.3.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
