@@ -13,28 +13,33 @@ type UsageRow struct {
 	Hours float64 `json:"hours"`
 }
 
-// GET /stats/usage?days=14  (also supports window=14d/4w)
 func Usage(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// support either ?window=14d or ?days=14
-		days := parseWindowDays(c.Query("window", ""), parseQueryInt(c, "days", 14))
+		// CORRECTED: Use the shared helper functions.
+		days := parseQueryInt(c, "days", 14)
 		if days <= 0 {
 			days = 14
 		}
-		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
 
-		// Use simple daily usage approximation based on lifetime totals
-		rows, err := db.Query(`
+		now := time.Now().UTC()
+		winEnd := now.Unix()
+		winStart := now.AddDate(0, 0, -days).Unix()
+
+		// UPGRADED: This query is now accurate, using interval overlap.
+		query := `
 			SELECT
-				strftime('%Y-%m-%d', datetime(pe.ts / 1000, 'unixepoch')) AS day,
-				COALESCE(u.name, pe.user_id) AS user,
-				COUNT(DISTINCT pe.item_id) * 0.6 AS hours  -- Conservative daily estimate
-			FROM play_event pe
-			LEFT JOIN emby_user u ON u.id = pe.user_id
-			WHERE pe.ts >= ? AND pe.user_id != '' AND pe.pos_ms > 120000  -- 2+ minutes
-			GROUP BY day, pe.user_id, u.name
-			ORDER BY day ASC, user ASC;
-		`, fromMs)
+				strftime('%Y-%m-%d', datetime(pi.start_ts, 'unixepoch')) AS day,
+				u.name,
+				SUM(MIN(pi.end_ts, ?) - MAX(pi.start_ts, ?)) / 3600.0 AS hours
+			FROM play_intervals pi
+			JOIN emby_user u ON u.id = pi.user_id
+			WHERE
+				pi.start_ts <= ? AND pi.end_ts >= ?
+			GROUP BY day, u.name
+			ORDER BY day ASC, u.name ASC;
+		`
+
+		rows, err := db.Query(query, winEnd, winStart, winEnd, winStart)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
