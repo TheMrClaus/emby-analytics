@@ -126,6 +126,8 @@ func main() {
 	app.Post("/admin/users/sync", admin.UsersSyncHandler(sqlDB, em, cfg))
 	app.Get("/admin/users", admin.ListUsers(sqlDB, em))
 	app.Get("/admin/debug/userdata", admin.DebugUserData(em))
+	app.Post("/admin/cleanup/unknown", admin.CleanupUnknownItems(sqlDB, em))
+
 	// background loops
 	go tasks.StartSyncLoop(sqlDB, em, cfg)
 	go tasks.StartUserSyncLoop(sqlDB, em, cfg)
