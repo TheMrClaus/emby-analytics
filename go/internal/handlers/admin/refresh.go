@@ -54,6 +54,9 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 	var total int
 	var actualItemsProcessed int
 
+	// Phase 1: Library Metadata Refresh
+	rm.set(Progress{Message: "Getting library count...", Running: true})
+
 	// Step 1: Get total count (this is the count of actual Emby items, not codec entries)
 	count, err := em.TotalItems()
 	if err != nil {
@@ -61,9 +64,9 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 		return
 	}
 	total = count
-	rm.set(Progress{Total: total, Message: "Fetching items...", Running: true})
+	rm.set(Progress{Total: total, Message: "Fetching library items...", Running: true})
 
-	// Step 2: Fetch in chunks
+	// Step 2: Fetch library items in chunks
 	page := 0
 	for actualItemsProcessed < total {
 		// GetItemsChunk now returns multiple entries per item (one per codec)
@@ -84,11 +87,12 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 				INSERT INTO library_item (id, name, type, height, codec)
 				VALUES (?, ?, ?, ?, ?)
 				ON CONFLICT(id) DO UPDATE SET
-					name=excluded.name,
-					type=excluded.type,
-					height=excluded.height,
-					codec=excluded.codec
+					name = COALESCE(excluded.name, library_item.name),
+					type = COALESCE(excluded.type, library_item.type),
+					height = COALESCE(excluded.height, library_item.height),
+					codec = COALESCE(excluded.codec, library_item.codec)
 			`, entry.Id, entry.Name, entry.Type, entry.Height, entry.Codec)
+
 			// For episodes, ensure we have proper series info
 			if entry.Type == "Episode" && em != nil {
 				// Enrich episode data immediately during refresh
@@ -111,8 +115,9 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 					}
 				}
 			}
+
 			if err == nil {
-				if rowsAffected, _ := result.RowsAffected(); rowsAffected > 0 {
+				if rows, _ := result.RowsAffected(); rows > 0 {
 					dbEntriesInserted++
 				}
 			}
@@ -153,11 +158,80 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 		time.Sleep(100 * time.Millisecond)
 	}
 
+	// Phase 2: Play History Collection
 	rm.set(Progress{
 		Total:     total,
-		Processed: actualItemsProcessed,
+		Processed: total,
+		Message:   "Library complete! Now collecting play history...",
+		Running:   true,
+	})
+
+	// Get all users and collect their complete history
+	users, err := em.GetUsers()
+	if err != nil {
+		rm.set(Progress{Error: "Failed to get users for history collection: " + err.Error(), Done: true})
+		return
+	}
+
+	totalHistoryEvents := 0
+	for userIndex, user := range users {
+		rm.set(Progress{
+			Total:     total,
+			Processed: total,
+			Message:   fmt.Sprintf("Collecting history for user %s (%d/%d)...", user.Name, userIndex+1, len(users)),
+			Running:   true,
+		})
+
+		// Get unlimited history for this user (0 = all history)
+		history, err := em.GetUserPlayHistory(user.Id, 0)
+		if err != nil {
+			log.Printf("[refresh] Failed to get history for user %s: %v", user.Name, err)
+			continue // Skip user but don't fail entire refresh
+		}
+
+		userEvents := 0
+		for _, h := range history {
+			// Upsert user and item info
+			_, _ = db.Exec(`INSERT INTO emby_user (id, name) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name`, user.Id, user.Name)
+			_, _ = db.Exec(`INSERT INTO library_item (id, name, type) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=COALESCE(excluded.name, library_item.name), type=COALESCE(excluded.type, library_item.type)`, h.Id, h.Name, h.Type)
+
+			// Convert position to milliseconds
+			posMs := int64(0)
+			if h.PlaybackPos > 0 {
+				posMs = h.PlaybackPos / 10_000
+			}
+
+			// Use historical timestamp
+			var eventTime int64 = time.Now().UnixMilli() // fallback
+			if h.DatePlayed != "" {
+				if playTime, err := time.Parse(time.RFC3339, h.DatePlayed); err == nil {
+					eventTime = playTime.UnixMilli()
+				} else if playTime, err := time.Parse("2006-01-02T15:04:05", h.DatePlayed); err == nil {
+					eventTime = playTime.UnixMilli()
+				}
+			}
+
+			// Insert play event
+			result, err := db.Exec(`INSERT OR IGNORE INTO play_event (ts, user_id, item_id, pos_ms) VALUES (?, ?, ?, ?)`, eventTime, user.Id, h.Id, posMs)
+			if err == nil {
+				if rows, _ := result.RowsAffected(); rows > 0 {
+					userEvents++
+					totalHistoryEvents++
+				}
+			}
+		}
+
+		if userEvents > 0 {
+			log.Printf("[refresh] User %s: collected %d historical events", user.Name, userEvents)
+		}
+	}
+
+	// Complete!
+	rm.set(Progress{
+		Total:     total,
+		Processed: total,
+		Message:   fmt.Sprintf("Complete! Library: %d items, History: %d events from %d users", actualItemsProcessed, totalHistoryEvents, len(users)),
 		Done:      true,
-		Message:   "Refresh complete",
 		Running:   false,
 	})
 }
