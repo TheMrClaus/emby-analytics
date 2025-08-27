@@ -35,24 +35,27 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 
 		// Handle "all-time" vs time-windowed differently
 		if timeframe == "all-time" {
-			// For all-time, use a simple heuristic since we don't have item-level lifetime data
-			// This is less accurate but gives a broad view of popular content
+			// Use the same accurate approach as time-windowed queries, but without time restriction
 			rows, err = db.Query(`
 				SELECT 
 					li.id, 
 					COALESCE(li.name, 'Unknown') as name, 
 					COALESCE(li.type, 'Unknown') as type,
-					COUNT(DISTINCT pe.user_id) * 
-					CASE 
-						WHEN li.type = 'Movie' THEN 2.0    -- Average movie length
-						WHEN li.type = 'Episode' THEN 0.75 -- Average episode length  
-						ELSE 1.2
-					END AS hours
-				FROM play_event pe
-				LEFT JOIN library_item li ON li.id = pe.item_id
-				WHERE pe.item_id != '' AND pe.pos_ms > 300000  -- 5+ minute sessions
-					AND li.type NOT IN ('TvChannel', 'LiveTv', 'Channel') 
+					SUM(max_pos_ms) / 3600000.0 AS hours
+				FROM (
+					-- Get the max watch position for each user+item combination (all time)
+					SELECT
+						user_id,
+						item_id,
+						MAX(pos_ms) as max_pos_ms
+					FROM play_event
+					WHERE item_id != '' AND pos_ms > 60000  -- 1+ minute sessions
+					GROUP BY user_id, item_id
+				) AS user_item_max
+				LEFT JOIN library_item li ON li.id = user_item_max.item_id
+				WHERE li.type NOT IN ('TvChannel', 'LiveTv', 'Channel') 
 				GROUP BY li.id, li.name, li.type
+				HAVING SUM(max_pos_ms) > 600000  -- At least 10 minutes total
 				ORDER BY hours DESC
 				LIMIT ?;
 			`, limit)
