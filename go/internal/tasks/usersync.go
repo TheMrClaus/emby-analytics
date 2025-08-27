@@ -18,7 +18,7 @@ func StartUserSyncLoop(db *sql.DB, em *emby.Client, cfg config.Config) {
 
 	interval := time.Duration(cfg.UserSyncIntervalSec) * time.Second
 	log.Printf("[usersync] Starting periodic loop with interval %v.", interval)
-	
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -64,4 +64,22 @@ func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) {
 		log.Printf("[usersync] failed to get watch data for %s: %v", userName, err)
 		return
 	}
-	var 
+	var totalWatchMs int64
+	for _, item := range userDataItems {
+		if item.UserData.Played && item.RunTimeTicks > 0 {
+			totalWatchMs += item.RunTimeTicks / 10000
+		}
+	}
+	_, err = db.Exec(`INSERT INTO lifetime_watch (user_id, total_ms)
+	                  VALUES (?, ?)
+	                  ON CONFLICT(user_id) DO UPDATE SET total_ms = excluded.total_ms`,
+		userID, totalWatchMs)
+	if err != nil {
+		log.Printf("[usersync] failed to update lifetime watch for %s: %v", userName, err)
+	}
+}
+
+// RunUserSyncOnce is the exported function for synchronous, on-demand syncs.
+func RunUserSyncOnce(db *sql.DB, em *emby.Client) {
+	runUserSync(db, em)
+}
