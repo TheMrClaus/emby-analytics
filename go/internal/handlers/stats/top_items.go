@@ -117,92 +117,79 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 			}
 		}
 
-		// Also collect IDs for non-episode items that have Unknown names/types
-		unknownIDs := make([]string, 0)
+		// Collect ALL IDs that need enrichment (episodes + unknown items)
+		allEnrichIDs := make([]string, 0)
+		allEnrichIDs = append(allEnrichIDs, episodeIDs...) // Add episodes
+
+		// Add any items with Unknown names/types (regardless of type)
 		for _, item := range items {
-			// Skip episodes (they're handled above) but catch other unknown items
-			if !strings.EqualFold(item.Type, "Episode") &&
-				(item.Name == "Unknown" || item.Type == "Unknown") {
-				unknownIDs = append(unknownIDs, item.ItemID)
+			if (item.Name == "Unknown" || item.Type == "Unknown") &&
+				!strings.EqualFold(item.Type, "Episode") { // Don't double-add episodes
+				allEnrichIDs = append(allEnrichIDs, item.ItemID)
 			}
 		}
 
-		// Enrich Episodes via Emby API
-		if len(episodeIDs) > 0 && em != nil {
-			if embyItems, err := em.ItemsByIDs(episodeIDs); err == nil {
+		// Enrich ALL items via Emby API (episodes + unknowns in one call)
+		if len(allEnrichIDs) > 0 && em != nil {
+			if embyItems, err := em.ItemsByIDs(allEnrichIDs); err == nil {
 				// Create map for faster lookup
 				embyMap := make(map[string]*emby.EmbyItem)
 				for _, it := range embyItems {
 					embyMap[it.Id] = &it
 				}
 
-				// Update items in place
+				// Update ALL items in place
 				for i, item := range items {
-					if it, ok := embyMap[item.ItemID]; ok && strings.EqualFold(item.Type, "Episode") {
-						// Build enhanced display name
-						name := item.Name
-						if (name == "" || name == it.Name) && it.Name != "" {
-							name = it.Name
-							items[i].Name = name
-						}
-
-						season := it.ParentIndexNumber
-						ep := it.IndexNumber
-						series := it.SeriesName
-						epname := name
-
-						if series == "" {
-							items[i].Display = epname
-						} else {
-							epcode := ""
-							if season != nil && ep != nil {
-								epcode = fmt.Sprintf("S%02dE%02d", *season, *ep)
+					if it, ok := embyMap[item.ItemID]; ok {
+						// Found in Emby API - handle different types
+						if strings.EqualFold(item.Type, "Episode") || it.Type == "Episode" {
+							// Handle Episodes - build enhanced display name
+							name := item.Name
+							if (name == "" || name == "Unknown" || name == it.Name) && it.Name != "" {
+								name = it.Name
+								items[i].Name = name
 							}
-							if epcode != "" && epname != "" {
-								items[i].Display = fmt.Sprintf("%s - %s (%s)", series, epname, epcode)
-							} else if epname != "" {
-								items[i].Display = fmt.Sprintf("%s - %s", series, epname)
+
+							season := it.ParentIndexNumber
+							ep := it.IndexNumber
+							series := it.SeriesName
+							epname := name
+
+							if series == "" {
+								items[i].Display = epname
 							} else {
-								items[i].Display = series
+								epcode := ""
+								if season != nil && ep != nil {
+									epcode = fmt.Sprintf("S%02dE%02d", *season, *ep)
+								}
+								if epcode != "" && epname != "" {
+									items[i].Display = fmt.Sprintf("%s - %s (%s)", series, epname, epcode)
+								} else if epname != "" {
+									items[i].Display = fmt.Sprintf("%s - %s", series, epname)
+								} else {
+									items[i].Display = series
+								}
+								items[i].Type = "Series"
 							}
-							items[i].Type = "Series"
-						}
-					}
-				}
-			}
-		}
-
-		// Also enrich Unknown non-episode items via Emby API
-		if len(unknownIDs) > 0 && em != nil {
-			if embyItems, err := em.ItemsByIDs(unknownIDs); err == nil {
-				// Create map for faster lookup
-				embyMap := make(map[string]*emby.EmbyItem)
-				for _, it := range embyItems {
-					embyMap[it.Id] = &it
-				}
-
-				// Update unknown items in place
-				for i, item := range items {
-					if item.Name == "Unknown" || item.Type == "Unknown" {
-						if it, ok := embyMap[item.ItemID]; ok {
-							// Found in Emby - update with real data
-							if it.Name != "" {
+						} else {
+							// Handle other item types (Movies, etc.)
+							if it.Name != "" && (item.Name == "Unknown" || item.Name == "") {
 								items[i].Name = it.Name
 								items[i].Display = it.Name
 							}
-							if it.Type != "" {
+							if it.Type != "" && (item.Type == "Unknown" || item.Type == "") {
 								items[i].Type = it.Type
 							}
-						} else {
-							// Not found in Emby - item probably deleted, show ID for identification
-							items[i].Name = fmt.Sprintf("Deleted Item (%s)", item.ItemID[:8])
-							items[i].Display = fmt.Sprintf("Deleted Item (%s)", item.ItemID[:8])
-							items[i].Type = "Deleted"
 						}
+					} else if item.Name == "Unknown" || item.Type == "Unknown" {
+						// Not found in Emby - probably deleted, show ID for identification
+						items[i].Name = fmt.Sprintf("Deleted Item (%s)", item.ItemID[:8])
+						items[i].Display = fmt.Sprintf("Deleted Item (%s)", item.ItemID[:8])
+						items[i].Type = "Deleted"
 					}
 				}
 			} else {
-				// Emby API failed - at least show item IDs for identification
+				// Emby API failed - at least show item IDs for unknown items
 				for i, item := range items {
 					if item.Name == "Unknown" || item.Type == "Unknown" {
 						items[i].Name = fmt.Sprintf("Item (%s)", item.ItemID[:8])
@@ -211,8 +198,8 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 					}
 				}
 			}
-		} else if len(unknownIDs) > 0 {
-			// No Emby client - at least show item IDs for identification
+		} else {
+			// No Emby client or no IDs to enrich - show item IDs for unknown items
 			for i, item := range items {
 				if item.Name == "Unknown" || item.Type == "Unknown" {
 					items[i].Name = fmt.Sprintf("Item (%s)", item.ItemID[:8])
