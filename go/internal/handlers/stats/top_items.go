@@ -39,22 +39,26 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 			winEnd = now.AddDate(100, 0, 0).Unix()
 		}
 
-		// CORRECTED: Pass 'c' directly.
+		// 1. Get historical data
 		historicalRows, err := queries.TopItemsByWatchSeconds(c, db, winStart, winEnd, 1000)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "database query failed: " + err.Error()})
 		}
 
+		// 2. Prepare to combine historical and live data
 		combinedHours := make(map[string]float64)
 		itemDetails := make(map[string]TopItem)
+
 		for _, row := range historicalRows {
 			combinedHours[row.ItemID] += row.Hours
 			itemDetails[row.ItemID] = TopItem{ItemID: row.ItemID, Name: row.Name, Type: row.Type}
 		}
 
-		liveWatchTimes := tasks.GetLiveItemWatchTimes()
+		// 3. Get live data and merge
+		liveWatchTimes := tasks.GetLiveItemWatchTimes() // Returns seconds
 		for itemID, seconds := range liveWatchTimes {
 			combinedHours[itemID] += seconds / 3600.0
+			// Ensure we have item details, even if it only has a live session
 			if _, ok := itemDetails[itemID]; !ok {
 				var name, itemType string
 				_ = db.QueryRow("SELECT name, type FROM library_item WHERE id = ?", itemID).Scan(&name, &itemType)
@@ -62,6 +66,7 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 			}
 		}
 
+		// 4. Convert map back to slice
 		finalResult := make([]TopItem, 0, len(combinedHours))
 		for itemID, hours := range combinedHours {
 			details := itemDetails[itemID]
@@ -70,10 +75,11 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 				Name:    details.Name,
 				Type:    details.Type,
 				Hours:   hours,
-				Display: details.Name,
+				Display: details.Name, // Default display before enrichment
 			})
 		}
 
+		// 5. Sort and limit
 		sort.Slice(finalResult, func(i, j int) bool {
 			return finalResult[i].Hours > finalResult[j].Hours
 		})
@@ -81,12 +87,14 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 			finalResult = finalResult[:limit]
 		}
 
+		// 6. Run your preserved enrichment logic on the final, combined list
 		enrichItems(finalResult, em)
 
 		return c.JSON(finalResult)
 	}
 }
 
+// Your original enrichment logic, now in a helper function for clarity.
 func enrichItems(items []TopItem, em *emby.Client) {
 	allEnrichIDs := make([]string, 0)
 	for _, item := range items {
