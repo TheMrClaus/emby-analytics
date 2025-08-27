@@ -74,3 +74,45 @@ func DebugUserRecentActivity(em *emby.Client) fiber.Handler {
 		})
 	}
 }
+
+// DebugUserAllData shows ALL user data without any filtering
+func DebugUserAllData(em *emby.Client) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		userID := c.Query("user_id", "")
+
+		if userID == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "user_id parameter required"})
+		}
+
+		// Get user data (this uses GetUserData which has different filtering)
+		userData, err := em.GetUserData(userID)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Failed to get user data: " + err.Error()})
+		}
+
+		// Filter to items with any playback activity
+		recentItems := []interface{}{}
+		for _, item := range userData {
+			if item.UserData.PlaybackPos > 0 || item.UserData.Played || item.UserData.PlayCount > 0 {
+				recentItems = append(recentItems, map[string]interface{}{
+					"id":               item.Id,
+					"name":             item.Name,
+					"type":             item.Type,
+					"played":           item.UserData.Played,
+					"play_count":       item.UserData.PlayCount,
+					"playback_pos_hrs": float64(item.UserData.PlaybackPos) / 10000 / 3600000,
+					"last_played_date": item.UserData.LastPlayedDate,
+					"runtime_hrs":      float64(item.RunTimeTicks) / 10000 / 3600000,
+				})
+			}
+		}
+
+		return c.JSON(fiber.Map{
+			"user_id":             userID,
+			"total_user_items":    len(userData),
+			"items_with_activity": len(recentItems),
+			"note":                "Shows items with ANY playback activity (position > 0, played, or play_count > 0)",
+			"items":               recentItems,
+		})
+	}
+}
