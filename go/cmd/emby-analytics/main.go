@@ -129,6 +129,7 @@ func main() {
 	app.Post("/admin/cleanup/unknown", admin.CleanupUnknownItems(sqlDB, em))
 	app.Post("/admin/backfill", admin.BackfillHistory(sqlDB, em))
 	app.Get("/admin/debug/history", admin.DebugUserHistory(em))
+	app.Get("/admin/debug/recent", admin.DebugUserRecentActivity(em))
 
 	// background loops
 	go tasks.StartSyncLoop(sqlDB, em, cfg)

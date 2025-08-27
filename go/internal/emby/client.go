@@ -393,6 +393,66 @@ func (c *Client) GetUserPlayHistory(userID string, daysBack int) ([]PlayHistoryI
 	return out.Items, nil
 }
 
+// GetUserRecentActivity returns ALL recent items accessed by a user (not just "played" ones)
+func (c *Client) GetUserRecentActivity(userID string, daysBack int) ([]PlayHistoryItem, error) {
+	u := fmt.Sprintf("%s/emby/Users/%s/Items", c.BaseURL, userID)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("SortBy", "DateLastMediaAdded,DateCreated,SortName")
+	q.Set("SortOrder", "Descending")
+	// NOTE: No "IsPlayed" filter - this will show all recently accessed items
+	q.Set("Recursive", "true")
+	q.Set("Limit", "100")
+	q.Set("Fields", "UserData")
+
+	if daysBack > 0 {
+		from := time.Now().AddDate(0, 0, -daysBack).Format(time.RFC3339)
+		q.Set("MinDateLastMediaAdded", from)
+	}
+
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	req.Header.Set("X-Emby-Token", c.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var out struct {
+		Items []struct {
+			Id       string `json:"Id"`
+			Name     string `json:"Name"`
+			Type     string `json:"Type"`
+			UserData struct {
+				LastPlayedDate        string `json:"LastPlayedDate"`
+				PlaybackPositionTicks int64  `json:"PlaybackPositionTicks"`
+				Played                bool   `json:"Played"`
+				PlayCount             int    `json:"PlayCount"`
+			} `json:"UserData"`
+		} `json:"Items"`
+	}
+	if err := readJSON(resp, &out); err != nil {
+		return nil, err
+	}
+
+	// Convert to PlayHistoryItem format
+	result := make([]PlayHistoryItem, 0, len(out.Items))
+	for _, item := range out.Items {
+		if item.UserData.LastPlayedDate != "" {
+			result = append(result, PlayHistoryItem{
+				Id:          item.Id,
+				Name:        item.Name,
+				Type:        item.Type,
+				DatePlayed:  item.UserData.LastPlayedDate,
+				PlaybackPos: item.UserData.PlaybackPositionTicks,
+				UserID:      userID,
+			})
+		}
+	}
+
+	return result, nil
+}
+
 type usersResp struct {
 	Items []EmbyUser `json:"Items"`
 }
