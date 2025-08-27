@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -27,7 +28,19 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 	apiCalls := 0
 	startTime := time.Now()
 
-	// Step 1: active sessions
+	// Step 1: Check if this is the first sync (empty or very little play data)
+	var existingEvents int
+	db.QueryRow(`SELECT COUNT(*) FROM play_event`).Scan(&existingEvents)
+
+	isFirstSync := existingEvents < 10 // Consider it "first sync" if less than 10 events
+	historyDays := cfg.HistoryDays
+
+	if isFirstSync {
+		historyDays = 0 // 0 = unlimited history collection
+		log.Printf("[sync] First sync detected (%d existing events) - collecting ALL history", existingEvents)
+	}
+
+	// Step 2: active sessions
 	sessions, err := em.GetActiveSessions()
 	apiCalls++ // Count the GetActiveSessions API call
 	if err != nil {
@@ -58,7 +71,7 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 		}
 	}
 
-	// Step 2: backfill from recent user history
+	// Step 3: backfill from user history (use unlimited history on first sync)
 	rows, err := db.Query(`SELECT id, name FROM emby_user`)
 	if err != nil {
 		log.Println("sync user list error:", err)
@@ -78,13 +91,19 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 		}
 
 		userCount++
-		history, err := em.GetUserPlayHistory(uid.String, cfg.HistoryDays)
+
+		if isFirstSync {
+			log.Printf("[sync] Collecting ALL history for user: %s", uname.String)
+		}
+
+		history, err := em.GetUserPlayHistory(uid.String, historyDays)
 		apiCalls++ // Count each GetUserPlayHistory API call
 		if err != nil {
 			log.Printf("history error for %s: %v\n", uid.String, err)
 			continue
 		}
 
+		userEvents := 0
 		for _, h := range history {
 			// Enrich library info too
 			upsertUserAndItem(db, uid.String, uname.String, h.Id, h.Name, h.Type)
@@ -98,16 +117,39 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 				posMs = 0
 			}
 
-			if insertPlayEvent(db, uid.String, h.Id, posMs) {
-				insertedEvents++
+			// Use historical timestamp if available, otherwise current time
+			var eventTime int64
+			if h.DatePlayed != "" {
+				if playTime, err := time.Parse(time.RFC3339, h.DatePlayed); err == nil {
+					eventTime = playTime.UnixMilli()
+				} else if playTime, err := time.Parse("2006-01-02T15:04:05", h.DatePlayed); err == nil {
+					eventTime = playTime.UnixMilli()
+				} else {
+					eventTime = time.Now().UnixMilli()
+				}
+			} else {
+				eventTime = time.Now().UnixMilli()
 			}
+
+			if insertPlayEventWithTimestamp(db, uid.String, h.Id, posMs, eventTime) {
+				insertedEvents++
+				userEvents++
+			}
+		}
+
+		if isFirstSync && userEvents > 0 {
+			log.Printf("[sync] User %s: collected %d historical events", uname.String, userEvents)
 		}
 	}
 
 	duration := time.Since(startTime)
-	if insertedEvents > 0 || apiCalls > 1 {
-		log.Printf("[sync] completed in %v: %d API calls, %d users processed, %d play events inserted",
+	if insertedEvents > 0 || apiCalls > 1 || isFirstSync {
+		logMsg := fmt.Sprintf("[sync] completed in %v: %d API calls, %d users processed, %d play events inserted",
 			duration.Round(time.Millisecond), apiCalls, userCount, insertedEvents)
+		if isFirstSync {
+			logMsg += " (FULL HISTORY COLLECTION)"
+		}
+		log.Println(logMsg)
 	}
 }
 
@@ -116,6 +158,17 @@ func insertPlayEvent(db *sql.DB, userID, itemID string, posMs int64) bool {
 	res, err := db.Exec(`INSERT INTO play_event (ts, user_id, item_id, pos_ms)
 	                VALUES (?, ?, ?, ?)`,
 		ts, userID, itemID, posMs)
+	if err != nil {
+		return false
+	}
+	rowsAffected, _ := res.RowsAffected()
+	return rowsAffected > 0
+}
+
+func insertPlayEventWithTimestamp(db *sql.DB, userID, itemID string, posMs int64, timestamp int64) bool {
+	res, err := db.Exec(`INSERT OR IGNORE INTO play_event (ts, user_id, item_id, pos_ms)
+	                VALUES (?, ?, ?, ?)`,
+		timestamp, userID, itemID, posMs)
 	if err != nil {
 		return false
 	}
