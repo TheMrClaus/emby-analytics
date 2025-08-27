@@ -10,15 +10,17 @@ import (
 	"emby-analytics/internal/emby"
 )
 
+// Intervalizer and liveState structs remain the same...
 type Intervalizer struct {
 	DB                *sql.DB
-	NoProgressTimeout time.Duration // e.g. 45s
-	SeekThreshold     time.Duration // e.g. 3s jump
+	NoProgressTimeout time.Duration
+	SeekThreshold     time.Duration
 }
 
-// liveState is an in-memory tracker for an active session
 type liveState struct {
 	SessionFK        int64
+	UserID           string // Add UserID to liveState
+	ItemID           string // Add ItemID to liveState
 	LastPosTicks     int64
 	LastEventTS      time.Time
 	IsIntervalOpen   bool
@@ -26,18 +28,56 @@ type liveState struct {
 	IntervalStartPos int64
 }
 
+// CORRECTED: Capitalize to make them public, so handlers can access them.
 var (
-	liveSessions = make(map[string]*liveState)
-	liveMutex    = &sync.Mutex{}
+	LiveSessions = make(map[string]*liveState)
+	LiveMutex    = &sync.Mutex{}
 )
+
+// NEW FUNCTION: Provides safe, concurrent access to live watch times.
+// Returns a map of UserID -> seconds watched in the current interval.
+func GetLiveUserWatchTimes() map[string]float64 {
+	LiveMutex.Lock()
+	defer LiveMutex.Unlock()
+
+	watchTimes := make(map[string]float64)
+	now := time.Now()
+
+	for _, session := range LiveSessions {
+		if session.IsIntervalOpen {
+			// Calculate the duration of the current, unclosed interval
+			duration := now.Sub(session.IntervalStartTS).Seconds()
+			watchTimes[session.UserID] += duration
+		}
+	}
+	return watchTimes
+}
+
+// NEW FUNCTION: Same as above, but for items.
+// Returns a map of ItemID -> seconds watched in the current interval.
+func GetLiveItemWatchTimes() map[string]float64 {
+	LiveMutex.Lock()
+	defer LiveMutex.Unlock()
+
+	watchTimes := make(map[string]float64)
+	now := time.Now()
+
+	for _, session := range LiveSessions {
+		if session.IsIntervalOpen {
+			duration := now.Sub(session.IntervalStartTS).Seconds()
+			watchTimes[session.ItemID] += duration
+		}
+	}
+	return watchTimes
+}
 
 func sessionKey(sessionID, itemID string) string { return sessionID + "|" + itemID }
 
-// Handle takes an event from the WebSocket and processes it.
+// Handle now uses the public (capitalized) lock and map
 func (iz *Intervalizer) Handle(evt emby.EmbyEvent) {
-	liveMutex.Lock()
-	defer liveMutex.Unlock()
-
+	LiveMutex.Lock()
+	defer LiveMutex.Unlock()
+	// ... (rest of Handle function is unchanged) ...
 	var data emby.PlaybackProgressData
 	if err := json.Unmarshal(evt.Data, &data); err != nil {
 		log.Printf("[intervalizer] failed to unmarshal event data for %s: %v", evt.MessageType, err)
@@ -72,23 +112,26 @@ func (iz *Intervalizer) onStart(d emby.PlaybackProgressData) {
 
 	s := &liveState{
 		SessionFK:      sessionFK,
+		UserID:         d.UserID,        // Store UserID
+		ItemID:         d.NowPlaying.ID, // Store ItemID
 		LastPosTicks:   d.PlayState.PositionTicks,
 		LastEventTS:    now,
 		IsIntervalOpen: false,
 	}
-	liveSessions[k] = s
+	LiveSessions[k] = s // Use public map
 }
 
 func (iz *Intervalizer) onProgress(d emby.PlaybackProgressData) {
 	k := sessionKey(d.SessionID, d.NowPlaying.ID)
-	s, ok := liveSessions[k]
+	s, ok := LiveSessions[k] // Use public map
 	if !ok {
 		iz.onStart(d)
-		s, ok = liveSessions[k]
+		s, ok = LiveSessions[k] // Use public map
 		if !ok {
 			return
 		}
 	}
+	// ... (rest of onProgress is unchanged) ...
 	now := time.Now().UTC()
 	insertEvent(iz.DB, s.SessionFK, "progress", d.PlayState.IsPaused, d.PlayState.PositionTicks)
 
@@ -126,7 +169,7 @@ func (iz *Intervalizer) onProgress(d emby.PlaybackProgressData) {
 
 func (iz *Intervalizer) onStop(d emby.PlaybackProgressData) {
 	k := sessionKey(d.SessionID, d.NowPlaying.ID)
-	s, ok := liveSessions[k]
+	s, ok := LiveSessions[k] // Use public map
 	if !ok {
 		return
 	}
@@ -138,26 +181,28 @@ func (iz *Intervalizer) onStop(d emby.PlaybackProgressData) {
 	}
 
 	_, _ = iz.DB.Exec(`UPDATE play_sessions SET ended_at = ?, is_active = false WHERE id = ?`, now.Unix(), s.SessionFK)
-	delete(liveSessions, k)
+	delete(LiveSessions, k) // Use public map
 }
 
+// TickTimeoutSweep now uses the public (capitalized) lock and map
 func (iz *Intervalizer) TickTimeoutSweep() {
-	liveMutex.Lock()
-	defer liveMutex.Unlock()
+	LiveMutex.Lock()
+	defer LiveMutex.Unlock()
 
 	now := time.Now().UTC()
-	for k, s := range liveSessions {
+	for k, s := range LiveSessions {
 		if now.Sub(s.LastEventTS) >= iz.NoProgressTimeout {
 			log.Printf("[intervalizer] timing out session %s", k)
 			if s.IsIntervalOpen {
 				iz.closeInterval(s, s.LastEventTS, s.LastPosTicks, false)
 			}
 			_, _ = iz.DB.Exec(`UPDATE play_sessions SET ended_at = ?, is_active = false WHERE id = ?`, s.LastEventTS.Unix(), s.SessionFK)
-			delete(liveSessions, k)
+			delete(LiveSessions, k)
 		}
 	}
 }
 
+// ... (rest of the file is unchanged) ...
 func (iz *Intervalizer) closeInterval(s *liveState, end time.Time, endPos int64, seeked bool) {
 	start := s.IntervalStartTS
 	if end.Before(start) || end.Sub(start).Seconds() < 1 {
