@@ -1,3 +1,29 @@
+-- =================================================================
+-- ESSENTIAL BASE TABLES (These must be created first)
+-- =================================================================
+CREATE TABLE IF NOT EXISTS emby_user (
+    id TEXT PRIMARY KEY,
+    name TEXT
+);
+
+CREATE TABLE IF NOT EXISTS library_item (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    type TEXT,
+    height INTEGER,
+    codec TEXT
+);
+
+CREATE TABLE IF NOT EXISTS lifetime_watch (
+    user_id TEXT,
+    total_ms INTEGER,
+    PRIMARY KEY(user_id)
+);
+
+-- =================================================================
+-- NEW PLAYBACK TRACKING TABLES (From the refactor)
+-- =================================================================
+
 -- sessions: logical play grouping
 CREATE TABLE IF NOT EXISTS play_sessions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -12,7 +38,7 @@ CREATE TABLE IF NOT EXISTS play_sessions (
   started_at INTEGER NOT NULL, -- unix seconds
   ended_at INTEGER,            -- unix seconds
   is_active BOOLEAN DEFAULT true,
-  UNIQUE(session_id, item_id)  -- avoids accidental dup per Emby session
+  UNIQUE(session_id, item_id)
 );
 
 -- raw events we receive (for auditing / rebuild)
@@ -36,7 +62,7 @@ CREATE TABLE IF NOT EXISTS play_intervals (
   end_ts INTEGER NOT NULL,      -- unix seconds
   start_pos_ticks INTEGER,      -- position at start
   end_pos_ticks INTEGER,        -- position at end
-  duration_seconds INTEGER NOT NULL, -- (end_ts - start_ts) adjusted
+  duration_seconds INTEGER NOT NULL,
   seeked INTEGER NOT NULL DEFAULT 0
 );
 

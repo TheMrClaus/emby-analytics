@@ -2,7 +2,13 @@ DROP TABLE IF EXISTS play_intervals;
 DROP TABLE IF EXISTS play_events;
 DROP TABLE IF EXISTS play_sessions;
 
--- Re-create the old table if rolling back
+-- Also drop the base tables
+DROP TABLE IF EXISTS lifetime_watch;
+DROP TABLE IF EXISTS library_item;
+DROP TABLE IF EXISTS emby_user;
+
+
+-- Re-create the very old table if rolling back
 CREATE TABLE IF NOT EXISTS play_event (
     ts INTEGER,
     user_id TEXT,
