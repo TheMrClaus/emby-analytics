@@ -22,6 +22,10 @@ WORKDIR /app
 COPY --from=builder /emby-analytics /app/emby-analytics
 # Copy the statically-exported UI to be served by the Go app
 COPY --from=ui /ui/app/out /app/web
+
+# Copy the database migration files so the app can find them on startup.
+COPY --from=builder /src/go/internal/db/migrations /app/internal/db/migrations
+
 VOLUME ["/var/lib/emby-analytics"]
 EXPOSE 8080
 USER 1000:1000

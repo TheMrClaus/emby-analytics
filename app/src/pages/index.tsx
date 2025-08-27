@@ -21,6 +21,9 @@ export default function Dashboard() {
         <main className="p-4 md:p-6 space-y-6 border-t border-neutral-800">
           <OverviewCards />
 
+          {/* ADD THIS COMPONENT BACK */}
+          <NowPlaying />
+
           <div className="grid lg:grid-cols-2 gap-4">
             <TopUsers limit={10} />
             <TopItems limit={10} />

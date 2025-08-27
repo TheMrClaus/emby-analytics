@@ -3,6 +3,8 @@ package stats
 import (
 	"database/sql"
 	"emby-analytics/internal/queries"
+	"emby-analytics/internal/tasks"
+	"sort"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -18,7 +20,6 @@ func TopUsers(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		timeframe := c.Query("timeframe", "14d")
 		limit := parseQueryInt(c, "limit", 10)
-
 		if limit <= 0 || limit > 100 {
 			limit = 10
 		}
@@ -52,29 +53,51 @@ func TopUsers(db *sql.DB) fiber.Handler {
 		}
 
 		days := parseTimeframeToDays(timeframe)
-		if days <= 0 {
-			days = 14
-		}
-
 		now := time.Now().UTC()
 		winEnd := now.Unix()
 		winStart := now.AddDate(0, 0, -days).Unix()
 
-		// CORRECTED: Pass 'c' directly as the context.
-		queryRows, err := queries.TopUsersByWatchSeconds(c, db, winStart, winEnd, limit)
+		// 1. Get historical data from the database
+		// CORRECTED: Pass 'c' directly.
+		historicalRows, err := queries.TopUsersByWatchSeconds(c, db, winStart, winEnd, 1000)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
 
-		out := make([]TopUser, len(queryRows))
-		for i, r := range queryRows {
-			out[i] = TopUser{
-				UserID: r.UserID,
-				Name:   r.Name,
-				Hours:  r.Hours,
+		combinedHours := make(map[string]float64)
+		userNames := make(map[string]string)
+		for _, row := range historicalRows {
+			combinedHours[row.UserID] += row.Hours
+			userNames[row.UserID] = row.Name
+		}
+
+		liveWatchTimes := tasks.GetLiveUserWatchTimes()
+		for userID, seconds := range liveWatchTimes {
+			combinedHours[userID] += seconds / 3600.0
+			if _, ok := userNames[userID]; !ok {
+				var name string
+				_ = db.QueryRow("SELECT name FROM emby_user WHERE id = ?", userID).Scan(&name)
+				userNames[userID] = name
 			}
 		}
 
-		return c.JSON(out)
+		finalResult := make([]TopUser, 0, len(combinedHours))
+		for userID, hours := range combinedHours {
+			finalResult = append(finalResult, TopUser{
+				UserID: userID,
+				Name:   userNames[userID],
+				Hours:  hours,
+			})
+		}
+
+		sort.Slice(finalResult, func(i, j int) bool {
+			return finalResult[i].Hours > finalResult[j].Hours
+		})
+
+		if len(finalResult) > limit {
+			finalResult = finalResult[:limit]
+		}
+
+		return c.JSON(finalResult)
 	}
 }
