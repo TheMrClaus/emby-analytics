@@ -60,7 +60,8 @@ func TopUsers(db *sql.DB) fiber.Handler {
 
 		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
 
-		// First try the accurate position-based calculation with time window
+		// Use accurate position-based calculation with time window
+		// DO NOT fall back to lifetime_watch for time-windowed queries
 		rows, err := db.Query(`
 			SELECT
 				u.id,
@@ -95,32 +96,6 @@ func TopUsers(db *sql.DB) fiber.Handler {
 			}
 			out = append(out, u)
 		}
-
-		// If we have no data from play_event table, fall back to lifetime_watch
-		// This provides some data until play_event table rebuilds
-		if len(out) == 0 {
-			rows2, err2 := db.Query(`
-				SELECT 
-					u.id, 
-					u.name,
-					COALESCE(lw.total_ms / 3600000.0, 0) AS hours
-				FROM emby_user u
-				LEFT JOIN lifetime_watch lw ON lw.user_id = u.id
-				WHERE lw.total_ms > 0
-				ORDER BY hours DESC
-				LIMIT ?;
-			`, limit)
-			if err2 == nil {
-				defer rows2.Close()
-				for rows2.Next() {
-					var u TopUser
-					if err := rows2.Scan(&u.UserID, &u.Name, &u.Hours); err == nil {
-						out = append(out, u)
-					}
-				}
-			}
-		}
-
 		return c.JSON(out)
 	}
 }
