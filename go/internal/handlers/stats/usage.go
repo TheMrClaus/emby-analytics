@@ -15,7 +15,6 @@ type UsageRow struct {
 
 func Usage(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Use the shared helper functions from helpers.go
 		days := parseQueryInt(c, "days", 14)
 		if days <= 0 {
 			days = 14
@@ -25,27 +24,22 @@ func Usage(db *sql.DB) fiber.Handler {
 		winEnd := now.Unix()
 		winStart := now.AddDate(0, 0, -days).Unix()
 
-		// UPGRADED & CORRECTED: This query is now accurate and syntactically valid.
+		// CORRECTED & SIMPLIFIED: This query correctly calculates the overlap
+		// duration for each interval within the window and then sums it up per day and user.
 		query := `
-			WITH daily_overlap AS (
-				SELECT
-					strftime('%Y-%m-%d', datetime(pi.start_ts, 'unixepoch')) AS day,
-					pi.user_id,
-					(MIN(pi.end_ts, ?) - MAX(pi.start_ts, ?)) AS overlap_seconds
-				FROM play_intervals pi
-				WHERE
-					pi.start_ts <= ? AND pi.end_ts >= ? -- Filter for intervals that overlap the window
-				GROUP BY pi.id -- Group by interval id to correctly calculate overlap for each interval
-			)
 			SELECT
-				do.day,
+				strftime('%Y-%m-%d', datetime(pi.start_ts, 'unixepoch')) AS day,
 				u.name,
-				SUM(do.overlap_seconds) / 3600.0 AS hours
-			FROM daily_overlap do
-			JOIN emby_user u ON u.id = do.user_id
-			WHERE do.overlap_seconds > 0
-			GROUP BY do.day, u.name
-			ORDER BY do.day ASC, u.name ASC;
+				SUM(
+					-- Calculate the overlap of each interval with the time window
+					MIN(pi.end_ts, ?) - MAX(pi.start_ts, ?)
+				) / 3600.0 AS hours
+			FROM play_intervals pi
+			JOIN emby_user u ON u.id = pi.user_id
+			WHERE
+				pi.start_ts <= ? AND pi.end_ts >= ? -- Filter for intervals that overlap the window
+			GROUP BY day, u.name
+			ORDER BY day ASC, u.name ASC;
 		`
 
 		rows, err := db.Query(query, winEnd, winStart, winEnd, winStart)
