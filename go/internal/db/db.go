@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite"
@@ -24,36 +25,11 @@ func Open(path string) (*sql.DB, error) {
 	return db, nil
 }
 
-func RunMigrations(db *sql.DB, migrationPath string) error {
-	driver, err := sqlite.WithInstance(db, &sqlite.Config{})
-	if err != nil {
-		return fmt.Errorf("could not create sqlite driver: %w", err)
-	}
-
-	// Ensure the migration path exists
-	if _, err := os.Stat(migrationPath); os.IsNotExist(err) {
-		log.Printf("Migration directory not found at %s, skipping migrations.", migrationPath)
-		return EnsureLegacySchema(db) // Fallback for old schema if no migrations exist
-	}
-
-	m, err := migrate.NewWithDatabaseInstance(
-		"file://"+migrationPath,
-		"sqlite", driver)
-	if err != nil {
-		return fmt.Errorf("could not create migrate instance: %w", err)
-	}
-
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		return fmt.Errorf("failed to apply migrations: %w", err)
-	}
-
-	log.Println("Database migrations applied successfully.")
-	return nil
-}
-
-// EnsureLegacySchema is kept for backward compatibility if migrations folder doesn't exist
-func EnsureLegacySchema(db *sql.DB) error {
-	schema := `
+// EnsureBaseSchema guarantees the fundamental tables required for startup exist.
+// This is run before migrations to prevent race conditions.
+func EnsureBaseSchema(db *sql.DB) error {
+	log.Println("Ensuring base schema tables (emby_user, library_item, lifetime_watch) exist...")
+	baseSchema := `
 CREATE TABLE IF NOT EXISTS emby_user (
     id TEXT PRIMARY KEY,
     name TEXT
@@ -71,6 +47,41 @@ CREATE TABLE IF NOT EXISTS lifetime_watch (
     PRIMARY KEY(user_id)
 );
 `
-	_, err := db.Exec(schema)
-	return err
+	_, err := db.Exec(baseSchema)
+	if err != nil {
+		return fmt.Errorf("failed to ensure base schema: %w", err)
+	}
+	log.Println("Base schema check complete.")
+	return nil
+}
+
+func RunMigrations(db *sql.DB, migrationPath string) error {
+	driver, err := sqlite.WithInstance(db, &sqlite.Config{})
+	if err != nil {
+		return fmt.Errorf("could not create sqlite driver instance: %w", err)
+	}
+
+	wd, _ := os.Getwd()
+	absPath := filepath.Join(wd, migrationPath)
+	log.Printf("Attempting to run migrations from path: %s", absPath)
+
+	if _, err := os.Stat(migrationPath); os.IsNotExist(err) {
+		log.Printf("MIGRATION ERROR: Directory not found at %s. Analytics tables will not be created.", migrationPath)
+		return nil
+	}
+
+	m, err := migrate.NewWithDatabaseInstance(
+		"file://"+migrationPath,
+		"sqlite", driver)
+	if err != nil {
+		return fmt.Errorf("could not create migrate instance: %w", err)
+	}
+
+	log.Println("Applying database migrations for analytics tables...")
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("failed to apply migrations: %w", err)
+	}
+
+	log.Println("Database migrations checked and applied successfully.")
+	return nil
 }

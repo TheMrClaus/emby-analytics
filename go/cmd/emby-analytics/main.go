@@ -29,30 +29,41 @@ import (
 )
 
 func main() {
+	log.Println("=====================================================")
+	log.Println("        Starting Emby Analytics Application")
+	log.Println("=====================================================")
+
 	_ = godotenv.Load()
 
-	// ---- Config & Clients ----
 	cfg := config.Load()
 	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
 
 	// ---- Database Initialization & Migration ----
 	sqlDB, err := db.Open(cfg.SQLitePath)
 	if err != nil {
-		log.Fatalf("failed to open db: %v", err)
+		log.Fatalf("--> FATAL: Failed to open database at %s: %v", cfg.SQLitePath, err)
 	}
 	defer func(dbh *sql.DB) { _ = dbh.Close() }(sqlDB)
+	log.Println("--> Step 1: Database connection opened successfully.")
 
+	// --- CORRECTED STARTUP SEQUENCE ---
+	// 1. Unconditionally create the tables required for the app to start.
+	if err := db.EnsureBaseSchema(sqlDB); err != nil {
+		log.Fatalf("--> FATAL: Failed to ensure base schema: %v", err)
+	}
+	log.Println("--> Step 2: Base schema (user, item, lifetime) ensured.")
+
+	// 2. Then, run the full migrations to create analytics tables.
 	migrationPath := filepath.Join(".", "internal", "db", "migrations")
 	if err := db.RunMigrations(sqlDB, migrationPath); err != nil {
-		log.Fatalf("failed to run migrations: %v", err)
+		log.Fatalf("--> FATAL: Failed to run migrations: %v", err)
 	}
+	log.Println("--> Step 3: Analytics schema (sessions, intervals) migrated.")
 
-	// ---- CRITICAL FIX: Perform initial sync AFTER migrations ----
-	// Run the first user sync synchronously to ensure the database is populated
-	// before any other tasks or API calls need the user data.
-	log.Println("Performing initial user sync...")
+	// 3. Perform the initial user sync synchronously AFTER the schema is ready.
+	log.Println("--> Step 4: Performing initial user and lifetime stats sync...")
 	tasks.RunUserSyncOnce(sqlDB, em)
-	log.Println("Initial user sync complete.")
+	log.Println("--> Initial user sync complete.")
 
 	// ---- Real-time Analytics via WebSocket ----
 	embyWS := &emby.EmbyWS{
@@ -68,10 +79,11 @@ func main() {
 	}
 	embyWS.Handler = intervalizer.Handle
 	embyWS.Start(context.Background())
+	log.Println("--> Step 5: Emby WebSocket listener started.")
 
-	// ---- Background Tasks (Now started AFTER initial sync) ----
-	go tasks.StartUserSyncLoop(sqlDB, em, cfg) // This will handle periodic future syncs.
-	go func() {                                // Background sweeper for timed-out sessions.
+	// ---- Background Tasks ----
+	go tasks.StartUserSyncLoop(sqlDB, em, cfg)
+	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -79,8 +91,8 @@ func main() {
 			intervalizer.TickTimeoutSweep()
 		}
 	}()
+	log.Println("--> Step 6: Background tasks initiated.")
 
-	// ... (The rest of the file remains the same)
 	// ---- Real-time UI Broadcaster ----
 	pollInterval := time.Duration(cfg.NowPollSec) * time.Second
 	if pollInterval <= 0 {
@@ -165,9 +177,9 @@ func main() {
 	if p := os.Getenv("PORT"); p != "" {
 		addr = ":" + p
 	}
-	log.Printf("Starting Emby Analytics server on %s", addr)
+	log.Printf("--> Step 7: Starting HTTP server on %s", addr)
 	if err := app.Listen(addr); err != nil {
-		log.Fatal(err)
+		log.Fatalf("--> FATAL: Failed to start server: %v", err)
 	}
 }
 
