@@ -22,13 +22,8 @@ export default function Dashboard() {
           <OverviewCards />
 
           <div className="grid lg:grid-cols-2 gap-4">
-            <UsageChart days={14} />
-            <NowPlaying />
-          </div>
-
-          <div className="grid lg:grid-cols-2 gap-4">
-            <TopUsers days={14} limit={10} />
-            <TopItems days={14} limit={10} />
+            <TopUsers limit={10} />
+            <TopItems limit={10} />
           </div>
 
           <div className="grid lg:grid-cols-2 gap-4">

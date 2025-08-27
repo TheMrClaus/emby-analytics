@@ -47,20 +47,20 @@ export function useUsage(days = 14) {
   );
 }
 
-// Top users hook with dynamic parameters
-export function useTopUsers(days = 14, limit = 10) {
+// Top users hook with dynamic parameters + optional timeframe
+export function useTopUsers(days = 14, limit = 10, timeframe?: string) {
   return useSWR<TopUser[]>(
-    ['topUsers', days, limit],
-    () => fetchTopUsers(days, limit),
+    ['topUsers', days, limit, timeframe],
+    () => fetchTopUsers(days, limit, timeframe),
     config
   );
 }
 
-// Top items hook with dynamic parameters
-export function useTopItems(days = 14, limit = 10) {
+// Top items hook with dynamic parameters + optional timeframe  
+export function useTopItems(days = 14, limit = 10, timeframe?: string) {
   return useSWR<TopItem[]>(
-    ['topItems', days, limit],
-    () => fetchTopItems(days, limit),
+    ['topItems', days, limit, timeframe],
+    () => fetchTopItems(days, limit, timeframe),
     config
   );
 }
