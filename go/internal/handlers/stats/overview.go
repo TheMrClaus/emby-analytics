@@ -17,17 +17,17 @@ func Overview(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		data := OverviewData{} // ensure all fields start at 0
 
-		// Count total users
+		// This query is correct and does not need to change.
 		_ = db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&data.TotalUsers)
 
-		// Count total items (excluding Live TV)
+		// This query is also correct.
 		_ = db.QueryRow(`SELECT COUNT(*) FROM library_item WHERE type NOT IN ('TvChannel', 'LiveTv', 'Channel')`).Scan(&data.TotalItems)
 
-		// Count total plays (events)
-		_ = db.QueryRow(`SELECT COUNT(*) FROM play_event`).Scan(&data.TotalPlays)
+		// CORRECTED: Count sessions instead of old play events.
+		_ = db.QueryRow(`SELECT COUNT(*) FROM play_sessions`).Scan(&data.TotalPlays)
 
-		// Count unique played items
-		_ = db.QueryRow(`SELECT COUNT(DISTINCT item_id) FROM play_event`).Scan(&data.UniquePlays)
+		// CORRECTED: Count unique items from sessions.
+		_ = db.QueryRow(`SELECT COUNT(DISTINCT item_id) FROM play_sessions`).Scan(&data.UniquePlays)
 
 		return c.JSON(data)
 	}
