@@ -38,6 +38,8 @@ func BackfillHistory(db *sql.DB, em *emby.Client) fiber.Handler {
 				continue
 			}
 
+			log.Printf("[backfill] Processing user: %s (ID: %s)", user.Name, user.Id)
+
 			// Get historical data for this user
 			history, err := em.GetUserPlayHistory(user.Id, days)
 			apiCalls++
@@ -45,6 +47,16 @@ func BackfillHistory(db *sql.DB, em *emby.Client) fiber.Handler {
 			if err != nil {
 				log.Printf("[backfill] Error getting history for %s: %v", user.Name, err)
 				continue
+			}
+
+			log.Printf("[backfill] User %s returned %d history items", user.Name, len(history))
+
+			// Debug: show first few items
+			for i, h := range history {
+				if i < 3 { // Only show first 3 items for debugging
+					log.Printf("[backfill] Item %d: %s (%s) - DatePlayed: %s, PlaybackPos: %d",
+						i+1, h.Name, h.Type, h.DatePlayed, h.PlaybackPos)
+				}
 			}
 
 			processedUsers++
@@ -65,6 +77,8 @@ func BackfillHistory(db *sql.DB, em *emby.Client) fiber.Handler {
 				if h.DatePlayed != "" {
 					if parsedTime, err := time.Parse(time.RFC3339, h.DatePlayed); err == nil {
 						ts = parsedTime.UnixMilli()
+					} else {
+						log.Printf("[backfill] Failed to parse DatePlayed '%s': %v", h.DatePlayed, err)
 					}
 				}
 
@@ -72,6 +86,9 @@ func BackfillHistory(db *sql.DB, em *emby.Client) fiber.Handler {
 				if insertPlayEventWithTime(db, ts, user.Id, h.Id, posMs) {
 					userEvents++
 					totalEvents++
+					log.Printf("[backfill] Inserted event: %s watched %s (pos: %dms)", user.Name, h.Name, posMs)
+				} else {
+					log.Printf("[backfill] Failed to insert event for %s - %s", user.Name, h.Name)
 				}
 			}
 
