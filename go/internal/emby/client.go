@@ -393,21 +393,21 @@ func (c *Client) GetUserPlayHistory(userID string, daysBack int) ([]PlayHistoryI
 	return out.Items, nil
 }
 
-// GetUserRecentActivity returns ALL recent items accessed by a user (not just "played" ones)
+// GetUserRecentActivity returns ALL recent items with playback activity (not just "played" ones)
 func (c *Client) GetUserRecentActivity(userID string, daysBack int) ([]PlayHistoryItem, error) {
 	u := fmt.Sprintf("%s/emby/Users/%s/Items", c.BaseURL, userID)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-	q.Set("SortBy", "DateLastMediaAdded,DateCreated,SortName")
+	q.Set("SortBy", "DatePlayed")
 	q.Set("SortOrder", "Descending")
-	// NOTE: No "IsPlayed" filter - this will show all recently accessed items
+	// NOTE: Removed "IsPlayed" filter to show partially watched items too
 	q.Set("Recursive", "true")
 	q.Set("Limit", "100")
 	q.Set("Fields", "UserData")
 
 	if daysBack > 0 {
 		from := time.Now().AddDate(0, 0, -daysBack).Format(time.RFC3339)
-		q.Set("MinDateLastMediaAdded", from)
+		q.Set("MinDatePlayed", from)
 	}
 
 	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
@@ -438,16 +438,20 @@ func (c *Client) GetUserRecentActivity(userID string, daysBack int) ([]PlayHisto
 	// Convert to PlayHistoryItem format
 	result := make([]PlayHistoryItem, 0, len(out.Items))
 	for _, item := range out.Items {
-		if item.UserData.LastPlayedDate != "" {
-			result = append(result, PlayHistoryItem{
-				Id:          item.Id,
-				Name:        item.Name,
-				Type:        item.Type,
-				DatePlayed:  item.UserData.LastPlayedDate,
-				PlaybackPos: item.UserData.PlaybackPositionTicks,
-				UserID:      userID,
-			})
+		// Use LastPlayedDate if available, otherwise skip
+		dateToUse := item.UserData.LastPlayedDate
+		if dateToUse == "" {
+			continue
 		}
+
+		result = append(result, PlayHistoryItem{
+			Id:          item.Id,
+			Name:        item.Name,
+			Type:        item.Type,
+			DatePlayed:  dateToUse,
+			PlaybackPos: item.UserData.PlaybackPositionTicks,
+			UserID:      userID,
+		})
 	}
 
 	return result, nil
