@@ -34,7 +34,6 @@ func main() {
 	log.Println("=====================================================")
 
 	_ = godotenv.Load()
-
 	cfg := config.Load()
 	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
 
@@ -46,14 +45,13 @@ func main() {
 	defer func(dbh *sql.DB) { _ = dbh.Close() }(sqlDB)
 	log.Println("--> Step 1: Database connection opened successfully.")
 
-	// --- CORRECTED STARTUP SEQUENCE ---
-	// 1. Unconditionally create the tables required for the app to start.
+	// 1. Unconditionally create the base tables required for the app to start.
 	if err := db.EnsureBaseSchema(sqlDB); err != nil {
 		log.Fatalf("--> FATAL: Failed to ensure base schema: %v", err)
 	}
 	log.Println("--> Step 2: Base schema (user, item, lifetime) ensured.")
 
-	// 2. Then, run the full migrations to create analytics tables.
+	// 2. Run the full migrations to create analytics tables.
 	migrationPath := filepath.Join(".", "internal", "db", "migrations")
 	if err := db.RunMigrations(sqlDB, migrationPath); err != nil {
 		log.Fatalf("--> FATAL: Failed to run migrations: %v", err)
@@ -67,10 +65,7 @@ func main() {
 
 	// ---- Real-time Analytics via WebSocket ----
 	embyWS := &emby.EmbyWS{
-		Cfg: emby.WSConfig{
-			BaseURL: cfg.EmbyBaseURL,
-			APIKey:  cfg.EmbyAPIKey,
-		},
+		Cfg: emby.WSConfig{BaseURL: cfg.EmbyBaseURL, APIKey: cfg.EmbyAPIKey},
 	}
 	intervalizer := &tasks.Intervalizer{
 		DB:                sqlDB,
@@ -81,19 +76,17 @@ func main() {
 	embyWS.Start(context.Background())
 	log.Println("--> Step 5: Emby WebSocket listener started.")
 
-	// ---- Background Tasks ----
+	// ---- Background Tasks (Now started AFTER initial sync) ----
 	go tasks.StartUserSyncLoop(sqlDB, em, cfg)
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
-		for {
-			<-ticker.C
+		for range ticker.C {
 			intervalizer.TickTimeoutSweep()
 		}
 	}()
 	log.Println("--> Step 6: Background tasks initiated.")
 
-	// ---- Real-time UI Broadcaster ----
 	pollInterval := time.Duration(cfg.NowPollSec) * time.Second
 	if pollInterval <= 0 {
 		pollInterval = 5 * time.Second
@@ -114,7 +107,6 @@ func main() {
 	// Health Routes
 	app.Get("/health", health.Health(sqlDB))
 	app.Get("/health/emby", health.Emby(em))
-
 	// Stats API Routes
 	app.Get("/stats/overview", stats.Overview(sqlDB))
 	app.Get("/stats/usage", stats.Usage(sqlDB))
@@ -126,13 +118,11 @@ func main() {
 	app.Get("/stats/active-users", stats.ActiveUsersLifetime(sqlDB))
 	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))
 	app.Get("/stats/user/:id", stats.UserDetailHandler(sqlDB))
-
 	// Item & Image Routes
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
 	imgOpts := images.NewOpts(cfg)
 	app.Get("/img/primary/:id", images.Primary(imgOpts))
 	app.Get("/img/backdrop/:id", images.Backdrop(imgOpts))
-
 	// Now Playing Routes
 	app.Get("/now/snapshot", now.Snapshot)
 	app.Get("/now/ws", func(c fiber.Ctx) error {
@@ -144,23 +134,13 @@ func main() {
 	app.Post("/now/:id/pause", now.PauseSession)
 	app.Post("/now/:id/stop", now.StopSession)
 	app.Post("/now/:id/message", now.MessageSession)
-
 	// Admin Routes
 	rm := admin.NewRefreshManager()
 	app.Post("/admin/refresh/start", admin.StartPostHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
 	app.Get("/admin/refresh/status", admin.StatusHandler(rm))
-	app.Get("/admin/refresh/stream", admin.StreamHandler(rm))
 	app.Post("/admin/reset-all", admin.ResetAllData(sqlDB, em))
 	app.Post("/admin/reset-lifetime", admin.ResetLifetimeWatch(sqlDB))
 	app.Post("/admin/users/force-sync", admin.ForceUserSync(sqlDB, em))
-	app.Post("/admin/users/sync", admin.UsersSyncHandler(sqlDB, em, cfg))
-	app.Get("/admin/users", admin.ListUsers(sqlDB, em))
-	app.Get("/admin/debug/userdata", admin.DebugUserData(em))
-	app.Post("/admin/cleanup/unknown", admin.CleanupUnknownItems(sqlDB, em))
-	app.Post("/admin/backfill", admin.BackfillHistory(sqlDB, em))
-	app.Get("/admin/debug/history", admin.DebugUserHistory(em))
-	app.Get("/admin/debug/recent", admin.DebugUserRecentActivity(em))
-	app.Get("/admin/debug/all", admin.DebugUserAllData(em))
 	app.All("/admin/fix-pos-units", admin.FixPosUnits(sqlDB))
 
 	// Static UI Serving
