@@ -183,17 +183,41 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 
 				// Update unknown items in place
 				for i, item := range items {
-					if it, ok := embyMap[item.ItemID]; ok &&
-						(item.Name == "Unknown" || item.Type == "Unknown") {
-						// Update with Emby data
-						if it.Name != "" {
-							items[i].Name = it.Name
-							items[i].Display = it.Name
-						}
-						if it.Type != "" {
-							items[i].Type = it.Type
+					if item.Name == "Unknown" || item.Type == "Unknown" {
+						if it, ok := embyMap[item.ItemID]; ok {
+							// Found in Emby - update with real data
+							if it.Name != "" {
+								items[i].Name = it.Name
+								items[i].Display = it.Name
+							}
+							if it.Type != "" {
+								items[i].Type = it.Type
+							}
+						} else {
+							// Not found in Emby - item probably deleted, show ID for identification
+							items[i].Name = fmt.Sprintf("Deleted Item (%s)", item.ItemID[:8])
+							items[i].Display = fmt.Sprintf("Deleted Item (%s)", item.ItemID[:8])
+							items[i].Type = "Deleted"
 						}
 					}
+				}
+			} else {
+				// Emby API failed - at least show item IDs for identification
+				for i, item := range items {
+					if item.Name == "Unknown" || item.Type == "Unknown" {
+						items[i].Name = fmt.Sprintf("Item (%s)", item.ItemID[:8])
+						items[i].Display = fmt.Sprintf("Item (%s)", item.ItemID[:8])
+						items[i].Type = "Unavailable"
+					}
+				}
+			}
+		} else if len(unknownIDs) > 0 {
+			// No Emby client - at least show item IDs for identification
+			for i, item := range items {
+				if item.Name == "Unknown" || item.Type == "Unknown" {
+					items[i].Name = fmt.Sprintf("Item (%s)", item.ItemID[:8])
+					items[i].Display = fmt.Sprintf("Item (%s)", item.ItemID[:8])
+					items[i].Type = "Unavailable"
 				}
 			}
 		}
