@@ -34,10 +34,18 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
 export const fetchOverview = () => j<OverviewData>("/stats/overview");
 export const fetchUsage = (days = 14) =>
   j<UsageRow[]>(`/stats/usage?days=${days}`);
-export const fetchTopUsers = (days = 14, limit = 10) =>
-  j<TopUser[]>(`/stats/top/users?days=${days}&limit=${limit}`);
-export const fetchTopItems = (days = 14, limit = 10) =>
-  j<TopItem[]>(`/stats/top/items?days=${days}&limit=${limit}`);
+export const fetchTopUsers = (days = 14, limit = 10, timeframe?: string) => {
+  if (timeframe) {
+    return j<TopUser[]>(`/stats/top/users?timeframe=${timeframe}&limit=${limit}`);
+  }
+  return j<TopUser[]>(`/stats/top/users?days=${days}&limit=${limit}`);
+};
+export const fetchTopItems = (days = 14, limit = 10, timeframe?: string) => {
+  if (timeframe) {
+    return j<TopItem[]>(`/stats/top/items?timeframe=${timeframe}&limit=${limit}`);
+  }
+  return j<TopItem[]>(`/stats/top/items?days=${days}&limit=${limit}`);
+};
 export const fetchQualities = () => j<QualityBuckets>("/stats/qualities");
 export const fetchCodecs = () => j<CodecBuckets>("/stats/codecs");
 export const fetchActiveUsersLifetime = (limit = 10) =>
