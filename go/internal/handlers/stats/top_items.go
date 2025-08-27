@@ -208,7 +208,23 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 				}
 			}
 		}
+		// Final cleanup: Better labeling for remaining unknown items
+		for i, item := range items {
+			if item.Name == "Unknown" || item.Name == "" {
+				// Check if this item has any identifying info we can use
+				var firstSeen sql.NullInt64
+				db.QueryRow(`SELECT MIN(ts) FROM play_event WHERE item_id = ?`, item.ItemID).Scan(&firstSeen)
 
+				if firstSeen.Valid {
+					date := time.Unix(firstSeen.Int64/1000, 0).Format("2006-01-02")
+					items[i].Name = fmt.Sprintf("Unknown Item (first seen %s)", date)
+					items[i].Display = fmt.Sprintf("Unknown Item (first seen %s)", date)
+				} else {
+					items[i].Name = fmt.Sprintf("Unknown Item (%s)", item.ItemID[:8])
+					items[i].Display = fmt.Sprintf("Unknown Item (%s)", item.ItemID[:8])
+				}
+			}
+		}
 		return c.JSON(items)
 	}
 }
