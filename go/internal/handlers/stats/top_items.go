@@ -121,7 +121,7 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 		if len(episodeIDs) > 0 && em != nil {
 			if embyItems, err := em.ItemsByIDs(episodeIDs); err == nil {
 				// Create map for faster lookup
-				embyMap := make(map[string]*EmbyItem)
+				embyMap := make(map[string]*emby.EmbyItem)
 				for _, it := range embyItems {
 					embyMap[it.Id] = &it
 				}
