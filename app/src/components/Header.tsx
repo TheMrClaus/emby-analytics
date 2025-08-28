@@ -82,10 +82,6 @@ export default function Header() {
         {/* Title + Clock */}
         <div className="flex items-center gap-8">
           <h1 className="text-2xl font-bold text-white">Emby Analytics</h1>
-          <div className="text-gray-400">
-            <span className="text-sm">Current Time: </span>
-            <span className="text-white font-mono">{currentTime}</span>
-          </div>
         </div>
 
         {/* Stats + Refresh */}
