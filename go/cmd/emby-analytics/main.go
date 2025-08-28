@@ -53,6 +53,9 @@ func main() {
 
 	// 2. Run the full migrations to create analytics tables.
 	migrationPath := filepath.Join(".", "internal", "db", "migrations")
+	if tables, err := db.ListTablesForDebug(sqlDB); err == nil {
+		log.Printf("[debug] tables BEFORE migrations: %v\n", tables)
+	}
 	if err := db.RunMigrationsWithLogging(sqlDB, migrationPath, log.Default()); err != nil {
 		log.Fatalf("--> FATAL: Failed to run migrations: %v", err)
 	}
