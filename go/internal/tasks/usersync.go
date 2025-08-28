@@ -9,117 +9,91 @@ import (
 	"emby-analytics/internal/emby"
 )
 
-// StartUserSyncLoop runs the user sync task periodically
+// StartUserSyncLoop now ONLY handles the periodic background syncs.
 func StartUserSyncLoop(db *sql.DB, em *emby.Client, cfg config.Config) {
 	if cfg.UserSyncIntervalSec <= 0 {
-		log.Println("[usersync] disabled (interval <= 0)")
+		log.Println("[usersync] Periodic sync disabled (interval <= 0).")
 		return
 	}
 
-	log.Printf("[usersync] starting loop with interval %d seconds (%d hours)",
-		cfg.UserSyncIntervalSec, cfg.UserSyncIntervalSec/3600)
+	interval := time.Duration(cfg.UserSyncIntervalSec) * time.Second
+	log.Printf("[usersync] Starting periodic loop with interval %v.", interval)
 
-	// Run once immediately
-	runUserSync(db, em)
-
-	ticker := time.NewTicker(time.Duration(cfg.UserSyncIntervalSec) * time.Second)
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
-		<-ticker.C
+		<-ticker.C // This will wait for the first interval before running.
 		runUserSync(db, em)
 	}
 }
 
+// runUserSync is a private helper to perform the sync logic.
 func runUserSync(db *sql.DB, em *emby.Client) {
-	log.Println("[usersync] starting user sync...")
+	log.Println("[usersync] starting periodic user sync...")
 	startTime := time.Now()
-	apiCalls := 0
+
+	// DEBUG: Test the API connection first
+	log.Printf("[usersync] Attempting to fetch users from Emby API...")
 
 	users, err := em.GetUsers()
-	apiCalls++ // Count the GetUsers API call
-
 	if err != nil {
-		log.Printf("[usersync] ERROR fetching users from Emby: %v", err)
+		log.Printf("[usersync] ERROR fetching users from Emby API: %v", err)
 		return
 	}
 
-	if len(users) == 0 {
-		log.Println("[usersync] WARNING: Emby returned 0 users")
-		return
-	}
+	log.Printf("[usersync] Successfully fetched %d users from Emby API", len(users))
 
-	log.Printf("[usersync] found %d users from Emby", len(users))
+	// DEBUG: Print details of each user
+	for i, user := range users {
+		log.Printf("[usersync] User %d: ID=%s, Name=%s", i+1, user.Id, user.Name)
+	}
 
 	upserted := 0
 	for _, user := range users {
-		// Upsert user
-		result, err := db.Exec(`INSERT INTO emby_user (id, name) VALUES (?, ?)
+		log.Printf("[usersync] Processing user: %s (ID: %s)", user.Name, user.Id)
+
+		res, err := db.Exec(`INSERT INTO emby_user (id, name) VALUES (?, ?)
 		                   ON CONFLICT(id) DO UPDATE SET name=excluded.name`,
 			user.Id, user.Name)
 		if err != nil {
-			log.Printf("[usersync] ERROR upserting user %s (%s): %v", user.Name, user.Id, err)
+			log.Printf("[usersync] ERROR upserting user %s: %v", user.Name, err)
 			continue
 		}
-
-		rows, _ := result.RowsAffected()
-		if rows > 0 {
+		if rows, _ := res.RowsAffected(); rows > 0 {
 			upserted++
-			log.Printf("[usersync] upserted user: %s (ID: %s)", user.Name, user.Id)
+			log.Printf("[usersync] Successfully upserted user: %s", user.Name)
 		}
-
-		// Sync user watch data - this makes heavy API calls
-		userApiCalls := syncUserWatchData(db, em, user.Id, user.Name)
-		apiCalls += userApiCalls
+		syncUserWatchData(db, em, user.Id, user.Name)
 	}
 
-	// Verify database count
 	var totalInDB int
-	db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&totalInDB)
-
-	duration := time.Since(startTime)
-	log.Printf("[usersync] completed in %v: %d API calls, upserted %d users, total in DB: %d",
-		duration.Round(time.Millisecond), apiCalls, upserted, totalInDB)
+	_ = db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&totalInDB)
+	log.Printf("[usersync] periodic sync completed in %v: upserted %d users, total in DB: %d", time.Since(startTime), upserted, totalInDB)
 }
 
-func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) int {
+func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) {
 	userDataItems, err := em.GetUserData(userID)
-	apiCalls := 1 // Count the GetUserData API call
-
 	if err != nil {
-		log.Printf("[usersync] failed to get user data for %s: %v", userName, err)
-		return apiCalls
+		log.Printf("[usersync] failed to get watch data for %s: %v", userName, err)
+		return
 	}
-
-	// Calculate total watch time from completed items
 	var totalWatchMs int64
-	playedCount := 0
 	for _, item := range userDataItems {
 		if item.UserData.Played && item.RunTimeTicks > 0 {
-			// Convert ticks to milliseconds (1 tick = 100 nanoseconds)
-			itemRuntimeMs := item.RunTimeTicks / 10000
-			totalWatchMs += itemRuntimeMs
-			playedCount++
+			totalWatchMs += item.RunTimeTicks / 10000
 		}
 	}
-
-	// Update lifetime watch with calculated total
 	_, err = db.Exec(`INSERT INTO lifetime_watch (user_id, total_ms)
 	                  VALUES (?, ?)
 	                  ON CONFLICT(user_id) DO UPDATE SET total_ms = excluded.total_ms`,
 		userID, totalWatchMs)
-
 	if err != nil {
 		log.Printf("[usersync] failed to update lifetime watch for %s: %v", userName, err)
-	} else {
-		hours := totalWatchMs / 3600000
-		log.Printf("[usersync] updated %s: %d played items, %d hours total watch time", userName, playedCount, hours)
 	}
-
-	return apiCalls
 }
 
-// RunUserSyncOnce triggers a single user sync cycle immediately
+// RunUserSyncOnce is the exported function for synchronous, on-demand syncs.
 func RunUserSyncOnce(db *sql.DB, em *emby.Client) {
 	runUserSync(db, em)
 }

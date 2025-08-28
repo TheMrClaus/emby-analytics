@@ -50,9 +50,8 @@ func (b *Broadcaster) Stop() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	// Close all client connections
 	for client := range b.clients {
-		client.Close()
+		_ = client.Close()
 	}
 	b.clients = make(map[*ws.Conn]bool)
 }
@@ -76,14 +75,6 @@ func (b *Broadcaster) RemoveClient(conn *ws.Conn) {
 	delete(b.clients, conn)
 }
 
-// GetClientCount returns the number of active WebSocket clients
-func (b *Broadcaster) GetClientCount() int {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
-	return len(b.clients)
-}
-
 // broadcastLoop is the main polling and broadcasting goroutine
 func (b *Broadcaster) broadcastLoop() {
 	ticker := time.NewTicker(b.interval)
@@ -104,7 +95,12 @@ func (b *Broadcaster) broadcastLoop() {
 
 // broadcast fetches data from Emby and sends to all connected clients
 func (b *Broadcaster) broadcast() {
-	entries := b.fetchNowPlayingEntries()
+	// MODIFIED: Fetch entries first. If it fails, do not broadcast.
+	entries, err := b.fetchNowPlayingEntries()
+	if err != nil {
+		log.Printf("[broadcaster] failed to fetch now playing data, skipping broadcast: %v", err)
+		return // Do nothing on error
+	}
 
 	b.mu.RLock()
 	clients := make([]*ws.Conn, 0, len(b.clients))
@@ -113,7 +109,6 @@ func (b *Broadcaster) broadcast() {
 	}
 	b.mu.RUnlock()
 
-	// Send to all clients (do this outside the lock to avoid blocking)
 	for _, client := range clients {
 		go b.sendToClientWithData(client, entries)
 	}
@@ -121,25 +116,27 @@ func (b *Broadcaster) broadcast() {
 
 // sendToClient sends current data to a specific client
 func (b *Broadcaster) sendToClient(conn *ws.Conn) {
-	entries := b.fetchNowPlayingEntries()
+	entries, err := b.fetchNowPlayingEntries()
+	if err != nil {
+		log.Printf("[broadcaster] failed to send initial snapshot to client: %v", err)
+		// Don't send anything if the initial fetch fails
+		return
+	}
 	b.sendToClientWithData(conn, entries)
 }
 
-// sendToClientWithData sends specific data to a client
 func (b *Broadcaster) sendToClientWithData(conn *ws.Conn, entries []NowEntry) {
 	if err := conn.WriteJSON(entries); err != nil {
-		// Client disconnected, remove it
 		b.RemoveClient(conn)
-		conn.Close()
+		_ = conn.Close()
 	}
 }
 
-// fetchNowPlayingEntries fetches and formats current sessions from Emby
-func (b *Broadcaster) fetchNowPlayingEntries() []NowEntry {
+// fetchNowPlayingEntries now returns an error if it fails
+func (b *Broadcaster) fetchNowPlayingEntries() ([]NowEntry, error) {
 	sessions, err := b.embyClient.GetActiveSessions()
 	if err != nil {
-		log.Printf("Error fetching active sessions: %v", err)
-		return []NowEntry{} // Return empty list on error
+		return nil, err // Return the error instead of an empty slice
 	}
 
 	nowTime := time.Now().UnixMilli()
@@ -149,53 +146,42 @@ func (b *Broadcaster) fetchNowPlayingEntries() []NowEntry {
 		var pct float64
 		if s.DurationTicks > 0 {
 			pct = float64(s.PosTicks) / float64(s.DurationTicks) * 100
-			if pct < 0 {
-				pct = 0
-			}
-			if pct > 100 {
-				pct = 100
-			}
 		}
-
 		entries = append(entries, NowEntry{
-			Timestamp:         nowTime,
-			Title:             s.ItemName,
-			User:              s.UserName,
-			App:               s.App,
-			Device:            s.Device,
-			PlayMethod:        s.PlayMethod,
-			Video:             videoDetailFromSession(s),
-			Audio:             audioDetailFromSession(s),
-			Subs:              s.SubLang,
-			Bitrate:           s.Bitrate,
-			ProgressPct:       pct,
-			Poster:            "/img/primary/" + s.ItemID,
-			SessionID:         s.SessionID,
-			ItemID:            s.ItemID,
-			ItemType:          s.ItemType,
-			Container:         s.Container,
-			Width:             s.Width,
-			Height:            s.Height,
-			DolbyVision:       s.DolbyVision,
-			HDR10:             s.HDR10,
-			AudioLang:         s.AudioLang,
-			AudioCh:           s.AudioCh,
-			SubLang:           s.SubLang,
-			SubCodec:          s.SubCodec,
-			StreamPath:        streamPathLabel(s.Container),
-			StreamDetail:      mbps(s.Bitrate),
-			TransReason:       reasonText(s.VideoMethod, s.AudioMethod, s.TransReasons),
-			TransPct:          s.TransCompletion,
-			TransAudioBitrate: s.TransAudioBitrate,
-			TransVideoBitrate: s.TransVideoBitrate,
-			TransVideoFrom:    s.TransVideoFrom,
-			TransVideoTo:      s.TransVideoTo,
-			TransAudioFrom:    s.TransAudioFrom,
-			TransAudioTo:      s.TransAudioTo,
-			VideoMethod:       s.VideoMethod,
-			AudioMethod:       s.AudioMethod,
+			Timestamp:      nowTime,
+			Title:          s.ItemName,
+			User:           s.UserName,
+			App:            s.App,
+			Device:         s.Device,
+			PlayMethod:     s.PlayMethod,
+			Video:          videoDetailFromSession(s),
+			Audio:          audioDetailFromSession(s),
+			Subs:           s.SubLang,
+			Bitrate:        s.Bitrate,
+			ProgressPct:    pct,
+			Poster:         "/img/primary/" + s.ItemID,
+			SessionID:      s.SessionID,
+			ItemID:         s.ItemID,
+			ItemType:       s.ItemType,
+			Container:      s.Container,
+			Width:          s.Width,
+			Height:         s.Height,
+			DolbyVision:    s.DolbyVision,
+			HDR10:          s.HDR10,
+			AudioLang:      s.AudioLang,
+			AudioCh:        s.AudioCh,
+			SubLang:        s.SubLang,
+			SubCodec:       s.SubCodec,
+			TransVideoFrom: s.TransVideoFrom,
+			TransVideoTo:   s.TransVideoTo,
+			TransAudioFrom: s.TransAudioFrom,
+			TransAudioTo:   s.TransAudioTo,
+			VideoMethod:    s.VideoMethod,
+			AudioMethod:    s.AudioMethod,
+			TransReason:    reasonText(s.VideoMethod, s.AudioMethod, s.TransReasons),
+			TransPct:       s.TransCompletion,
 		})
 	}
 
-	return entries
+	return entries, nil
 }

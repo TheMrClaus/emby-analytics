@@ -600,14 +600,16 @@ type EmbySession struct {
 	TransReasons      []string `json:"TransReasons,omitempty"`
 	TransCompletion   float64  `json:"TransCompletion,omitempty"`
 	TransPosTicks     int64    `json:"TransPosTicks,omitempty"`
+	RemoteAddress     string   `json:"RemoteAddress,omitempty"`
 }
 
 type rawSession struct {
-	Id         string `json:"Id"` // session id
-	UserID     string `json:"UserId"`
-	UserName   string `json:"UserName"`
-	Client     string `json:"Client"`
-	DeviceName string `json:"DeviceName"`
+	Id             string `json:"Id"` // session id
+	UserID         string `json:"UserId"`
+	UserName       string `json:"UserName"`
+	Client         string `json:"Client"`
+	DeviceName     string `json:"DeviceName"`
+	RemoteEndPoint string `json:"RemoteEndPoint"` // Emby provides remote IP address
 
 	NowPlayingItem *struct {
 		Id           string `json:"Id"`
@@ -714,6 +716,14 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 
 		// Capture additional media info defaults
 		es.Container = strings.ToUpper(rs.NowPlayingItem.Container)
+
+		// Extract remote address
+		es.RemoteAddress = rs.RemoteEndPoint
+
+		// Extract transcoding reasons if transcoding is active
+		if rs.TranscodingInfo != nil {
+			es.TransReasons = rs.TranscodingInfo.TranscodeReasons
+		}
 
 		// Per-track and stream info
 		subs := 0

@@ -2,6 +2,9 @@ package stats
 
 import (
 	"database/sql"
+	"emby-analytics/internal/queries"
+	"emby-analytics/internal/tasks"
+	"sort"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -15,19 +18,18 @@ type TopUser struct {
 
 func TopUsers(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Get timeframe parameter: all-time, 30d, 14d, 7d, 3d, 1d
+		// --- Parameter Parsing ---
 		timeframe := c.Query("timeframe", "14d")
 		limit := parseQueryInt(c, "limit", 10)
-
 		if limit <= 0 || limit > 100 {
 			limit = 10
 		}
 
-		// Handle "all-time" differently - use lifetime_watch for perfect accuracy
+		// --- "All-Time" Logic (from your original code, preserved) ---
 		if timeframe == "all-time" {
 			rows, err := db.Query(`
-				SELECT 
-					u.id, 
+				SELECT
+					u.id,
 					u.name,
 					COALESCE(lw.total_ms / 3600000.0, 0) AS hours
 				FROM emby_user u
@@ -52,70 +54,62 @@ func TopUsers(db *sql.DB) fiber.Handler {
 			return c.JSON(out)
 		}
 
-		// Handle time-windowed queries - parse days from timeframe
+		// --- Live-Aware Time-Windowed Logic ---
 		days := parseTimeframeToDays(timeframe)
-		if days <= 0 {
-			days = 14 // fallback
-		}
+		now := time.Now().UTC()
+		winEnd := now.Unix()
+		winStart := now.AddDate(0, 0, -days).Unix()
 
-		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
-
-		// Use accurate position-based calculation with time window
-		// DO NOT fall back to lifetime_watch for time-windowed queries
-		rows, err := db.Query(`
-			SELECT
-				u.id,
-				u.name,
-				SUM(max_pos_ms) / 3600000.0 AS hours
-			FROM (
-				-- Get the max watch position for each item within the time window
-				SELECT
-					user_id,
-					item_id,
-					MAX(pos_ms) as max_pos_ms
-				FROM play_event
-				WHERE ts >= ? AND user_id != '' AND pos_ms > 60000  -- 1+ minute sessions
-				GROUP BY user_id, item_id
-			) AS user_item_max
-			JOIN emby_user u ON u.id = user_item_max.user_id
-			GROUP BY u.id, u.name
-			HAVING SUM(max_pos_ms) > 600000  -- At least 10 minutes total
-			ORDER BY hours DESC
-			LIMIT ?;
-		`, fromMs, limit)
+		// 1. Get historical data from the database (fetch a high number to merge before limiting)
+		historicalRows, err := queries.TopUsersByWatchSeconds(c, db, winStart, winEnd, 1000)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
-		defer rows.Close()
 
-		out := []TopUser{}
-		for rows.Next() {
-			var u TopUser
-			if err := rows.Scan(&u.UserID, &u.Name, &u.Hours); err != nil {
-				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
-			}
-			out = append(out, u)
+		// 2. Prepare to combine historical and live data
+		combinedHours := make(map[string]float64)
+		userNames := make(map[string]string)
+
+		for _, row := range historicalRows {
+			combinedHours[row.UserID] += row.Hours
+			userNames[row.UserID] = row.Name
 		}
-		return c.JSON(out)
-	}
-}
 
-// parseTimeframeToDays converts timeframe strings to days
-func parseTimeframeToDays(timeframe string) int {
-	switch timeframe {
-	case "1d":
-		return 1
-	case "3d":
-		return 3
-	case "7d":
-		return 7
-	case "14d":
-		return 14
-	case "30d":
-		return 30
-	case "all-time":
-		return 0 // Special case handled separately
-	default:
-		return 14 // Default fallback
+		// 3. Get live data from the Intervalizer and merge it
+		liveWatchTimes := tasks.GetLiveUserWatchTimes() // Returns seconds
+		for userID, seconds := range liveWatchTimes {
+			combinedHours[userID] += seconds / 3600.0 // Convert seconds to hours
+			// Ensure we have a username, even if the user only has a live session
+			if _, ok := userNames[userID]; !ok {
+				var name string
+				// This query is fast and only runs for new users with live sessions
+				_ = db.QueryRow("SELECT name FROM emby_user WHERE id = ?", userID).Scan(&name)
+				userNames[userID] = name
+			}
+		}
+
+		// 4. Convert the combined map back to a slice for sorting
+		finalResult := make([]TopUser, 0, len(combinedHours))
+		for userID, hours := range combinedHours {
+			if userNames[userID] != "" { // Only include users we have a name for
+				finalResult = append(finalResult, TopUser{
+					UserID: userID,
+					Name:   userNames[userID],
+					Hours:  hours,
+				})
+			}
+		}
+
+		// 5. Sort the final combined list by hours, descending
+		sort.Slice(finalResult, func(i, j int) bool {
+			return finalResult[i].Hours > finalResult[j].Hours
+		})
+
+		// 6. Apply the final limit
+		if len(finalResult) > limit {
+			finalResult = finalResult[:limit]
+		}
+
+		return c.JSON(finalResult)
 	}
 }
