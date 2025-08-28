@@ -45,6 +45,3 @@ CREATE TABLE IF NOT EXISTS lifetime_watch (
   PRIMARY KEY (user_id),
   FOREIGN KEY (user_id) REFERENCES emby_user(id) ON DELETE CASCADE
 );
-
-CREATE INDEX IF NOT EXISTS idx_library_item_type ON library_item(type);
-CREATE INDEX IF NOT EXISTS idx_library_item_title ON library_item(title);
