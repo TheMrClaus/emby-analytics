@@ -2,18 +2,19 @@ package admin
 
 import (
 	"database/sql"
-	"github.com/gofiber/fiber/v3"
 	"emby-analytics/internal/emby"
 	"emby-analytics/internal/tasks"
+
+	"github.com/gofiber/fiber/v3"
 )
 
 // ResetAllData clears all data and re-syncs from scratch
 func ResetAllData(db *sql.DB, em *emby.Client) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Clear all tables
-		tables := []string{"play_event", "lifetime_watch", "emby_user", "library_item"}
+		// Clear all tables - updated for new schema
+		tables := []string{"play_intervals", "play_events", "play_sessions", "lifetime_watch", "emby_user", "library_item"}
 		deleted := make(map[string]int64)
-		
+
 		for _, table := range tables {
 			result, err := db.Exec(`DELETE FROM ` + table)
 			if err != nil {
@@ -25,15 +26,15 @@ func ResetAllData(db *sql.DB, em *emby.Client) fiber.Handler {
 
 		// Re-sync users immediately
 		tasks.RunUserSyncOnce(db, em)
-		
+
 		// Get final counts
 		var finalUsers int
 		db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&finalUsers)
 
 		return c.JSON(fiber.Map{
-			"success": true,
-			"message": "All data cleared and re-synced",
-			"deleted_records": deleted,
+			"success":          true,
+			"message":          "All data cleared and re-synced",
+			"deleted_records":  deleted,
 			"final_user_count": finalUsers,
 		})
 	}

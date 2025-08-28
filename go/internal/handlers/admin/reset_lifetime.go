@@ -18,41 +18,33 @@ func ResetLifetimeWatch(db *sql.DB) fiber.Handler {
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to clear lifetime data"})
 		}
 
-		// First, let's debug what data we have
+		// First, let's debug what data we have - updated table name
 		var totalEvents, totalUsers int
-		_ = db.QueryRow(`SELECT COUNT(*) FROM play_event`).Scan(&totalEvents)
-		_ = db.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM play_event WHERE pos_ms > 30000`).Scan(&totalUsers)
+		_ = db.QueryRow(`SELECT COUNT(*) FROM play_intervals`).Scan(&totalEvents)
+		_ = db.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM play_intervals WHERE duration_seconds > 30`).Scan(&totalUsers)
 
-		log.Printf("DEBUG: Found %d total play events, %d users with >30s position", totalEvents, totalUsers)
+		log.Printf("DEBUG: Found %d total play intervals, %d users with >30s duration", totalEvents, totalUsers)
 
 		if totalEvents == 0 {
 			return c.JSON(fiber.Map{
 				"success":           true,
 				"users_updated":     0,
 				"total_watch_hours": 0,
-				"calculation_type":  "max_position_per_item",
+				"calculation_type":  "play_intervals",
 				"timestamp":         time.Now().Unix(),
-				"debug_info":        "No play events found in database",
+				"debug_info":        "No play intervals found in database",
 			})
 		}
 
-		// Use the simplest and most accurate approach: max position per user per item
+		// Use play_intervals table for more accurate calculation
 		rows, err := db.Query(`
 			SELECT 
 				user_id,
-				SUM(max_pos_ms) AS total_watch_ms,
+				SUM(duration_seconds * 1000) AS total_watch_ms,
 				COUNT(DISTINCT item_id) AS items_watched,
-				AVG(max_pos_ms) AS avg_item_watch_ms
-			FROM (
-				-- Get the maximum position reached per user per item
-				SELECT 
-					user_id, 
-					item_id, 
-					MAX(pos_ms) AS max_pos_ms
-				FROM play_event 
-				WHERE pos_ms > 30000  -- Only events after 30 seconds
-				GROUP BY user_id, item_id
-			) user_item_max
+				AVG(duration_seconds * 1000) AS avg_item_watch_ms
+			FROM play_intervals 
+			WHERE duration_seconds > 30  -- Only intervals longer than 30 seconds
 			GROUP BY user_id
 			HAVING total_watch_ms > 60000  -- At least 1 minute total
 		`)
@@ -83,32 +75,18 @@ func ResetLifetimeWatch(db *sql.DB) fiber.Handler {
 			}
 
 			updated++
-			watchHours := float64(totalWatchMs) / (1000.0 * 60.0 * 60.0)
-			totalWatchHours += watchHours
+			totalWatchHours += float64(totalWatchMs) / (1000.0 * 60.0 * 60.0)
 
-			// Log detailed info for verification
-			log.Printf("User %s: %.1f hours actual watch time (%d items, avg %.1f min per item)",
-				userID,
-				watchHours,
-				itemsWatched,
-				avgItemWatchMs/(1000.0*60.0),
-			)
+			log.Printf("User %s: %d items watched, %.1f hours total (avg %.1f min/item)",
+				userID, itemsWatched, float64(totalWatchMs)/(1000.0*60.0*60.0), avgItemWatchMs/(1000.0*60.0))
 		}
-
-		if err := rows.Err(); err != nil {
-			log.Printf("Row iteration error: %v", err)
-		}
-
-		log.Printf("✓ Calculated watch durations for %d users (%.1f total hours)",
-			updated, totalWatchHours)
 
 		return c.JSON(fiber.Map{
 			"success":           true,
 			"users_updated":     updated,
-			"total_watch_hours": totalWatchHours,
-			"calculation_type":  "max_position_per_item",
+			"total_watch_hours": fmt.Sprintf("%.1f", totalWatchHours),
+			"calculation_type":  "play_intervals",
 			"timestamp":         time.Now().Unix(),
-			"debug_info":        fmt.Sprintf("%d total events, %d qualifying users", totalEvents, totalUsers),
 		})
 	}
 }

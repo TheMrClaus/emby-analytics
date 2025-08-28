@@ -24,10 +24,10 @@ func CleanupUnknownItems(db *sql.DB, em *emby.Client) fiber.Handler {
 
 		// Get all unknown/problematic items
 		rows, err := db.Query(`
-			SELECT DISTINCT id, name, type 
+			SELECT DISTINCT id, name, media_type 
 			FROM library_item 
 			WHERE name IS NULL OR name = '' OR name = 'Unknown' 
-			   OR type IS NULL OR type = '' OR type = 'Unknown'
+			   OR media_type IS NULL OR media_type = '' OR media_type = 'Unknown'
 		`)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
@@ -78,8 +78,9 @@ func CleanupUnknownItems(db *sql.DB, em *emby.Client) fiber.Handler {
 		// Handle invalid IDs (probably orphaned data) - delete if no recent activity
 		for _, id := range invalidIDs {
 			var recentEvents int
-			thirtyDaysAgo := time.Now().AddDate(0, 0, -30).UnixMilli()
-			db.QueryRow(`SELECT COUNT(*) FROM play_event WHERE item_id = ? AND ts > ?`,
+			thirtyDaysAgo := time.Now().AddDate(0, 0, -30).Unix()
+			// Updated to use play_intervals table
+			db.QueryRow(`SELECT COUNT(*) FROM play_intervals WHERE item_id = ? AND start_ts > ?`,
 				id, thirtyDaysAgo).Scan(&recentEvents)
 
 			if recentEvents == 0 {
@@ -108,7 +109,7 @@ func CleanupUnknownItems(db *sql.DB, em *emby.Client) fiber.Handler {
 					if embyItem, found := embyMap[id]; found && embyItem.Name != "" && embyItem.Type != "" {
 						_, err := db.Exec(`
 							UPDATE library_item 
-							SET name = ?, type = ? 
+							SET name = ?, media_type = ? 
 							WHERE id = ?
 						`, embyItem.Name, embyItem.Type, id)
 						if err == nil {
@@ -118,8 +119,9 @@ func CleanupUnknownItems(db *sql.DB, em *emby.Client) fiber.Handler {
 					} else {
 						// Item not found in Emby (probably deleted)
 						var recentEvents int
-						thirtyDaysAgo := time.Now().AddDate(0, 0, -30).UnixMilli()
-						db.QueryRow(`SELECT COUNT(*) FROM play_event WHERE item_id = ? AND ts > ?`,
+						thirtyDaysAgo := time.Now().AddDate(0, 0, -30).Unix()
+						// Updated to use play_intervals table
+						db.QueryRow(`SELECT COUNT(*) FROM play_intervals WHERE item_id = ? AND start_ts > ?`,
 							id, thirtyDaysAgo).Scan(&recentEvents)
 
 						if recentEvents == 0 {
