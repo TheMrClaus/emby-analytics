@@ -66,23 +66,23 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 	total = count
 	rm.set(Progress{Total: total, Message: "Fetching library items...", Running: true})
 
-	// Step 2: Fetch library items in chunks
+// Step 2: Fetch library items in chunks
 	page := 0
 	for actualItemsProcessed < total {
-		// GetItemsChunk now returns multiple entries per item (one per codec)
-		codecEntries, err := em.GetItemsChunk(chunkSize, page)
+		// GetItemsChunk now returns one entry per media item (1:1 mapping)
+		libraryEntries, err := em.GetItemsChunk(chunkSize, page)
 		if err != nil {
 			rm.set(Progress{Error: err.Error(), Done: true})
 			return
 		}
 
-		if len(codecEntries) == 0 {
+		if len(libraryEntries) == 0 {
 			break // No more items to process
 		}
 
-		// Insert codec entries into DB
+		// Insert library entries into DB (now 1:1 mapping)
 		dbEntriesInserted := 0
-		for _, entry := range codecEntries {
+		for _, entry := range libraryEntries {
 			result, err := db.Exec(`
 				INSERT INTO library_item (id, server_id, item_id, name, media_type, height, video_codec, created_at, updated_at)
 				VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
@@ -125,6 +125,20 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 				}
 			}
 		}
+
+		// Simple counting now that we have 1:1 mapping
+		actualItemsProcessed += len(libraryEntries)
+
+		rm.set(Progress{
+			Total:     total,
+			Processed: actualItemsProcessed,
+			Message:   fmt.Sprintf("Processed %d / %d items", actualItemsProcessed, total),
+			Page:      page,
+			Running:   true,
+		})
+		page++
+		time.Sleep(100 * time.Millisecond)
+	}
 
 		// Count unique actual items processed (not codec entries)
 		uniqueItems := make(map[string]bool)
