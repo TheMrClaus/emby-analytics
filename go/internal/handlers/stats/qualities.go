@@ -64,9 +64,9 @@ func Qualities(db *sql.DB) fiber.Handler {
 				COALESCE(media_type, 'Unknown') AS media_type,
 				COUNT(*) AS count
 			FROM library_item
-			WHERE media_type IN ('Movie', 'Episode')
+			WHERE COALESCE(media_type, 'Unknown') IN ('Movie', 'Episode', 'Unknown')
 			GROUP BY width, display_title, media_type
-		`
+			`
 
 		rows, err := db.Query(q)
 		if err != nil {
