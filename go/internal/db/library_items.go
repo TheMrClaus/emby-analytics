@@ -14,7 +14,7 @@ type LibraryItem struct {
 	MediaType    sql.NullString
 	Height       sql.NullInt64  // legacy
 	Width        sql.NullInt64  // NEW
-	DisplayTitle sql.NullString // optional
+	DisplayTitle sql.NullString // NEW (optional)
 	RunTimeTicks sql.NullInt64
 	Container    sql.NullString
 	VideoCodec   sql.NullString
@@ -22,8 +22,6 @@ type LibraryItem struct {
 }
 
 func UpsertLibraryItem(ctx context.Context, sqldb *sql.DB, it LibraryItem) error {
-	// Uses SQLite/PG-compatible UPSERT pattern; adapt conflict target to your DB.
-	// If your PK is `id`, this is fine; otherwise switch to your unique key.
 	_, err := sqldb.ExecContext(ctx, `
 INSERT INTO library_item (
   id, server_id, item_id, name, media_type, height, width, display_title,
