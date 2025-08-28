@@ -45,7 +45,7 @@ func main() {
 		log.Fatalf("--> FATAL: resolving SQLite path: %v", err)
 	}
 	// sqlite driver URL (golang-migrate): sqlite3://file:/ABS?cache=shared&mode=rwc
-	dbURL := fmt.Sprintf("sqlite3://file:%s?cache=shared&mode=rwc", filepath.ToSlash(absPath))
+	dbURL := fmt.Sprintf("sqlite://file:%s?cache=shared&mode=rwc", filepath.ToSlash(absPath))
 
 	if err := db.MigrateUp(dbURL); err != nil {
 		log.Fatalf("--> FATAL: migrations failed: %v", err)
