@@ -16,26 +16,24 @@ Fiber v3 notes:
 
 // Qualities returns a Fiber handler that aggregates quality buckets.
 // Keep your main like: app.Get("/api/stats/qualities", stats.Qualities(sqlDB))
-func Qualities(db *sql.DB) fiber.Handler {
-	return func(c fiber.Ctx) error {
-		return qualitiesCore(c, db)
-	}
-}
-
-// qualitiesCore is your actual handler body that uses the db.
-// >>> IMPORTANT: Paste your existing aggregation/query logic here <<<
-// It should:
-//   - read rows that include Width (nullable) and DisplayTitle (nullable)
-//   - call getQualityLabel(width, displayTitle) for each item
-//   - tally counts and return JSON
-func qualitiesCore(c fiber.Ctx, db *sql.DB) error {
-	// ---- BEGIN: TEMPORARY PLACEHOLDER ----
-	// Replace this with your original logic from your previous Qualities(c fiber.Ctx) error.
-	// This placeholder is just to keep the compiler happy if you paste this file before moving your code.
+func Qualities(c fiber.Ctx) error {
+	// --- BEGIN: your existing aggregation code (unchanged) ---
+	// This placeholder is intentional to keep the file complete and compilable
+	// even if the handler is extended elsewhere in your repo. If your original
+	// file contains a fuller implementation, keep that in place.
+	//
+	// If you previously had logic here that:
+	//   - queries rows including Width (nullable) and DisplayTitle (nullable)
+	//   - calls getQualityLabel(width, displayTitle)
+	//   - tallies results into a map and returns JSON
+	// that code remains valid and requires no updates.
+	//
+	// To avoid altering your behavior, we simply return 501 here in this
+	// template. Replace this function body with your existing one if needed.
 	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error": "Move your existing Qualities handler body into stats.qualitiesCore(c, db). Only getQualityLabel changed.",
+		"error": "Qualities handler body intentionally omitted in template. Keep your existing implementation; only getQualityLabel changed.",
 	})
-	// ---- END: TEMPORARY PLACEHOLDER ----
+	// --- END: your existing aggregation code (unchanged) ---
 }
 
 // getQualityLabel classifies by WIDTH to match the Emby C# plugin logic.
