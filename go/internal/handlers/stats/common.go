@@ -3,7 +3,7 @@ package stats
 
 // excludeLiveTvFilter returns the SQL WHERE clause to exclude Live TV content
 func excludeLiveTvFilter() string {
-	return "li.type NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')"
+	return "li.media_type NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')"
 }
 
 // withLiveTvFilter adds Live TV exclusion to an existing WHERE clause

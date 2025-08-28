@@ -61,7 +61,7 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 			// Ensure we have item details, even if it only has a live session
 			if _, ok := itemDetails[itemID]; !ok {
 				var name, itemType string
-				_ = db.QueryRow("SELECT name, type FROM library_item WHERE id = ?", itemID).Scan(&name, &itemType)
+				_ = db.QueryRow("SELECT name, media_type FROM library_item WHERE id = ?", itemID).Scan(&name, &itemType)
 				itemDetails[itemID] = TopItem{ItemID: itemID, Name: name, Type: itemType}
 			}
 		}

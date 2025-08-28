@@ -82,7 +82,7 @@ func UserDetailHandler(db *sql.DB) fiber.Handler {
             SELECT 
                 li.id, 
                 li.name, 
-                li.type,
+                li.media_type,
                 COUNT(*) * 0.8 AS hours  -- Simplified for user detail
             FROM play_event pe
             JOIN library_item li ON li.id = pe.item_id
@@ -90,7 +90,7 @@ func UserDetailHandler(db *sql.DB) fiber.Handler {
                 SELECT MAX(pos_ms) * 0.85 FROM play_event pe2 
                 WHERE pe2.item_id = pe.item_id
             )
-            GROUP BY li.id, li.name, li.type
+            GROUP BY li.id, li.name, li.media_type
             ORDER BY hours DESC
             LIMIT ?;
         `, userID, fromMs, limit); err == nil {
@@ -105,7 +105,7 @@ func UserDetailHandler(db *sql.DB) fiber.Handler {
 
 		// recent activity
 		if rows, err := db.Query(`
-			SELECT pe.ts, li.id, li.name, li.type, pe.pos_ms/3600000.0
+			SELECT pe.ts, li.id, li.name, li.media_type, pe.pos_ms/3600000.0
 			FROM play_event pe
 			LEFT JOIN library_item li ON li.id = pe.item_id
 			WHERE pe.user_id = ? AND pe.ts >= ?

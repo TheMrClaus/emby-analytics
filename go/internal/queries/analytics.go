@@ -63,7 +63,7 @@ func TopItemsByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd in
 		JOIN library_item li ON li.id = pi.item_id
 		WHERE
 			pi.start_ts <= ? AND pi.end_ts >= ? -- Filter for intervals that overlap the window
-		GROUP BY pi.item_id, li.name, li.type
+		GROUP BY pi.item_id, li.name, li.media_type
 		ORDER BY hours DESC
 		LIMIT ?;
 	`
