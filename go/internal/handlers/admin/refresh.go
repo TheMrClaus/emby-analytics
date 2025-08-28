@@ -84,14 +84,17 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 		dbEntriesInserted := 0
 		for _, entry := range codecEntries {
 			result, err := db.Exec(`
-				INSERT INTO library_item (id, name, type, height, codec)
-				VALUES (?, ?, ?, ?, ?)
+				INSERT INTO library_item (id, server_id, item_id, name, media_type, height, video_codec, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 				ON CONFLICT(id) DO UPDATE SET
+					server_id = COALESCE(excluded.server_id, library_item.server_id),
+					item_id = COALESCE(excluded.item_id, library_item.item_id),
 					name = COALESCE(excluded.name, library_item.name),
-					type = COALESCE(excluded.type, library_item.type),
+					media_type = COALESCE(excluded.media_type, library_item.media_type),
 					height = COALESCE(excluded.height, library_item.height),
-					codec = COALESCE(excluded.codec, library_item.codec)
-			`, entry.Id, entry.Name, entry.Type, entry.Height, entry.Codec)
+					video_codec = COALESCE(excluded.video_codec, library_item.video_codec),
+					updated_at = CURRENT_TIMESTAMP
+			`, entry.Id, entry.Id, entry.Id, entry.Name, entry.Type, entry.Height, entry.Codec)
 
 			// For episodes, ensure we have proper series info
 			if entry.Type == "Episode" && em != nil {
@@ -110,7 +113,7 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 							}
 						}
 						// Update the database with enriched info
-						db.Exec(`UPDATE library_item SET name = ?, type = ? WHERE id = ?`,
+						db.Exec(`UPDATE library_item SET name = ?, media_type = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 							display, "Series", entry.Id)
 					}
 				}
@@ -193,7 +196,7 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 		for _, h := range history {
 			// Upsert user and item info
 			_, _ = db.Exec(`INSERT INTO emby_user (id, name) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name`, user.Id, user.Name)
-			_, _ = db.Exec(`INSERT INTO library_item (id, name, type) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=COALESCE(excluded.name, library_item.name), type=COALESCE(excluded.type, library_item.type)`, h.Id, h.Name, h.Type)
+			_, _ = db.Exec(`INSERT INTO library_item (id, server_id, item_id, name, media_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET name=COALESCE(excluded.name, library_item.name), media_type=COALESCE(excluded.media_type, library_item.media_type), updated_at=CURRENT_TIMESTAMP`, h.Id, h.Id, h.Id, h.Name, h.Type)
 
 			// Convert position to milliseconds
 			posMs := int64(0)
