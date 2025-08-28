@@ -66,7 +66,7 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 	total = count
 	rm.set(Progress{Total: total, Message: "Fetching library items...", Running: true})
 
-// Step 2: Fetch library items in chunks
+	// Step 2: Fetch library items in chunks
 	page := 0
 	for actualItemsProcessed < total {
 		// GetItemsChunk now returns one entry per media item (1:1 mapping)
@@ -133,41 +133,6 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 			Total:     total,
 			Processed: actualItemsProcessed,
 			Message:   fmt.Sprintf("Processed %d / %d items", actualItemsProcessed, total),
-			Page:      page,
-			Running:   true,
-		})
-		page++
-		time.Sleep(100 * time.Millisecond)
-	}
-
-		// Count unique actual items processed (not codec entries)
-		uniqueItems := make(map[string]bool)
-		for _, entry := range codecEntries {
-			// Extract original item ID (remove codec suffix)
-			originalID := entry.Id
-			if len(originalID) > 4 {
-				// Remove "_v_codec" or "_a_codec" suffix to get original ID
-				if pos := len(originalID) - 1; pos > 0 {
-					for i := pos; i >= 0; i-- {
-						if originalID[i] == '_' {
-							// Check if this looks like our codec suffix pattern
-							if i > 0 && (originalID[i-1] == 'v' || originalID[i-1] == 'a') && i >= 2 && originalID[i-2] == '_' {
-								originalID = originalID[:i-2]
-								break
-							}
-						}
-					}
-				}
-			}
-			uniqueItems[originalID] = true
-		}
-
-		actualItemsProcessed += len(uniqueItems)
-
-		rm.set(Progress{
-			Total:     total,
-			Processed: actualItemsProcessed,
-			Message:   fmt.Sprintf("Processed %d / %d items (%d codec entries)", actualItemsProcessed, total, dbEntriesInserted),
 			Page:      page,
 			Running:   true,
 		})
