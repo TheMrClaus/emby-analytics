@@ -1,0 +1,1 @@
+ALTER TABLE library_item ADD COLUMN IF NOT EXISTS width INTEGER;
