@@ -83,3 +83,9 @@ func RunMigrationsWithLogging(db *sql.DB, migrationsDir string, logger *log.Logg
 	logger.Printf("[migrate] created tables: %s\n", strings.Join(created, ", "))
 	return nil
 }
+
+// ListTablesForDebug is a tiny exported helper for startup logs.
+// Not required by the logger wrapper; purely optional.
+func ListTablesForDebug(db *sql.DB) ([]string, error) {
+	return listTables(db)
+}
