@@ -1,0 +1,3 @@
+-- This down migration recreates the triggers if needed
+-- But since we're using the simple schema, we'll leave this empty
+-- Down migrations are rarely used in production

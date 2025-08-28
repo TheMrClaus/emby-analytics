@@ -32,14 +32,27 @@ func StartUserSyncLoop(db *sql.DB, em *emby.Client, cfg config.Config) {
 func runUserSync(db *sql.DB, em *emby.Client) {
 	log.Println("[usersync] starting periodic user sync...")
 	startTime := time.Now()
+
+	// DEBUG: Test the API connection first
+	log.Printf("[usersync] Attempting to fetch users from Emby API...")
+
 	users, err := em.GetUsers()
 	if err != nil {
-		log.Printf("[usersync] ERROR fetching users: %v", err)
+		log.Printf("[usersync] ERROR fetching users from Emby API: %v", err)
 		return
+	}
+
+	log.Printf("[usersync] Successfully fetched %d users from Emby API", len(users))
+
+	// DEBUG: Print details of each user
+	for i, user := range users {
+		log.Printf("[usersync] User %d: ID=%s, Name=%s", i+1, user.Id, user.Name)
 	}
 
 	upserted := 0
 	for _, user := range users {
+		log.Printf("[usersync] Processing user: %s (ID: %s)", user.Name, user.Id)
+
 		res, err := db.Exec(`INSERT INTO emby_user (id, name) VALUES (?, ?)
 		                   ON CONFLICT(id) DO UPDATE SET name=excluded.name`,
 			user.Id, user.Name)
@@ -49,6 +62,7 @@ func runUserSync(db *sql.DB, em *emby.Client) {
 		}
 		if rows, _ := res.RowsAffected(); rows > 0 {
 			upserted++
+			log.Printf("[usersync] Successfully upserted user: %s", user.Name)
 		}
 		syncUserWatchData(db, em, user.Id, user.Name)
 	}

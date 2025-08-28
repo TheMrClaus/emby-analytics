@@ -147,6 +147,7 @@ func main() {
 	app.Post("/admin/reset-lifetime", admin.ResetLifetimeWatch(sqlDB))
 	app.Post("/admin/users/force-sync", admin.ForceUserSync(sqlDB, em))
 	app.All("/admin/fix-pos-units", admin.FixPosUnits(sqlDB))
+	app.Get("/admin/debug/users", admin.DebugUsers(em))
 
 	// Static UI Serving
 	app.Use("/", static.New(cfg.WebPath))
