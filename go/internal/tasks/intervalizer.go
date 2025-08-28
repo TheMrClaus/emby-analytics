@@ -23,7 +23,7 @@ type liveState struct {
 	ItemID           string
 	LastPosTicks     int64
 	LastEventTS      time.Time
-	SessionStartTS   time.Time // NEW: Track the session's absolute start time.
+	SessionStartTS   time.Time
 	IsIntervalOpen   bool
 	IntervalStartTS  time.Time
 	IntervalStartPos int64
@@ -153,12 +153,12 @@ func (iz *Intervalizer) onStop(d emby.PlaybackProgressData) {
 
 	insertEvent(iz.DB, s.SessionFK, "stop", false, d.PlayState.PositionTicks)
 
-	// MODIFIED: This is the crucial fix for short playbacks.
 	if s.IsIntervalOpen {
 		// If an interval was open, close it normally.
 		iz.closeInterval(s, s.IntervalStartTS, now, s.IntervalStartPos, d.PlayState.PositionTicks, false)
-	} else {
-		// If no interval was open (e.g., a very short play), create one from the session start time.
+	} else if !s.SessionStartTS.IsZero() {
+		// **THE FIX**: If no interval was open (e.g., a very short play),
+		// create one from the absolute session start time.
 		iz.closeInterval(s, s.SessionStartTS, now, 0, d.PlayState.PositionTicks, false)
 	}
 
