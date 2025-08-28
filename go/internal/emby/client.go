@@ -252,7 +252,7 @@ func (c *Client) TotalItems() (int, error) {
 	return out.Total, nil
 }
 
-// GetItemsChunk extracts codec data from MediaStreams
+// GetItemsChunk extracts codec data from MediaStreams - one entry per media item
 func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
@@ -278,56 +278,38 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 		return nil, err
 	}
 
-	// Convert to LibraryItem format, creating separate entries for each codec
+	// Convert to LibraryItem format, creating ONE entry per media item
 	var result []LibraryItem
 
 	for _, item := range out.Items {
-		videoCodecs := make(map[string]*int) // codec -> height
-		audioCodecs := make(map[string]bool)
+		var firstVideoCodec string
+		var firstVideoHeight *int
 
-		// Extract ALL codecs from MediaStreams
+		// Find the FIRST video stream only (matches C# plugin logic)
 		for _, source := range item.MediaSources {
 			for _, stream := range source.MediaStreams {
 				if stream.Type == "Video" && stream.Codec != "" {
-					if _, exists := videoCodecs[stream.Codec]; !exists {
-						videoCodecs[stream.Codec] = stream.Height
-					}
-				} else if stream.Type == "Audio" && stream.Codec != "" {
-					audioCodecs[stream.Codec] = true
+					firstVideoCodec = stream.Codec
+					firstVideoHeight = stream.Height
+					goto found // Break out of both loops
 				}
 			}
 		}
 
-		// Create separate LibraryItem entries for each video codec
-		for codec, height := range videoCodecs {
-			result = append(result, LibraryItem{
-				Id:     item.Id + "_v_" + codec,
-				Name:   item.Name,
-				Type:   item.Type,
-				Height: height,
-				Codec:  codec,
-			})
+	found:
+		// Set codec to "Unknown" if no video stream found
+		if firstVideoCodec == "" {
+			firstVideoCodec = "Unknown"
 		}
 
-		// Create separate LibraryItem entries for each audio codec
-		for codec := range audioCodecs {
-			result = append(result, LibraryItem{
-				Id:    item.Id + "_a_" + codec,
-				Name:  item.Name,
-				Type:  item.Type,
-				Codec: codec,
-			})
-		}
-
-		// If no codecs found, create Unknown entry
-		if len(videoCodecs) == 0 && len(audioCodecs) == 0 {
-			result = append(result, LibraryItem{
-				Id:    item.Id,
-				Name:  item.Name,
-				Type:  item.Type,
-				Codec: "Unknown",
-			})
-		}
+		// Create ONE LibraryItem entry per media item
+		result = append(result, LibraryItem{
+			Id:     item.Id, // Use original ID without suffix
+			Name:   item.Name,
+			Type:   item.Type,
+			Height: firstVideoHeight,
+			Codec:  firstVideoCodec,
+		})
 	}
 
 	return result, nil
