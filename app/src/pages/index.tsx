@@ -4,8 +4,8 @@ import OverviewCards from "../components/OverviewCards";
 import UsageChart from "../components/UsageChart";
 import TopUsers from "../components/TopUsers";
 import TopItems from "../components/TopItems";
-import QualitiesChart from "../components/QualitiesChart";
-import CodecsChart from "../components/CodecsChart";
+import QualitiesTable from "../components/QualitiesTable";
+import CodecsTable from "../components/CodecsTable";
 import ActiveUsersLifetime from "../components/ActiveUsersLifetime";
 import NowPlaying from "../components/NowPlaying";
 
@@ -30,8 +30,12 @@ export default function Dashboard() {
           </div>
 
           <div className="grid lg:grid-cols-2 gap-4">
-            <QualitiesChart />
-            <CodecsChart />
+              {/* Media Qualities (table) */}
+              <QualitiesTable />
+
+              {/* Media Codecs (table) */}
+              <CodecsTable />
+
           </div>
 
           <ActiveUsersLifetime limit={10} />
