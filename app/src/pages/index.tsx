@@ -28,16 +28,11 @@ export default function Dashboard() {
             <TopUsers limit={10} />
             <TopItems limit={10} />
           </div>
-
-          <div className="grid lg:grid-cols-2 gap-4">
-              {/* Media Qualities (table) */}
-              <QualitiesTable />
-
-              {/* Media Codecs (table) */}
-              <CodecsTable />
-
+          {/* Media Qualities & Codecs (independent heights, same widths) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <QualitiesTable />
+            <CodecsTable />
           </div>
-
           <ActiveUsersLifetime limit={10} />
         </main>
       </div>
