@@ -11,7 +11,6 @@ export default function QualitiesTable() {
     fetchQualities().then(setData).catch(() => {});
   }, []);
 
-  // keep a stable, human-friendly order
   const order = ["4K", "1080p", "720p", "SD", "Unknown"];
   const rows = useMemo(() => {
     if (!data?.buckets) return [];
@@ -23,9 +22,9 @@ export default function QualitiesTable() {
   }, [data]);
 
   return (
-    <div className="card p-4">
-      <div className="ty-h3 text-center">Media Qualities</div>
-      <table className="table-dark mt-2">
+    <div className="card-dark">
+      <div className="section-title text-center">Media Qualities</div>
+      <table className="table-dark mt-2 w-full">
         <thead>
           <tr>
             <th> </th>
@@ -46,4 +45,3 @@ export default function QualitiesTable() {
     </div>
   );
 }
-
