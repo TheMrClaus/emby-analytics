@@ -8,6 +8,7 @@ import QualitiesTable from "../components/QualitiesTable";
 import CodecsTable from "../components/CodecsTable";
 import ActiveUsersLifetime from "../components/ActiveUsersLifetime";
 import NowPlaying from "../components/NowPlaying";
+import Masonry from "../components/ui/Masonry";
 
 export default function Dashboard() {
   return (
@@ -24,15 +25,13 @@ export default function Dashboard() {
           {/* ADD THIS COMPONENT BACK */}
           <NowPlaying />
 
-          <div className="grid lg:grid-cols-2 gap-4">
-            <TopUsers limit={10} />
-            <TopItems limit={10} />
-          </div>
-          {/* Media Qualities & Codecs (independent heights, same widths) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          {/* Dashboard cards in masonry (Tetris) layout */}
+          <Masonry className="mt-4">
+            <TopUsers />
+            <TopItems />
             <QualitiesTable />
             <CodecsTable />
-          </div>
+          </Masonry>
           <ActiveUsersLifetime limit={10} />
         </main>
       </div>
