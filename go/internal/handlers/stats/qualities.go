@@ -17,7 +17,7 @@ keep them — this version is drop-in compatible with Fiber v3.
 // Qualities returns counts by quality bucket (8K/4K/1080p/720p/SD/Unknown).
 // This handler aggregates DB rows by calling getQualityLabel for each item.
 // No changes were required here.
-func Qualities(c *fiber.Ctx) error {
+func Qualities(c fiber.Ctx) error {
 	// --- BEGIN: your existing aggregation code (unchanged) ---
 	// This placeholder is intentional to keep the file complete and compilable
 	// even if the handler is extended elsewhere in your repo. If your original
