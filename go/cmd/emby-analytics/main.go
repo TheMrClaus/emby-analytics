@@ -21,8 +21,6 @@ import (
 	stats "emby-analytics/internal/handlers/stats"
 	"emby-analytics/internal/tasks"
 
-	"emby-analytics/internal/db/migrator/migrator.go"
-
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/recover"
@@ -49,7 +47,7 @@ func main() {
 	// sqlite driver URL (golang-migrate): sqlite3://file:/ABS?cache=shared&mode=rwc
 	dbURL := fmt.Sprintf("sqlite3://file:%s?cache=shared&mode=rwc", filepath.ToSlash(absPath))
 
-	if err := migrator.Up(dbURL); err != nil {
+	if err := db.MigrateUp(dbURL); err != nil {
 		log.Fatalf("--> FATAL: migrations failed: %v", err)
 	}
 	log.Println("--> Step 1: Migrations applied (embedded).")
