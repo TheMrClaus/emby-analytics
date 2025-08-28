@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchCodecs } from "../lib/api";
 import type { CodecBuckets } from "../types";
 import { fmtInt } from "../lib/format";
+import Card from "./ui/Card";
 
 export default function CodecsTable() {
   const [data, setData] = useState<CodecBuckets | null>(null);
@@ -23,26 +24,25 @@ export default function CodecsTable() {
   }, [data]);
 
   return (
-    <div className="card-dark">
-      <div className="section-title text-center">Media Codecs</div>
-      <table className="table-dark mt-2 w-full">
-        <thead>
+    <Card title="Media Codecs">
+      <table className="w-full text-sm text-left text-gray-300">
+        <thead className="text-gray-400 border-b border-neutral-700">
           <tr>
             <th> </th>
-            <th className="num">Movies</th>
-            <th className="num">Episodes</th>
+            <th className="text-right">Movies</th>
+            <th className="text-right">Episodes</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.codec}>
-              <td>{r.codec}</td>
-              <td className="num">{fmtInt(r.movies)}</td>
-              <td className="num">{fmtInt(r.episodes)}</td>
+            <tr key={r.codec} className="border-b border-neutral-800 last:border-0">
+              <td className="py-3">{r.codec}</td>
+              <td className="py-3 text-right">{fmtInt(r.movies)}</td>
+              <td className="py-3 text-right">{fmtInt(r.episodes)}</td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
+    </Card>
   );
 }
