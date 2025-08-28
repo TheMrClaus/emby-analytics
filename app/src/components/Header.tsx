@@ -8,7 +8,6 @@ type SnapshotEntry = {
 };
 
 export default function Header() {
-  const [currentTime, setCurrentTime] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
   // SWR-powered data
@@ -33,14 +32,6 @@ export default function Header() {
   // The backend is running if it says so; otherwise fall back to our local state
   const isBackendRunning = Boolean(refreshStatus?.running);
   const isRunning = isBackendRunning || refreshing;
-
-  // Clock
-  useEffect(() => {
-    const updateTime = () => setCurrentTime(new Date().toLocaleTimeString());
-    updateTime();
-    const t = setInterval(updateTime, 1000);
-    return () => clearInterval(t);
-  }, []);
 
   // When backend says it stopped (or errored), end our local "refreshing" state.
   useEffect(() => {
