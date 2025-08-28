@@ -206,6 +206,7 @@ type LibraryItem struct {
 	Name   string `json:"Name"`
 	Type   string `json:"Type"`
 	Height *int   `json:"Height,omitempty"`
+	Width  *int   `json:"Width,omitempty"`
 	Codec  string `json:"VideoCodec,omitempty"`
 }
 
@@ -219,6 +220,7 @@ type DetailedLibraryItem struct {
 			Type   string `json:"Type"`
 			Codec  string `json:"Codec"`
 			Height *int   `json:"Height"`
+			Width  *int   `json:"Width"`
 		} `json:"MediaStreams"`
 	} `json:"MediaSources"`
 }
@@ -284,6 +286,7 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 	for _, item := range out.Items {
 		var firstVideoCodec string
 		var firstVideoHeight *int
+		var firstVideoWidth *int
 
 		// Find the FIRST video stream only (matches C# plugin logic)
 		for _, source := range item.MediaSources {
@@ -291,6 +294,7 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 				if stream.Type == "Video" && stream.Codec != "" {
 					firstVideoCodec = stream.Codec
 					firstVideoHeight = stream.Height
+					firstVideoWidth = stream.Width
 					goto found // Break out of both loops
 				}
 			}
@@ -308,6 +312,7 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 			Name:   item.Name,
 			Type:   item.Type,
 			Height: firstVideoHeight,
+			Width:  firstVideoWidth,
 			Codec:  firstVideoCodec,
 		})
 	}

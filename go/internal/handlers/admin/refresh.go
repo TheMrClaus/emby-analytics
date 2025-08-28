@@ -83,18 +83,27 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 		// Insert library entries into DB (now 1:1 mapping)
 		dbEntriesInserted := 0
 		for _, entry := range libraryEntries {
+			// Extract width from height for older data compatibility
+			var width *int
+			if entry.Height != nil && *entry.Height > 0 {
+				// For 16:9 content, width = height * 16/9
+				calculatedWidth := int(float64(*entry.Height) * 16.0 / 9.0)
+				width = &calculatedWidth
+			}
+
 			result, err := db.Exec(`
-				INSERT INTO library_item (id, server_id, item_id, name, media_type, height, video_codec, created_at, updated_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+				INSERT INTO library_item (id, server_id, item_id, name, media_type, height, width, video_codec, created_at, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 				ON CONFLICT(id) DO UPDATE SET
 					server_id = COALESCE(excluded.server_id, library_item.server_id),
 					item_id = COALESCE(excluded.item_id, library_item.item_id),
 					name = COALESCE(excluded.name, library_item.name),
 					media_type = COALESCE(excluded.media_type, library_item.media_type),
 					height = COALESCE(excluded.height, library_item.height),
+					width = COALESCE(excluded.width, library_item.width),
 					video_codec = COALESCE(excluded.video_codec, library_item.video_codec),
 					updated_at = CURRENT_TIMESTAMP
-			`, entry.Id, entry.Id, entry.Id, entry.Name, entry.Type, entry.Height, entry.Codec)
+			`, entry.Id, entry.Id, entry.Id, entry.Name, entry.Type, entry.Height, width, entry.Codec)
 
 			// For episodes, ensure we have proper series info
 			if entry.Type == "Episode" && em != nil {
