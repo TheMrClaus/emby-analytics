@@ -6,12 +6,22 @@ CREATE TABLE IF NOT EXISTS emby_user (
     name TEXT
 );
 
+-- library items hold per-video metadata we aggregate against
 CREATE TABLE IF NOT EXISTS library_item (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    type TEXT,
-    height INTEGER,
-    codec TEXT
+    id                    TEXT PRIMARY KEY,
+    server_id             TEXT NOT NULL,
+    item_id               TEXT NOT NULL,
+    name                  TEXT,
+    media_type            TEXT,
+    height                INTEGER,            -- legacy (kept for back-compat)
+    width                 INTEGER,            -- NEW: used for quality classification
+    display_title         TEXT,               -- optional: e.g. "1080p H264"
+    run_time_ticks        BIGINT,
+    container             TEXT,
+    video_codec           TEXT,
+    audio_codec           TEXT,
+    created_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS lifetime_watch (
