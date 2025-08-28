@@ -57,7 +57,7 @@ func TopItemsByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd in
 		SELECT
 			pi.item_id,
 			li.name,
-			li.type,
+			li.media_type,
 			SUM(MIN(pi.end_ts, ?) - MAX(pi.start_ts, ?)) / 3600.0 AS hours
 		FROM play_intervals pi
 		JOIN library_item li ON li.id = pi.item_id

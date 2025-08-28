@@ -33,11 +33,11 @@ func Activity(db *sql.DB) fiber.Handler {
 		fromMs := time.Now().AddDate(0, 0, -days).UnixMilli()
 
 		rows, err := db.Query(`
-			SELECT pe.ts, u.id, u.name, li.id, li.name, li.type, pe.pos_ms / 3600000.0
+			SELECT pe.ts, u.id, u.name, li.id, li.name, li.media_type, pe.pos_ms / 3600000.0
 			FROM play_event pe
 			LEFT JOIN emby_user u ON u.id = pe.user_id
 			LEFT JOIN library_item li ON li.id = pe.item_id
-			WHERE pe.ts >= ? AND li.type NOT IN ('TvChannel', 'LiveTv', 'Channel')
+			WHERE pe.ts >= ? AND li.media_type NOT IN ('TvChannel', 'LiveTv', 'Channel')
 			ORDER BY pe.ts DESC
 			LIMIT ?;
 		`, fromMs, limit)

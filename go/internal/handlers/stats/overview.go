@@ -21,7 +21,7 @@ func Overview(db *sql.DB) fiber.Handler {
 		_ = db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&data.TotalUsers)
 
 		// This query is also correct.
-		_ = db.QueryRow(`SELECT COUNT(*) FROM library_item WHERE type NOT IN ('TvChannel', 'LiveTv', 'Channel')`).Scan(&data.TotalItems)
+		_ = db.QueryRow(`SELECT COUNT(*) FROM library_item WHERE media_type NOT IN ('TvChannel', 'LiveTv', 'Channel')`).Scan(&data.TotalItems)
 
 		// CORRECTED: Count sessions instead of old play events.
 		_ = db.QueryRow(`SELECT COUNT(*) FROM play_sessions`).Scan(&data.TotalPlays)
