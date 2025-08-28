@@ -66,12 +66,22 @@ func GetLiveItemWatchTimes() map[string]float64 {
 func sessionKey(sessionID, itemID string) string { return sessionID + "|" + itemID }
 
 func (iz *Intervalizer) Handle(evt emby.EmbyEvent) {
+	log.Printf("[intervalizer] Received event: %s", evt.MessageType)
+
 	LiveMutex.Lock()
 	defer LiveMutex.Unlock()
 	var data emby.PlaybackProgressData
-	if err := json.Unmarshal(evt.Data, &data); err != nil || data.NowPlaying.ID == "" {
+	if err := json.Unmarshal(evt.Data, &data); err != nil {
+		log.Printf("[intervalizer] JSON unmarshal error: %v", err)
 		return
 	}
+	if data.NowPlaying.ID == "" {
+		log.Printf("[intervalizer] Empty NowPlaying.ID, skipping event")
+		return
+	}
+
+	log.Printf("[intervalizer] Processing %s for user %s, item %s", evt.MessageType, data.UserID, data.NowPlaying.Name)
+
 	switch evt.MessageType {
 	case "PlaybackStart":
 		iz.onStart(data)
@@ -79,10 +89,14 @@ func (iz *Intervalizer) Handle(evt emby.EmbyEvent) {
 		iz.onProgress(data)
 	case "PlaybackStopped":
 		iz.onStop(data)
+	default:
+		log.Printf("[intervalizer] Unhandled event type: %s", evt.MessageType)
 	}
 }
 
 func (iz *Intervalizer) onStart(d emby.PlaybackProgressData) {
+	log.Printf("[intervalizer] onStart called for user %s, item %s, session %s", d.UserID, d.NowPlaying.Name, d.SessionID)
+
 	k := sessionKey(d.SessionID, d.NowPlaying.ID)
 	now := time.Now().UTC()
 	sessionFK, err := upsertSession(iz.DB, d)
@@ -90,6 +104,8 @@ func (iz *Intervalizer) onStart(d emby.PlaybackProgressData) {
 		log.Printf("[intervalizer] onStart upsertSession failed: %v", err)
 		return
 	}
+	log.Printf("[intervalizer] onStart created session FK: %d", sessionFK)
+
 	insertEvent(iz.DB, sessionFK, "start", d.PlayState.IsPaused, d.PlayState.PositionTicks)
 	s := &liveState{
 		SessionFK:      sessionFK,
@@ -101,6 +117,7 @@ func (iz *Intervalizer) onStart(d emby.PlaybackProgressData) {
 		IsIntervalOpen: false,
 	}
 	LiveSessions[k] = s
+	log.Printf("[intervalizer] onStart complete, added to LiveSessions: %s", k)
 }
 
 func (iz *Intervalizer) onProgress(d emby.PlaybackProgressData) {
