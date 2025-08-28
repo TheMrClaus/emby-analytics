@@ -2,6 +2,7 @@ package stats
 
 import (
 	"database/sql"
+	"log"
 	"regexp"
 
 	"github.com/gofiber/fiber/v3"
@@ -10,8 +11,8 @@ import (
 /*
 Fiber v3 notes:
 - fiber.Handler is: func(fiber.Ctx) error
-- Your main registers this as: app.Get("/api/stats/qualities", stats.Qualities(sqlDB))
-  so Qualities MUST be a factory that returns fiber.Handler.
+- main.go registers: app.Get("/api/stats/qualities", stats.Qualities(sqlDB))
+  => Qualities MUST be a factory that returns fiber.Handler.
 */
 
 // Qualities returns a Fiber handler that aggregates quality buckets.
@@ -22,19 +23,74 @@ func Qualities(db *sql.DB) fiber.Handler {
 	}
 }
 
-// qualitiesCore is your actual handler body that uses the db.
-// >>> IMPORTANT: Paste your existing aggregation/query logic here <<<
-// It should:
-//   - read rows that include Width (nullable) and DisplayTitle (nullable)
-//   - call getQualityLabel(width, displayTitle) for each item
-//   - tally counts and return JSON
+// qualitiesCore executes a simple query to get Width and DisplayTitle for videos,
+// buckets them using getQualityLabel, and returns JSON counts.
 func qualitiesCore(c fiber.Ctx, db *sql.DB) error {
-	// ---- BEGIN: TEMPORARY PLACEHOLDER ----
-	// Replace this with your original logic from your previous Qualities(c fiber.Ctx) handler.
-	return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-		"error": "Move your existing Qualities handler body into stats.qualitiesCore(c, db). Only getQualityLabel changed.",
+	// ---- EDIT HERE if your schema uses different names ----
+	// This query expects a table with columns:
+	//   Width (INTEGER/NULL) and DisplayTitle (TEXT/NULL).
+	// Common guesses are Items, LibraryItems, or MediaItems.
+	// Start with "Items" which many Emby-derived schemas use.
+	const q = `
+		SELECT
+			Width,         -- INTEGER, may be NULL
+			DisplayTitle   -- TEXT, may be NULL (e.g., "Avatar 4K 2160p")
+		FROM Items
+		WHERE 1=1
+		  -- Uncomment if you have a MediaType column to limit to video rows:
+		  -- AND MediaType = 'Video'
+	`
+
+	type row struct {
+		Width        sql.NullInt64
+		DisplayTitle sql.NullString
+	}
+
+	rows, err := db.Query(q)
+	if err != nil {
+		// If your table is named differently, return a helpful message.
+		log.Printf("stats.qualities: query failed: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "query failed; verify table/column names (expected table 'Items' with columns Width, DisplayTitle)",
+		})
+	}
+	defer rows.Close()
+
+	// Buckets we report
+	counts := map[string]int{
+		"8K":                       0,
+		"4K":                       0,
+		"1080p":                    0,
+		"720p":                     0,
+		"SD":                       0,
+		"Resolution Not Available": 0,
+	}
+
+	for rows.Next() {
+		var r row
+		if scanErr := rows.Scan(&r.Width, &r.DisplayTitle); scanErr != nil {
+			log.Printf("stats.qualities: scan failed: %v", scanErr)
+			continue
+		}
+		label := getQualityLabel(r.Width, r.DisplayTitle)
+		if _, ok := counts[label]; !ok {
+			// In case a future label appears, lump it into Unknown to avoid 500s.
+			counts["Resolution Not Available"]++
+			continue
+		}
+		counts[label]++
+	}
+
+	if rowsErr := rows.Err(); rowsErr != nil {
+		log.Printf("stats.qualities: rows error: %v", rowsErr)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "row iteration failed",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"buckets": counts,
 	})
-	// ---- END: TEMPORARY PLACEHOLDER ----
 }
 
 // getQualityLabel classifies by WIDTH to match the Emby C# plugin logic.
