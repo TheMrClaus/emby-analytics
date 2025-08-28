@@ -32,12 +32,14 @@ type EmbyEvent struct {
 
 // PlaybackProgressData is a trimmed down version of the event payload
 type PlaybackProgressData struct {
-	UserID     string `json:"UserId"`
-	SessionID  string `json:"SessionId"`
-	DeviceID   string `json:"DeviceId"`
-	Client     string `json:"Client"`
-	PlayMethod string `json:"PlayMethod"` // DirectPlay/DirectStream/Transcode
-	NowPlaying struct {
+	UserID           string   `json:"UserId"`
+	SessionID        string   `json:"SessionId"`
+	DeviceID         string   `json:"DeviceId"`
+	Client           string   `json:"Client"`
+	PlayMethod       string   `json:"PlayMethod"` // DirectPlay/DirectStream/Transcode
+	RemoteEndPoint   string   `json:"RemoteEndPoint,omitempty"`
+	TranscodeReasons []string `json:"TranscodeReasons,omitempty"`
+	NowPlaying       struct {
 		ID           string `json:"Id"`
 		RunTimeTicks int64  `json:"RunTimeTicks"`
 		Type         string `json:"Type"`
