@@ -80,7 +80,9 @@ func main() {
 	log.Println("--> Step 5: Emby WebSocket listener started.")
 
 	// ---- Background Tasks (Now started AFTER initial sync) ----
-	go tasks.StartUserSyncLoop(sqlDB, em, cfg)
+	// DEPRECATED: Commenting out the sync loop to rely entirely on WebSocket intervalizer
+	// The intervalizer provides more accurate event-driven analytics
+	// go tasks.StartUserSyncLoop(sqlDB, em, cfg)
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
@@ -88,7 +90,7 @@ func main() {
 			intervalizer.TickTimeoutSweep()
 		}
 	}()
-	log.Println("--> Step 6: Background tasks initiated.")
+	log.Println("--> Step 6: Background tasks initiated (sync loop deprecated, using WebSocket-only approach).")
 
 	pollInterval := time.Duration(cfg.NowPollSec) * time.Second
 	if pollInterval <= 0 {
