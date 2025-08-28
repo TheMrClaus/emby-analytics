@@ -22,12 +22,33 @@ import (
 	"emby-analytics/internal/tasks"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/logger"
 	"github.com/gofiber/fiber/v3/middleware/recover"
 	"github.com/gofiber/fiber/v3/middleware/static"
 	"github.com/joho/godotenv"
 	ws "github.com/saveblush/gofiber3-contrib/websocket"
 )
+
+// ANSI color helpers
+const (
+	colReset  = "\033[0m"
+	colRed    = "\033[31m"
+	colGreen  = "\033[32m"
+	colYellow = "\033[33m"
+	colCyan   = "\033[36m"
+)
+
+func colorStatus(code int) string {
+	switch {
+	case code >= 200 && code < 300:
+		return colGreen
+	case code >= 300 && code < 400:
+		return colYellow
+	case code >= 400:
+		return colRed
+	default: // 1xx and anything else
+		return colCyan
+	}
+}
 
 func main() {
 	log.Println("=====================================================")
@@ -75,6 +96,7 @@ func main() {
 	embyWS.Start(context.Background())
 	log.Println("--> Step 5: Emby WebSocket listener started.")
 
+	// ---- Background Tasks (WebSocket-first approach) ----
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
@@ -100,12 +122,27 @@ func main() {
 	})
 	app.Use(recover.New())
 
-	// 👉 Clean readable logger format
-	app.Use(logger.New(logger.Config{
-		Format:     "${time} | ${status} | ${latency} | ${ip} | ${method} | ${path}\n",
-		TimeFormat: "15:04:05",
-		TimeZone:   "Local",
-	}))
+	// Colored single-line logger (status-based)
+	app.Use(func(c fiber.Ctx) error {
+		start := time.Now()
+		err := c.Next()
+
+		// After response
+		status := c.Response().StatusCode()
+		latency := time.Since(start)
+		ip := c.IP()
+		method := c.Method()
+		path := c.Path()
+		ts := time.Now().Format("15:04:05")
+
+		// Colorize just the status code by class (2xx green, 3xx yellow, 4xx/5xx red, 1xx cyan)
+		statusColor := colorStatus(status)
+
+		log.Printf("%s | %s%d%s | %v | %s | %s | %s",
+			ts, statusColor, status, colReset, latency, ip, method, path)
+
+		return err
+	})
 
 	// Health Routes
 	app.Get("/health", health.Health(sqlDB))
