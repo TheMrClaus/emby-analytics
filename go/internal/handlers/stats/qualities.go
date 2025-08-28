@@ -68,7 +68,7 @@ func getQualityLabel(width sql.NullInt64, displayTitle sql.NullString) string {
 			return "8K"
 		}
 
-		// 4K can appear as "4k" or "2160p"
+		// 4K can appear as "4k" or "2160p".
 		re4k := regexp.MustCompile(`(?i)\b(4k|2160p)\b`)
 		if re4k.MatchString(s) {
 			return "4K"
@@ -84,7 +84,7 @@ func getQualityLabel(width sql.NullInt64, displayTitle sql.NullString) string {
 			return "720p"
 		}
 
-		// SD catch: common SD notations
+		// SD catch: common SD notations.
 		reSD := regexp.MustCompile(`(?i)\b(sd|480p|576p)\b`)
 		if reSD.MatchString(s) {
 			return "SD"
