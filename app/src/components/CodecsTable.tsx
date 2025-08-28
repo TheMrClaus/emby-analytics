@@ -13,7 +13,6 @@ export default function CodecsTable() {
 
   const rows = useMemo(() => {
     if (!data?.codecs) return [];
-    // sort by total (movies+episodes) desc for a nicer table
     return Object.keys(data.codecs)
       .map((codec) => ({
         codec,
@@ -24,9 +23,9 @@ export default function CodecsTable() {
   }, [data]);
 
   return (
-    <div className="card p-4">
-      <div className="ty-h3 text-center">Media Codecs</div>
-      <table className="table-dark mt-2">
+    <div className="card-dark">
+      <div className="section-title text-center">Media Codecs</div>
+      <table className="table-dark mt-2 w-full">
         <thead>
           <tr>
             <th> </th>
@@ -47,4 +46,3 @@ export default function CodecsTable() {
     </div>
   );
 }
-
