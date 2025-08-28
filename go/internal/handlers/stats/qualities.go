@@ -56,18 +56,19 @@ func getQualityLabel(width sql.NullInt64, displayTitle sql.NullString) string {
 // Qualities returns counts grouped by quality label using WIDTH from library_item.
 func Qualities(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		type row struct {
-			Width        sql.NullInt64
-			DisplayTitle sql.NullString
-		}
-
-		rows, err := db.Query(`
+		// Change the query to match the codecs pattern and use the correct media types
+		q := `
 			SELECT
 				width,
-				display_title
+				display_title,
+				COALESCE(media_type, 'Unknown') AS media_type,
+				COUNT(*) AS count
 			FROM library_item
-			WHERE media_type = 'Video'
-		`)
+			WHERE media_type IN ('Movie', 'Episode')
+			GROUP BY width, display_title, media_type
+		`
+
+		rows, err := db.Query(q)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error":   "query failed",
@@ -76,26 +77,39 @@ func Qualities(db *sql.DB) fiber.Handler {
 		}
 		defer rows.Close()
 
-		buckets := map[string]int{
-			"8K":      0,
-			"4K":      0,
-			"1080p":   0,
-			"720p":    0,
-			"SD":      0,
-			"Unknown": 0,
-		}
+		// Create buckets structure similar to codecs
+		buckets := make(map[string]MediaTypeCounts)
 
 		for rows.Next() {
-			var r row
-			if err := rows.Scan(&r.Width, &r.DisplayTitle); err != nil {
+			var width sql.NullInt64
+			var displayTitle sql.NullString
+			var mediaType string
+			var count int
+
+			if err := rows.Scan(&width, &displayTitle, &mediaType, &count); err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 					"error":   "scan failed",
 					"details": err.Error(),
 				})
 			}
-			label := getQualityLabel(r.Width, r.DisplayTitle)
-			buckets[label]++
+
+			// Get quality label for this item
+			label := getQualityLabel(width, displayTitle)
+
+			// Get or create bucket for this quality
+			bucket := buckets[label] // zero-value if missing
+
+			// Add count to appropriate media type
+			switch mediaType {
+			case "Movie":
+				bucket.Movie += count
+			case "Episode":
+				bucket.Episode += count
+			}
+
+			buckets[label] = bucket
 		}
+
 		if err := rows.Err(); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error":   "row iteration failed",
@@ -103,20 +117,11 @@ func Qualities(db *sql.DB) fiber.Handler {
 			})
 		}
 
-		type QualityCount struct {
-			Label string `json:"label"`
-			Count int    `json:"count"`
-		}
-		out := []QualityCount{
-			{Label: "8K", Count: buckets["8K"]},
-			{Label: "4K", Count: buckets["4K"]},
-			{Label: "1080p", Count: buckets["1080p"]},
-			{Label: "720p", Count: buckets["720p"]},
-			{Label: "SD", Count: buckets["SD"]},
-			// If you chart Unknown, uncomment next line:
-			// {Label: "Unknown", Count: buckets["Unknown"]},
+		// Return in the format expected by frontend (same as codecs)
+		type QualityBuckets struct {
+			Buckets map[string]MediaTypeCounts `json:"buckets"`
 		}
 
-		return c.JSON(out)
+		return c.JSON(QualityBuckets{Buckets: buckets})
 	}
 }
