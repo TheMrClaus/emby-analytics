@@ -122,8 +122,9 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 							}
 						}
 						// Update the database with enriched info
-						db.Exec(`UPDATE library_item SET name = ?, media_type = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-							display, "Series", entry.Id)
+						db.Exec(`UPDATE library_item SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+							display, entry.Id)
+
 					}
 				}
 			}
