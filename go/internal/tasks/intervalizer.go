@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -207,15 +208,23 @@ func upsertSession(db *sql.DB, d emby.PlaybackProgressData) (int64, error) {
 		return id, nil
 	}
 	now := time.Now().UTC().Unix()
+
+	// Convert TranscodeReasons slice to comma-separated string
+	var transcodeReasonsStr string
+	if len(d.TranscodeReasons) > 0 {
+		transcodeReasonsStr = strings.Join(d.TranscodeReasons, ",")
+	}
+
 	res, err := db.Exec(`
-		INSERT INTO play_sessions(user_id, session_id, device_id, client_name, item_id, item_name, item_type, play_method, started_at, is_active)
-		VALUES(?,?,?,?,?,?,?,?,?,true)
-	`, d.UserID, d.SessionID, d.DeviceID, d.Client, d.NowPlaying.ID, d.NowPlaying.Name, d.NowPlaying.Type, d.PlayMethod, now)
+		INSERT INTO play_sessions(user_id, session_id, device_id, client_name, item_id, item_name, item_type, play_method, started_at, is_active, transcode_reasons, remote_address)
+		VALUES(?,?,?,?,?,?,?,?,?,true,?,?)
+	`, d.UserID, d.SessionID, d.DeviceID, d.Client, d.NowPlaying.ID, d.NowPlaying.Name, d.NowPlaying.Type, d.PlayMethod, now, transcodeReasonsStr, d.RemoteEndPoint)
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
+
 func insertEvent(db *sql.DB, fk int64, kind string, paused bool, pos int64) {
 	_, err := db.Exec(`INSERT INTO play_events(session_fk, kind, is_paused, position_ticks, created_at) VALUES(?,?,?,?,?)`, fk, kind, boolToInt(paused), pos, time.Now().UTC().Unix())
 	if err != nil {
