@@ -13,7 +13,14 @@ export default function Card({
   className?: string;
 }) {
   return (
-    <div className={`bg-neutral-800 rounded-2xl p-4 shadow ${className}`}>
+    <div
+      className={
+        // inline-block + w-full so each card is a single masonry item
+        // break-inside-avoid prevents splitting between columns
+        `bg-neutral-800 rounded-2xl p-4 shadow inline-block w-full align-top
+         break-inside-avoid mb-4 ${className}`
+      }
+    >
       <div className="flex justify-between items-center mb-2">
         <div className="text-sm text-gray-400">{title}</div>
         {right ? <div>{right}</div> : null}
@@ -22,4 +29,3 @@ export default function Card({
     </div>
   );
 }
-
