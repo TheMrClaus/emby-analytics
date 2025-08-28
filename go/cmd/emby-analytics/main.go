@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -19,6 +20,8 @@ import (
 	now "emby-analytics/internal/handlers/now"
 	stats "emby-analytics/internal/handlers/stats"
 	"emby-analytics/internal/tasks"
+
+	"emby-analytics/internal/db/migrator/migrator.go"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/logger"
@@ -38,31 +41,29 @@ func main() {
 	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
 
 	// ---- Database Initialization & Migration ----
+	// Build a sqlite DB URL for golang-migrate and run embedded migrations BEFORE opening sql.DB.
+	absPath, err := filepath.Abs(cfg.SQLitePath)
+	if err != nil {
+		log.Fatalf("--> FATAL: resolving SQLite path: %v", err)
+	}
+	// sqlite driver URL (golang-migrate): sqlite3://file:/ABS?cache=shared&mode=rwc
+	dbURL := fmt.Sprintf("sqlite3://file:%s?cache=shared&mode=rwc", filepath.ToSlash(absPath))
+
+	if err := migrator.Up(dbURL); err != nil {
+		log.Fatalf("--> FATAL: migrations failed: %v", err)
+	}
+	log.Println("--> Step 1: Migrations applied (embedded).")
+
+	// Now open the DB handle and continue as normal.
 	sqlDB, err := db.Open(cfg.SQLitePath)
 	if err != nil {
 		log.Fatalf("--> FATAL: Failed to open database at %s: %v", cfg.SQLitePath, err)
 	}
 	defer func(dbh *sql.DB) { _ = dbh.Close() }(sqlDB)
-	log.Println("--> Step 1: Database connection opened successfully.")
+	log.Println("--> Step 2: Database connection opened successfully.")
 
-	// 1. Unconditionally create the base tables required for the app to start.
-	if err := db.EnsureBaseSchema(sqlDB); err != nil {
-		log.Fatalf("--> FATAL: Failed to ensure base schema: %v", err)
-	}
-	log.Println("--> Step 2: Base schema (user, item, lifetime) ensured.")
-
-	// 2. Run the full migrations to create analytics tables.
-	migrationPath := filepath.Join(".", "internal", "db", "migrations")
-	if tables, err := db.ListTablesForDebug(sqlDB); err == nil {
-		log.Printf("[debug] tables BEFORE migrations: %v\n", tables)
-	}
-	if err := db.RunMigrationsWithLogging(sqlDB, migrationPath, log.Default()); err != nil {
-		log.Fatalf("--> FATAL: Failed to run migrations: %v", err)
-	}
-	log.Println("--> Step 3: Analytics schema (sessions, intervals) migrated.")
-
-	// 3. Perform the initial user sync synchronously AFTER the schema is ready.
-	log.Println("--> Step 4: Performing initial user and lifetime stats sync...")
+	// Initial user sync AFTER schema is ready.
+	log.Println("--> Step 3: Performing initial user and lifetime stats sync...")
 	tasks.RunUserSyncOnce(sqlDB, em)
 	log.Println("--> Initial user sync complete.")
 
