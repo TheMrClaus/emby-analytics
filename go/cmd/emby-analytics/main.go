@@ -39,12 +39,10 @@ func main() {
 	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
 
 	// ---- Database Initialization & Migration ----
-	// Build a sqlite DB URL for golang-migrate and run embedded migrations BEFORE opening sql.DB.
 	absPath, err := filepath.Abs(cfg.SQLitePath)
 	if err != nil {
 		log.Fatalf("--> FATAL: resolving SQLite path: %v", err)
 	}
-	// sqlite driver URL (golang-migrate): sqlite3://file:/ABS?cache=shared&mode=rwc
 	dbURL := fmt.Sprintf("sqlite://file:%s?cache=shared&mode=rwc", filepath.ToSlash(absPath))
 
 	if err := db.MigrateUp(dbURL); err != nil {
@@ -52,7 +50,6 @@ func main() {
 	}
 	log.Println("--> Step 1: Migrations applied (embedded).")
 
-	// Now open the DB handle and continue as normal.
 	sqlDB, err := db.Open(cfg.SQLitePath)
 	if err != nil {
 		log.Fatalf("--> FATAL: Failed to open database at %s: %v", cfg.SQLitePath, err)
@@ -78,10 +75,6 @@ func main() {
 	embyWS.Start(context.Background())
 	log.Println("--> Step 5: Emby WebSocket listener started.")
 
-	// ---- Background Tasks (Now started AFTER initial sync) ----
-	// DEPRECATED: Commenting out the sync loop to rely entirely on WebSocket intervalizer
-	// The intervalizer provides more accurate event-driven analytics
-	// go tasks.StartUserSyncLoop(sqlDB, em, cfg)
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
@@ -106,7 +99,13 @@ func main() {
 		ProxyHeader:        fiber.HeaderXForwardedFor,
 	})
 	app.Use(recover.New())
-	app.Use(logger.New())
+
+	// 👉 Clean readable logger format
+	app.Use(logger.New(logger.Config{
+		Format:     "${time} | ${status} | ${latency} | ${ip} | ${method} | ${path}\n",
+		TimeFormat: "15:04:05",
+		TimeZone:   "Local",
+	}))
 
 	// Health Routes
 	app.Get("/health", health.Health(sqlDB))
