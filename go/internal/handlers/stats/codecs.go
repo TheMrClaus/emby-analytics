@@ -8,10 +8,9 @@ import (
 
 // MediaTypeCounts holds per-media-type tallies for a given codec.
 type MediaTypeCounts struct {
-	Movie   int `json:"movie"`
-	Episode int `json:"episode"`
+	Movie   int `json:"Movie"`
+	Episode int `json:"Episode"`
 }
-
 type CodecBuckets struct {
 	Codecs map[string]MediaTypeCounts `json:"codecs"`
 }
@@ -28,11 +27,11 @@ func Codecs(db *sql.DB) fiber.Handler {
 				COALESCE(li.media_type, 'Unknown') AS media_type,
 				COUNT(*) AS count
 			FROM library_item li
-			WHERE li.media_type NOT IN ('TvChannel', 'LiveTv', 'Channel')
+			WHERE COALESCE(li.media_type, 'Unknown') NOT IN ('TvChannel', 'LiveTv', 'Channel')
 			GROUP BY COALESCE(li.video_codec, 'Unknown'),
-			         COALESCE(li.media_type, 'Unknown')
+					COALESCE(li.media_type, 'Unknown')
 			ORDER BY COUNT(*) DESC
-		`
+			`
 
 		var rows *sql.Rows
 		var err error
