@@ -1,1 +1,0 @@
-ALTER TABLE library_item DROP COLUMN IF EXISTS width;
