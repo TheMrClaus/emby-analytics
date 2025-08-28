@@ -55,6 +55,8 @@ func main() {
 	log.Println("        Starting Emby Analytics Application")
 	log.Println("=====================================================")
 
+	log.SetFlags(0) // disable default date/time prefix; we print our own timestamp in the middleware
+
 	_ = godotenv.Load()
 	cfg := config.Load()
 	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
