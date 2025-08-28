@@ -192,3 +192,26 @@ body {
 .btn-premium--danger:hover {
   filter: brightness(1.05);
 }
+
+/* --- Dashboard cards (match dark premium theme) --- */
+.card-dark {
+  @apply rounded-2xl border border-white/10 bg-[#0f1218] p-4 md:p-6 shadow-[0_8px_24px_rgba(0,0,0,.35)];
+}
+
+.section-title {
+  @apply text-white/80 font-medium mb-3 tracking-wide;
+}
+
+/* Tighten and theme the tables for this dashboard */
+.table-dark thead th {
+  @apply text-white/60 uppercase text-xs font-semibold;
+}
+.table-dark tbody tr {
+  @apply border-t border-white/10;
+}
+.table-dark td, .table-dark th {
+  @apply py-3;
+}
+.table-dark tbody tr:hover {
+  @apply bg-white/5;
+}
