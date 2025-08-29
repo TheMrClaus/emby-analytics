@@ -3,7 +3,7 @@ module emby-analytics
 go 1.25
 
 require (
-	github.com/gofiber/fiber/v3 v3.0.0-rc1
+	github.com/gofiber/fiber/v3 v3.0.0-rc.1
 	github.com/golang-migrate/migrate/v4 v4.18.3
 	github.com/gorilla/websocket v1.5.1
 	github.com/joho/godotenv v1.5.1
