@@ -68,3 +68,42 @@ export const fetchNowSnapshot = () => j<NowEntry[]>("/now/snapshot");
 // Image helpers
 export const imgPrimary = (id: string) => `${API_BASE}/img/primary/${id}`;
 export const imgBackdrop = (id: string) => `${API_BASE}/img/backdrop/${id}`;
+
+export interface LibraryItemResponse {
+  id: string;
+  name: string;
+  media_type: string;
+  height?: number;
+  width?: number;
+  codec: string;
+}
+
+export interface ItemsByCodecResponse {
+  items: LibraryItemResponse[];
+  total: number;
+  codec: string;
+  page: number;
+  page_size: number;
+}
+
+export async function fetchItemsByCodec(
+  codec: string, 
+  page: number = 1, 
+  pageSize: number = 50,
+  mediaType?: string
+): Promise<ItemsByCodecResponse> {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    page_size: pageSize.toString(),
+  });
+  
+  if (mediaType) {
+    params.append('media_type', mediaType);
+  }
+  
+  const response = await fetch(`/stats/items/by-codec/${encodeURIComponent(codec)}?${params}`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}

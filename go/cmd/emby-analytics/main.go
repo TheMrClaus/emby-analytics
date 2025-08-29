@@ -161,6 +161,7 @@ func main() {
 	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))
 	app.Get("/stats/user/:id", stats.UserDetailHandler(sqlDB))
 	app.Get("/stats/play-methods", stats.PlayMethods(sqlDB))
+	app.Get("/stats/items/by-codec/:codec", stats.ItemsByCodec(sqlDB))
 
 	// Item & Image Routes
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
