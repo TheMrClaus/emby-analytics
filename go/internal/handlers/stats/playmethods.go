@@ -2,6 +2,8 @@ package stats
 
 import (
 	"database/sql"
+	"fmt"
+	"log"
 	"strconv"
 	"strings"
 
@@ -68,17 +70,27 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 			"Unknown":      0,
 		}
 
+		// DEBUG: Log what we're getting from the database
+		var debugRaw []string
+
 		for rows.Next() {
 			var raw string
 			var cnt int
 			if err := rows.Scan(&raw, &cnt); err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 			}
+
+			// DEBUG: Collect raw values for logging
+			debugRaw = append(debugRaw, fmt.Sprintf("'%s'->%s (%d)", raw, normalize(raw), cnt))
+
 			out[normalize(raw)] += cnt
 		}
 		if err := rows.Err(); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
+
+		// DEBUG: Log all raw values we found
+		log.Printf("[PlayMethods] Raw DB values: %v", debugRaw)
 
 		return c.JSON(fiber.Map{"methods": out})
 	}
