@@ -3,6 +3,7 @@ package stats
 import (
 	"database/sql"
 	"log"
+	"net/url"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -22,6 +23,14 @@ func ItemsByQuality(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		quality := c.Params("quality")
 		log.Printf("DEBUG: Received quality parameter: %q (length: %d)", quality, len(quality))
+
+		// Decode URL parameter for Fiber v3
+		decodedQuality, err := url.QueryUnescape(quality)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid quality parameter encoding"})
+		}
+		quality = decodedQuality
+		log.Printf("DEBUG: Decoded quality parameter: %q", quality)
 		if quality == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "quality parameter is required"})
 		}
