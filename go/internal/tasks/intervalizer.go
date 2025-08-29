@@ -232,12 +232,17 @@ func upsertSession(db *sql.DB, d emby.PlaybackProgressData) (int64, error) {
 			transcodeReasonsStr = strings.Join(d.TranscodeReasons, ",")
 		}
 
+		// Determine detailed playback methods from available data
+		videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo := determineDetailedMethods(d)
+
 		_, updateErr := db.Exec(`
-			UPDATE play_sessions 
-			SET user_id=?, device_id=?, client_name=?, item_name=?, item_type=?, play_method=?, 
-				started_at=?, ended_at=NULL, is_active=true, transcode_reasons=?, remote_address=?
-			WHERE id=?
-		`, d.UserID, d.DeviceID, d.Client, d.NowPlaying.Name, d.NowPlaying.Type, d.PlayMethod, now, transcodeReasonsStr, d.RemoteEndPoint, id)
+    UPDATE play_sessions 
+    SET user_id=?, device_id=?, client_name=?, item_name=?, item_type=?, play_method=?, 
+        started_at=?, ended_at=NULL, is_active=true, transcode_reasons=?, remote_address=?,
+        video_method=?, audio_method=?, video_codec_from=?, video_codec_to=?, 
+        audio_codec_from=?, audio_codec_to=?
+    WHERE id=?
+`, d.UserID, d.DeviceID, d.Client, d.NowPlaying.Name, d.NowPlaying.Type, d.PlayMethod, now, transcodeReasonsStr, d.RemoteEndPoint, videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo, id)
 		if updateErr != nil {
 			return 0, updateErr
 		}
@@ -253,10 +258,13 @@ func upsertSession(db *sql.DB, d emby.PlaybackProgressData) (int64, error) {
 		transcodeReasonsStr = strings.Join(d.TranscodeReasons, ",")
 	}
 
+	// Determine detailed playback methods from available data
+	videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo := determineDetailedMethods(d)
+
 	res, err := db.Exec(`
-		INSERT INTO play_sessions(user_id, session_id, device_id, client_name, item_id, item_name, item_type, play_method, started_at, is_active, transcode_reasons, remote_address)
-		VALUES(?,?,?,?,?,?,?,?,?,true,?,?)
-	`, d.UserID, d.SessionID, d.DeviceID, d.Client, d.NowPlaying.ID, d.NowPlaying.Name, d.NowPlaying.Type, d.PlayMethod, now, transcodeReasonsStr, d.RemoteEndPoint)
+    INSERT INTO play_sessions(user_id, session_id, device_id, client_name, item_id, item_name, item_type, play_method, started_at, is_active, transcode_reasons, remote_address, video_method, audio_method, video_codec_from, video_codec_to, audio_codec_from, audio_codec_to)
+    VALUES(?,?,?,?,?,?,?,?,?,true,?,?,?,?,?,?,?,?)
+`, d.UserID, d.SessionID, d.DeviceID, d.Client, d.NowPlaying.ID, d.NowPlaying.Name, d.NowPlaying.Type, d.PlayMethod, now, transcodeReasonsStr, d.RemoteEndPoint, videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo)
 	if err != nil {
 		return 0, err
 	}
@@ -274,4 +282,74 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// determineDetailedMethods analyzes the available transcode data to determine video/audio methods
+func determineDetailedMethods(d emby.PlaybackProgressData) (videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo string) {
+	// Default to DirectPlay
+	videoMethod = "DirectPlay"
+	audioMethod = "DirectPlay"
+
+	// If not transcoding at all, everything is direct
+	if d.PlayMethod != "Transcode" || len(d.TranscodeReasons) == 0 {
+		return
+	}
+
+	// Analyze transcode reasons to determine what's being transcoded
+	reasonsStr := strings.ToLower(strings.Join(d.TranscodeReasons, " "))
+
+	// Check for video transcoding indicators
+	videoIndicators := []string{
+		"videocodecnotsupported", "video codec not supported",
+		"videoprofilenotsupported", "video profile not supported",
+		"videolevelnotsupported", "video level not supported",
+		"videoframeratenotsupported", "video framerate not supported",
+		"videobitratenotsupported", "video bitrate not supported",
+		"videoresolutionnotsupported", "video resolution not supported",
+		"subtitlecodecnotsupported", "subtitle", "burn", // subtitle burn-in affects video
+		"containernotcurrentsupported", // container issues often require video re-encode
+	}
+
+	// Check for audio transcoding indicators
+	audioIndicators := []string{
+		"audiocodecnotsupported", "audio codec not supported",
+		"audioprofilenotsupported", "audio profile not supported",
+		"audiobitratenotsupported", "audio bitrate not supported",
+		"audiochannelsnotsupported", "audio channels not supported",
+		"audiosampleratenotsupported", "audio sample rate not supported",
+	}
+
+	// Determine what's transcoding
+	hasVideoTranscode := false
+	hasAudioTranscode := false
+
+	for _, indicator := range videoIndicators {
+		if strings.Contains(reasonsStr, indicator) {
+			hasVideoTranscode = true
+			break
+		}
+	}
+
+	for _, indicator := range audioIndicators {
+		if strings.Contains(reasonsStr, indicator) {
+			hasAudioTranscode = true
+			break
+		}
+	}
+
+	// If we found specific indicators, use them
+	if hasVideoTranscode {
+		videoMethod = "Transcode"
+	}
+	if hasAudioTranscode {
+		audioMethod = "Transcode"
+	}
+
+	// If no specific indicators but we know it's transcoding, make best guess
+	// Most transcode scenarios involve video, so default to video if unclear
+	if !hasVideoTranscode && !hasAudioTranscode && d.PlayMethod == "Transcode" {
+		videoMethod = "Transcode" // Default assumption
+	}
+
+	return
 }
