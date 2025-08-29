@@ -40,6 +40,16 @@ export type NowEntry = {
   hdr10?: boolean;
 };
 
+export type PlayMethodCounts = {
+  methods: {
+    DirectPlay?: number;
+    DirectStream?: number;
+    Transcode?: number;
+    Unknown?: number;
+    [k: string]: number | undefined;
+  };
+};
+
 // Stats responses
 export type OverviewData = {
   total_users: number;
