@@ -9,6 +9,7 @@ import (
 )
 
 // normalize maps various casings/variants into our 4 buckets.
+// normalize maps various casings/variants into our 4 buckets.
 func normalize(method string) string {
 	m := strings.ToLower(strings.TrimSpace(method))
 	switch m {
@@ -18,6 +19,8 @@ func normalize(method string) string {
 		return "DirectStream"
 	case "transcode", "transcoding":
 		return "Transcode"
+	case "direct": // ADD THIS LINE - handles the "Direct" value from Emby
+		return "DirectPlay"
 	default:
 		return "Unknown"
 	}
