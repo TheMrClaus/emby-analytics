@@ -92,12 +92,24 @@ func ItemsByCodec(db *sql.DB) fiber.Handler {
 		var items []LibraryItemResponse
 		for rows.Next() {
 			var item LibraryItemResponse
-			if err := rows.Scan(&item.ID, &item.Name, &item.MediaType, &item.Height, &item.Width, &item.Codec); err != nil {
+			var height, width sql.NullInt64
+
+			if err := rows.Scan(&item.ID, &item.Name, &item.MediaType, &height, &width, &item.Codec); err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 			}
+
+			// Convert sql.NullInt64 to *int
+			if height.Valid {
+				h := int(height.Int64)
+				item.Height = &h
+			}
+			if width.Valid {
+				w := int(width.Int64)
+				item.Width = &w
+			}
+
 			items = append(items, item)
 		}
-
 		if err := rows.Err(); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
