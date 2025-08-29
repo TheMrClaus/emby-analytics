@@ -4,7 +4,8 @@ import Head from "next/head";
 import Link from "next/link";
 import Header from "../../components/Header";
 import Card from "../../components/ui/Card";
-import { fetchItemsByQuality, ItemsByQualityResponse, LibraryItemResponse } from "../../lib/api";
+import { fetchItemsByQuality, ItemsByQualityResponse, LibraryItemResponse, fetchConfig } from "../../lib/api";
+import { openInEmby } from "../../lib/emby";
 import { fmtInt } from "../../lib/format";
 
 export default function QualityDetailPage() {
@@ -14,6 +15,7 @@ export default function QualityDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [embyExternalUrl, setEmbyExternalUrl] = useState<string>('');
 
   useEffect(() => {
     if (!quality || typeof quality !== "string") return;
@@ -34,6 +36,13 @@ export default function QualityDetailPage() {
       })
       .finally(() => setLoading(false));
   }, [quality, media_type, page]);
+
+  // Fetch config once on component mount to get Emby external URL
+  useEffect(() => {
+    fetchConfig()
+      .then(config => setEmbyExternalUrl(config.emby_external_url))
+      .catch(err => console.error('Failed to fetch config:', err));
+  }, []);
 
   const formatResolution = (item: LibraryItemResponse) => {
     if (item.height && item.width) {
@@ -141,7 +150,12 @@ export default function QualityDetailPage() {
                     </thead>
                     <tbody>
                       {data.items.map((item) => (
-                        <tr key={item.id} className="border-b border-neutral-800 last:border-0">
+                        <tr
+                          key={item.id}
+                          className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 cursor-pointer transition-colors"
+                          onClick={() => openInEmby(item.id, embyExternalUrl)}  
+                          title="Click to open in Emby"
+                        >
                           <td className="py-3 font-medium">{item.name}</td>
                           <td className="py-3">
                             <span className="px-2 py-1 bg-neutral-700 rounded text-xs">

@@ -138,3 +138,15 @@ export async function fetchItemsByQuality(
   }
   return response.json();
 }
+
+export interface ConfigResponse {
+  emby_external_url: string;
+}
+
+export const fetchConfig = async (): Promise<ConfigResponse> => {
+  const response = await fetch(`${API_BASE}/config`);
+  if (!response.ok) {
+    throw new Error('Failed to fetch config');
+  }
+  return response.json();
+};

@@ -9,10 +9,11 @@ import (
 )
 
 type Config struct {
-	EmbyBaseURL string
-	EmbyAPIKey  string
-	SQLitePath  string
-	WebPath     string
+	EmbyBaseURL     string
+	EmbyAPIKey      string
+	EmbyExternalURL string
+	SQLitePath      string
+	WebPath         string
 
 	// Streaming / polling
 	KeepAliveSec int
@@ -47,10 +48,12 @@ func Load() Config {
 
 	embyBase := env("EMBY_BASE_URL", "http://emby:8096")
 	embyKey := env("EMBY_API_KEY", "")
+	embyExternal := env("EMBY_EXTERNAL_URL", embyBase)
 
 	cfg := Config{
 		EmbyBaseURL:         embyBase,
 		EmbyAPIKey:          embyKey,
+		EmbyExternalURL:     embyExternal,
 		SQLitePath:          dbPath,
 		WebPath:             webPath,
 		KeepAliveSec:        envInt("KEEPALIVE_SEC", 15),

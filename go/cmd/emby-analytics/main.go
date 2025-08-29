@@ -10,16 +10,16 @@ import (
 	"strings"
 	"time"
 
-	"emby-analytics/internal/config"
-	"emby-analytics/internal/db"
-	"emby-analytics/internal/emby"
+	db "emby-analytics/internal/db"
+	emby "emby-analytics/internal/emby"
 	admin "emby-analytics/internal/handlers/admin"
+	config "emby-analytics/internal/handlers/config"
 	health "emby-analytics/internal/handlers/health"
 	images "emby-analytics/internal/handlers/images"
 	items "emby-analytics/internal/handlers/items"
 	now "emby-analytics/internal/handlers/now"
 	stats "emby-analytics/internal/handlers/stats"
-	"emby-analytics/internal/tasks"
+	tasks "emby-analytics/internal/tasks"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/recover"
@@ -163,6 +163,9 @@ func main() {
 	app.Get("/stats/play-methods", stats.PlayMethods(sqlDB))
 	app.Get("/stats/items/by-codec/:codec", stats.ItemsByCodec(sqlDB))
 	app.Get("/stats/items/by-quality/:quality", stats.ItemsByQuality(sqlDB))
+
+	// Configuration Routes
+	app.Get("/config", config.GetConfig(cfg))
 
 	// Item & Image Routes
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
