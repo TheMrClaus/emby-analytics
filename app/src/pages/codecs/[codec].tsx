@@ -2,7 +2,6 @@ import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import Head from "next/head";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import Header from "../../components/Header";
 import Card from "../../components/ui/Card";
 import { fetchItemsByCodec, ItemsByCodecResponse, LibraryItemResponse } from "../../lib/api";
@@ -110,8 +109,8 @@ export default function CodecDetailPage() {
         <main className="p-4 md:p-6 space-y-6 border-t border-neutral-800">
           {/* Header with back button */}
           <div className="flex items-center gap-4">
-            <Link href="/" className="text-gray-400 hover:text-white transition-colors">
-              <ArrowLeft size={20} />
+            <Link href="/" className="text-gray-400 hover:text-white transition-colors text-xl">
+              ←
             </Link>
             <div>
               <h1 className="text-2xl font-bold">{title}</h1>
