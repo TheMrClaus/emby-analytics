@@ -529,20 +529,17 @@ type UserDataItem struct {
 // ---------- Now Playing (sessions) ----------
 //
 
-// Flattened shape consumed by handlers (plus SessionID for controls)
 type EmbySession struct {
-	SessionID    string `json:"SessionId"` // Emby session id
-	AudioDefault bool   `json:"AudioDefault,omitempty"`
+	SessionID string `json:"SessionId"`
+	UserID    string `json:"UserId"`
+	UserName  string `json:"UserName"`
+	ItemID    string `json:"ItemId"`
+	ItemName  string `json:"ItemName"`
+	ItemType  string `json:"ItemType"`
 
-	UserID   string `json:"UserId"`
-	UserName string `json:"UserName"`
-
-	// Now playing item
-	ItemID        string `json:"NowPlayingItemId"`
-	ItemName      string `json:"NowPlayingItemName,omitempty"`
-	ItemType      string `json:"NowPlayingItemType,omitempty"`
-	DurationTicks int64  `json:"RunTimeTicks"`
-	PosTicks      int64  `json:"PositionTicks"`
+	// Timestamp when playback position was last updated
+	PosTicks     int64 `json:"PosTicks"`
+	DurationTicks int64 `json:"DurationTicks"`
 
 	// Client/device
 	App    string `json:"Client"`
@@ -561,8 +558,9 @@ type EmbySession struct {
 	DolbyVision bool   `json:"DolbyVision,omitempty"`
 	HDR10       bool   `json:"HDR10,omitempty"`
 
-	AudioLang string `json:"AudioLang,omitempty"`
-	AudioCh   int    `json:"AudioChannels,omitempty"`
+	AudioLang    string `json:"AudioLang,omitempty"`
+	AudioCh      int    `json:"AudioChannels,omitempty"`
+	AudioDefault bool   `json:"AudioDefault,omitempty"` // NEW: Track if current audio is default
 
 	SubLang  string `json:"SubLang,omitempty"`
 	SubCodec string `json:"SubCodec,omitempty"`
@@ -590,6 +588,7 @@ type EmbySession struct {
 	RemoteAddress     string   `json:"RemoteAddress,omitempty"`
 }
 
+// Update the rawSession struct to include stream indices
 type rawSession struct {
 	Id             string `json:"Id"` // session id
 	UserID         string `json:"UserId"`
@@ -607,8 +606,9 @@ type rawSession struct {
 		Container string `json:"Container"`
 
 		MediaStreams []struct {
-			Type     string `json:"Type"`  // "Video","Audio","Subtitle"
-			Codec    string `json:"Codec"` // e.g. h264,aac
+			Index    int    `json:"Index"`    // Stream index - this is key!
+			Type     string `json:"Type"`    // "Video","Audio","Subtitle"
+			Codec    string `json:"Codec"`   // e.g. h264,aac
 			Language string `json:"Language"`
 			Channels int    `json:"Channels"`
 			Width    int    `json:"Width"`
@@ -639,9 +639,11 @@ type rawSession struct {
 	} `json:"NowPlayingItem"`
 
 	PlayState *struct {
-		PositionTicks int64  `json:"PositionTicks"`
-		PlayMethod    string `json:"PlayMethod"`
-		IsPaused      bool   `json:"IsPaused"`
+		PositionTicks       int64  `json:"PositionTicks"`
+		PlayMethod          string `json:"PlayMethod"`
+		IsPaused            bool   `json:"IsPaused"`
+		AudioStreamIndex    *int   `json:"AudioStreamIndex"`    // Currently selected audio stream
+		SubtitleStreamIndex *int   `json:"SubtitleStreamIndex"` // Currently selected subtitle stream
 	} `json:"PlayState"`
 
 	TranscodingInfo *struct {
@@ -659,6 +661,117 @@ type rawSession struct {
 		TranscodePositionTicks int64    `json:"TranscodePositionTicks"`
 	} `json:"TranscodingInfo"`
 }
+
+// Replace the stream processing logic in GetActiveSessions() function
+// Find the part that starts with "// Per-track and stream info" and replace it with:
+
+		// Per-track and stream info
+		subs := 0
+		streamKbpsSum := int64(0)
+		var sourceVideoCodec, sourceAudioCodec string
+
+		// Get currently selected stream indices from PlayState
+		var currentAudioIndex, currentSubtitleIndex *int
+		if rs.PlayState != nil {
+			currentAudioIndex = rs.PlayState.AudioStreamIndex
+			currentSubtitleIndex = rs.PlayState.SubtitleStreamIndex
+		}
+
+		// Resolution / HDR / audio lang & channels / subs info
+		for _, ms := range rs.NowPlayingItem.MediaStreams {
+			switch strings.ToLower(ms.Type) {
+			case "video":
+				if es.VideoCodec == "" && ms.Codec != "" {
+					es.VideoCodec = strings.ToUpper(ms.Codec)
+				}
+				// Always assign sourceVideoCodec if present
+				if ms.Codec != "" {
+					sourceVideoCodec = strings.ToUpper(ms.Codec)
+				}
+				if es.Width == 0 && ms.Width > 0 {
+					es.Width = ms.Width
+					es.Height = ms.Height
+				}
+				// HDR/DV detection (prefer DV if present)
+				vr := strings.ToLower(strings.TrimSpace(ms.VideoRange))
+				vrt := strings.ToLower(strings.TrimSpace(ms.VideoRangeType))
+				if (ms.DvProfile != nil && *ms.DvProfile > 0) ||
+					vr == "dovi" || vr == "dolby vision" || vr == "dolbyvision" ||
+					vrt == "dv" || vrt == "dolbyvision" {
+					es.DolbyVision = true
+				}
+				if ms.Hdr10 || ms.Hdr || ms.IsHdr ||
+					strings.Contains(vr, "hdr") || vrt == "hdr10" || vrt == "hdr10plus" {
+					es.HDR10 = true
+				}
+				if ms.BitRate > 0 {
+					streamKbpsSum += ms.BitRate
+				} else if ms.Bitrate > 0 {
+					streamKbpsSum += ms.Bitrate
+				}
+			case "audio":
+				// Check if this is the currently selected audio stream
+				isCurrentAudio := false
+				if currentAudioIndex != nil && *currentAudioIndex == ms.Index {
+					isCurrentAudio = true
+				} else if currentAudioIndex == nil && (ms.IsDefault || ms.Default) {
+					// Fallback to default if no current index is specified
+					isCurrentAudio = true
+				} else if currentAudioIndex == nil && es.AudioCodec == "" {
+					// Further fallback to first audio stream if no default found
+					isCurrentAudio = true
+				}
+
+				if isCurrentAudio {
+					if ms.Codec != "" {
+						es.AudioCodec = strings.ToUpper(ms.Codec)
+					}
+					// Keep language as-is (don't force uppercase) so "English" stays "English"
+					if ms.Language != "" {
+						es.AudioLang = ms.Language
+					}
+					if ms.Channels > 0 {
+						es.AudioCh = ms.Channels
+					}
+					// Only mark as default if it's actually the default stream
+					if ms.IsDefault || ms.Default {
+						es.AudioDefault = true
+					}
+				}
+				
+				// Always assign sourceAudioCodec if not set and present
+				if sourceAudioCodec == "" && ms.Codec != "" {
+					sourceAudioCodec = strings.ToUpper(ms.Codec)
+				}
+				
+				if ms.BitRate > 0 {
+					streamKbpsSum += ms.BitRate
+				} else if ms.Bitrate > 0 {
+					streamKbpsSum += ms.Bitrate
+				}
+
+			case "subtitle":
+				subs++
+				// Check if this is the currently selected subtitle stream
+				isCurrentSubtitle := false
+				if currentSubtitleIndex != nil && *currentSubtitleIndex == ms.Index {
+					isCurrentSubtitle = true
+				} else if currentSubtitleIndex == nil && es.SubLang == "" {
+					// Only take first sub details if no specific one is selected and we haven't set one yet
+					isCurrentSubtitle = true
+				}
+
+				if isCurrentSubtitle {
+					if ms.Language != "" {
+						es.SubLang = strings.ToUpper(ms.Language)
+					}
+					if ms.Codec != "" {
+						es.SubCodec = strings.ToUpper(ms.Codec)
+					}
+				}
+			}
+		}
+		es.SubsCount = subs
 
 // GetActiveSessions returns only sessions that have a NowPlayingItem.
 func (c *Client) GetActiveSessions() ([]EmbySession, error) {

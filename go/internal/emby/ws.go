@@ -30,25 +30,28 @@ type EmbyEvent struct {
 	Data        json.RawMessage `json:"Data"`
 }
 
-// PlaybackProgressData is a trimmed down version of the event payload
 type PlaybackProgressData struct {
 	UserID           string   `json:"UserId"`
 	SessionID        string   `json:"SessionId"`
 	DeviceID         string   `json:"DeviceId"`
 	Client           string   `json:"Client"`
-	PlayMethod       string   `json:"PlayMethod"` // DirectPlay/DirectStream/Transcode
-	RemoteEndPoint   string   `json:"RemoteEndPoint,omitempty"`
-	TranscodeReasons []string `json:"TranscodeReasons,omitempty"`
-	NowPlaying       struct {
+	PlayMethod       string   `json:"PlayMethod"`
+	RemoteEndPoint   string   `json:"RemoteEndPoint"`
+	TranscodeReasons []string `json:"TranscodeReasons"`
+
+	NowPlaying struct {
 		ID           string `json:"Id"`
 		RunTimeTicks int64  `json:"RunTimeTicks"`
 		Type         string `json:"Type"`
 		Name         string `json:"Name"`
 	} `json:"NowPlayingItem"`
+
 	PlayState struct {
-		IsPaused      bool    `json:"IsPaused"`
-		PositionTicks int64   `json:"PositionTicks"`
-		PlaybackRate  float64 `json:"PlaybackRate"`
+		IsPaused            bool    `json:"IsPaused"`
+		PositionTicks       int64   `json:"PositionTicks"`
+		PlaybackRate        float64 `json:"PlaybackRate"`
+		AudioStreamIndex    *int    `json:"AudioStreamIndex"`    // Currently selected audio stream
+		SubtitleStreamIndex *int    `json:"SubtitleStreamIndex"` // Currently selected subtitle stream
 	} `json:"PlayState"`
 }
 
@@ -275,26 +278,101 @@ func detectPlayMethod(session SessionData) string {
 	return "DirectPlay"
 }
 
-// SessionData represents the structure of Sessions event data
+// Update the SessionData struct in ws.go to include stream indices
 type SessionData struct {
 	UserID           string   `json:"UserId"`
-	SessionID        string   `json:"SessionId,omitempty"`
-	DeviceID         string   `json:"DeviceId,omitempty"`
-	Client           string   `json:"Client,omitempty"`
-	PlayMethod       string   `json:"PlayMethod,omitempty"`
-	RemoteEndPoint   string   `json:"RemoteEndPoint,omitempty"`
+	SessionID        string   `json:"Id"`
+	DeviceID         string   `json:"DeviceId"`
+	Client           string   `json:"Client"`
+	RemoteEndPoint   string   `json:"RemoteEndPoint"`
 	TranscodeReasons []string `json:"TranscodeReasons,omitempty"`
-	PlayState        struct {
-		PositionTicks int64   `json:"PositionTicks"`
-		IsPaused      bool    `json:"IsPaused"`
-		PlaybackRate  float64 `json:"PlaybackRate"`
-	} `json:"PlayState"`
+
 	NowPlayingItem *struct {
 		ID           string `json:"Id"`
-		Name         string `json:"Name"`
-		Type         string `json:"Type"`
 		RunTimeTicks int64  `json:"RunTimeTicks"`
+		Type         string `json:"Type"`
+		Name         string `json:"Name"`
 	} `json:"NowPlayingItem"`
+
+	PlayState struct {
+		IsPaused            bool    `json:"IsPaused"`
+		PositionTicks       int64   `json:"PositionTicks"`
+		PlaybackRate        float64 `json:"PlaybackRate"`
+		AudioStreamIndex    *int    `json:"AudioStreamIndex"`    // Currently selected audio stream
+		SubtitleStreamIndex *int    `json:"SubtitleStreamIndex"` // Currently selected subtitle stream
+	} `json:"PlayState"`
+
+	TranscodingInfo *struct {
+		IsVideoDirect bool `json:"IsVideoDirect"`
+		IsAudioDirect bool `json:"IsAudioDirect"`
+	} `json:"TranscodingInfo"`
+}
+
+// Update the handleSessionsEvent function to pass through stream indices
+func (w *EmbyWS) handleSessionsEvent(evt EmbyEvent) {
+	if w.Handler == nil {
+		return
+	}
+
+	// Parse Sessions data
+	var sessions []SessionData
+	if err := json.Unmarshal(evt.Data, &sessions); err != nil {
+		log.Printf("[emby-ws] Failed to parse Sessions data: %v", err)
+		return
+	}
+
+	for _, session := range sessions {
+		if session.NowPlayingItem == nil {
+			continue // No active playback
+		}
+
+		// Convert to PlaybackProgressData format
+		progressData := PlaybackProgressData{
+			UserID:           session.UserID,
+			SessionID:        session.SessionID,
+			DeviceID:         session.DeviceID,
+			Client:           session.Client,
+			PlayMethod:       detectPlayMethod(session),
+			RemoteEndPoint:   session.RemoteEndPoint,
+			TranscodeReasons: session.TranscodeReasons,
+			NowPlaying: struct {
+				ID           string `json:"Id"`
+				RunTimeTicks int64  `json:"RunTimeTicks"`
+				Type         string `json:"Type"`
+				Name         string `json:"Name"`
+			}{
+				ID:           session.NowPlayingItem.ID,
+				RunTimeTicks: session.NowPlayingItem.RunTimeTicks,
+				Type:         session.NowPlayingItem.Type,
+				Name:         session.NowPlayingItem.Name,
+			},
+			PlayState: struct {
+				IsPaused            bool    `json:"IsPaused"`
+				PositionTicks       int64   `json:"PositionTicks"`
+				PlaybackRate        float64 `json:"PlaybackRate"`
+				AudioStreamIndex    *int    `json:"AudioStreamIndex"` // Pass through stream indices
+				SubtitleStreamIndex *int    `json:"SubtitleStreamIndex"`
+			}{
+				IsPaused:            session.PlayState.IsPaused,
+				PositionTicks:       session.PlayState.PositionTicks,
+				PlaybackRate:        session.PlayState.PlaybackRate,
+				AudioStreamIndex:    session.PlayState.AudioStreamIndex,
+				SubtitleStreamIndex: session.PlayState.SubtitleStreamIndex,
+			},
+		}
+
+		// Create a synthetic PlaybackProgress event
+		syntheticEvent := EmbyEvent{
+			MessageType: "PlaybackProgress",
+			Data:        nil, // Will be marshaled below
+		}
+
+		// Marshal the progress data
+		if data, err := json.Marshal(progressData); err == nil {
+			syntheticEvent.Data = data
+			w.Handler(syntheticEvent)
+		}
+	}
 }
 
 func (w *EmbyWS) Stop() {
