@@ -2,6 +2,7 @@ package stats
 
 import (
 	"database/sql"
+	"strconv"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -10,7 +11,12 @@ import (
 // Response shape: { "methods": { "DirectPlay": 123, "DirectStream": 45, "Transcode": 67, "Unknown": 3 } }
 func PlayMethods(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		days := c.QueryInt("days", 30)
+		// Fiber v3: no QueryInt helper; parse manually.
+		daysStr := c.Query("days", "30")
+		days, err := strconv.Atoi(daysStr)
+		if err != nil || days <= 0 {
+			days = 30
+		}
 
 		// We infer a unified "method" per session prioritizing Transcode > DirectStream > DirectPlay.
 		// Adjust column names if needed to match your play_sessions schema.
