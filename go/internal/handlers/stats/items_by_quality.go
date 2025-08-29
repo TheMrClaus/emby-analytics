@@ -2,6 +2,7 @@ package stats
 
 import (
 	"database/sql"
+	"log"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -20,6 +21,7 @@ type ItemsByQualityResponse struct {
 func ItemsByQuality(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		quality := c.Params("quality")
+		log.Printf("DEBUG: Received quality parameter: %q (length: %d)", quality, len(quality))
 		if quality == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "quality parameter is required"})
 		}

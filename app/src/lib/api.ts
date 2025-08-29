@@ -132,9 +132,14 @@ export async function fetchItemsByQuality(
     params.append('media_type', mediaType);
   }
   
+  // Debug: Log what we're sending
+  console.log('DEBUG: Sending quality parameter:', quality);
+  
   const response = await fetch(`/stats/items/by-quality/${encodeURIComponent(quality)}?${params}`);
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    const errorText = await response.text();
+    console.error('API Error:', errorText);
+    throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
   }
   return response.json();
 }
