@@ -8,29 +8,19 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-// hasColumn checks if a table has a column (case-insensitive).
-func hasColumn(db *sql.DB, table, col string) bool {
-	rows, err := db.Query("PRAGMA table_info(" + table + ")")
-	if err != nil {
-		return false
+// normalize maps various casings/variants into our 4 buckets.
+func normalize(method string) string {
+	m := strings.ToLower(strings.TrimSpace(method))
+	switch m {
+	case "directplay", "direct play":
+		return "DirectPlay"
+	case "directstream", "direct stream":
+		return "DirectStream"
+	case "transcode", "transcoding":
+		return "Transcode"
+	default:
+		return "Unknown"
 	}
-	defer rows.Close()
-
-	var (
-		cid       int
-		name      string
-		ctype     sql.NullString
-		notnull   int
-		dfltValue sql.NullString
-		pk        int
-	)
-	for rows.Next() {
-		_ = rows.Scan(&cid, &name, &ctype, &notnull, &dfltValue, &pk)
-		if strings.EqualFold(name, col) {
-			return true
-		}
-	}
-	return false
 }
 
 // PlayMethods returns a breakdown of playback methods over the last N days (default 30).
@@ -44,70 +34,19 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 			days = 30
 		}
 
-		// Determine available schema
-		hasPlayMethod := hasColumn(db, "play_sessions", "play_method")
-		hasVideoMethod := hasColumn(db, "play_sessions", "video_method")
-		hasAudioMethod := hasColumn(db, "play_sessions", "audio_method")
+		// Prefer using play_sessions.play_method + started_at (unix seconds)
+		// started_at/ended_at are defined in the schema migrations.
+		// We count sessions whose started_at is within the last N days.
+		query := `
+			SELECT
+				COALESCE(play_method, '') AS raw_method,
+				COUNT(*) AS cnt
+			FROM play_sessions
+			WHERE started_at >= (strftime('%s','now') - (? * 86400))
+			GROUP BY raw_method
+		`
 
-		var q string
-
-		switch {
-		case hasPlayMethod:
-			// Normalize different casings/wordings into the 4 buckets we display.
-			q = `
-				SELECT 
-					CASE
-						WHEN LOWER(COALESCE(play_method,'')) IN ('directplay','direct play') THEN 'DirectPlay'
-						WHEN LOWER(COALESCE(play_method,'')) IN ('directstream','direct stream') THEN 'DirectStream'
-						WHEN LOWER(COALESCE(play_method,'')) IN ('transcode','transcoding') THEN 'Transcode'
-						ELSE 'Unknown'
-					END AS method,
-					COUNT(*) AS cnt
-				FROM play_sessions
-				WHERE start_time >= datetime('now', '-' || ? || ' day')
-				GROUP BY method
-			`
-		case hasVideoMethod || hasAudioMethod:
-			// Build CASE using whichever columns actually exist.
-			parts := []string{}
-			if hasVideoMethod {
-				parts = append(parts, "COALESCE(video_method, '')")
-			}
-			if hasAudioMethod {
-				parts = append(parts, "COALESCE(audio_method, '')")
-			}
-			joined := strings.Join(parts, " || '|' || ")
-
-			q = `
-				WITH sessions AS (
-					SELECT
-						CASE
-							WHEN LOWER(` + joined + `) LIKE '%transcode%' THEN 'Transcode'
-							WHEN LOWER(` + joined + `) LIKE '%directstream%' OR LOWER(` + joined + `) LIKE '%direct stream%' THEN 'DirectStream'
-							WHEN LOWER(` + joined + `) LIKE '%directplay%' OR LOWER(` + joined + `) LIKE '%direct play%' THEN 'DirectPlay'
-							ELSE 'Unknown'
-						END AS method
-					FROM play_sessions
-					WHERE start_time >= datetime('now', '-' || ? || ' day')
-				)
-				SELECT method, COUNT(*) AS cnt
-				FROM sessions
-				GROUP BY method
-			`
-		default:
-			// No recognizable columns. Return zeros gracefully.
-			return c.JSON(fiber.Map{
-				"methods": fiber.Map{
-					"DirectPlay":   0,
-					"DirectStream": 0,
-					"Transcode":    0,
-					"Unknown":      0,
-				},
-				"note": "No play_method / video_method / audio_method columns found in play_sessions",
-			})
-		}
-
-		rows, err := db.Query(q, days)
+		rows, err := db.Query(query, days)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -121,11 +60,15 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 		}
 
 		for rows.Next() {
-			var method string
+			var raw string
 			var cnt int
-			if err := rows.Scan(&method, &cnt); err == nil {
-				out[method] += cnt
+			if err := rows.Scan(&raw, &cnt); err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 			}
+			out[normalize(raw)] += cnt
+		}
+		if err := rows.Err(); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
 
 		return c.JSON(fiber.Map{"methods": out})
