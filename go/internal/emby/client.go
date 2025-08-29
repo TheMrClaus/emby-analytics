@@ -538,7 +538,7 @@ type EmbySession struct {
 	ItemType  string `json:"ItemType"`
 
 	// Timestamp when playback position was last updated
-	PosTicks     int64 `json:"PosTicks"`
+	PosTicks      int64 `json:"PosTicks"`
 	DurationTicks int64 `json:"DurationTicks"`
 
 	// Client/device
@@ -588,7 +588,6 @@ type EmbySession struct {
 	RemoteAddress     string   `json:"RemoteAddress,omitempty"`
 }
 
-// Update the rawSession struct to include stream indices
 type rawSession struct {
 	Id             string `json:"Id"` // session id
 	UserID         string `json:"UserId"`
@@ -606,9 +605,9 @@ type rawSession struct {
 		Container string `json:"Container"`
 
 		MediaStreams []struct {
-			Index    int    `json:"Index"`    // Stream index - this is key!
-			Type     string `json:"Type"`    // "Video","Audio","Subtitle"
-			Codec    string `json:"Codec"`   // e.g. h264,aac
+			Index    int    `json:"Index"` // Stream index - this is key!
+			Type     string `json:"Type"`  // "Video","Audio","Subtitle"
+			Codec    string `json:"Codec"` // e.g. h264,aac
 			Language string `json:"Language"`
 			Channels int    `json:"Channels"`
 			Width    int    `json:"Width"`
@@ -662,8 +661,57 @@ type rawSession struct {
 	} `json:"TranscodingInfo"`
 }
 
-// Replace the stream processing logic in GetActiveSessions() function
-// Find the part that starts with "// Per-track and stream info" and replace it with:
+// GetActiveSessions returns only sessions that have a NowPlayingItem.
+func (c *Client) GetActiveSessions() ([]EmbySession, error) {
+	u := fmt.Sprintf("%s/emby/Sessions", c.BaseURL)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	// Some setups prefer header token; keep header for compatibility.
+	req.Header.Set("X-Emby-Token", c.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var raw []rawSession
+	if err := readJSON(resp, &raw); err != nil {
+		return nil, err
+	}
+
+	out := make([]EmbySession, 0, len(raw))
+	for _, rs := range raw {
+		// Only show active playback
+		if rs.NowPlayingItem == nil || rs.NowPlayingItem.Id == "" {
+			continue
+		}
+
+		es := EmbySession{
+			SessionID: rs.Id,
+			UserID:    rs.UserID,
+			UserName:  rs.UserName,
+			App:       rs.Client,
+			Device:    rs.DeviceName,
+		}
+
+		// Item + duration
+		es.ItemID = rs.NowPlayingItem.Id
+		es.ItemName = rs.NowPlayingItem.Name
+		es.ItemType = rs.NowPlayingItem.Type
+		es.DurationTicks = rs.NowPlayingItem.RunTimeTicks
+
+		// Capture additional media info defaults
+		es.Container = strings.ToUpper(rs.NowPlayingItem.Container)
+
+		// Extract remote address
+		es.RemoteAddress = rs.RemoteEndPoint
+
+		// Extract transcoding reasons if transcoding is active
+		if rs.TranscodingInfo != nil {
+			es.TransReasons = rs.TranscodingInfo.TranscodeReasons
+		}
 
 		// Per-track and stream info
 		subs := 0
@@ -738,12 +786,12 @@ type rawSession struct {
 						es.AudioDefault = true
 					}
 				}
-				
+
 				// Always assign sourceAudioCodec if not set and present
 				if sourceAudioCodec == "" && ms.Codec != "" {
 					sourceAudioCodec = strings.ToUpper(ms.Codec)
 				}
-				
+
 				if ms.BitRate > 0 {
 					streamKbpsSum += ms.BitRate
 				} else if ms.Bitrate > 0 {
@@ -768,133 +816,6 @@ type rawSession struct {
 					if ms.Codec != "" {
 						es.SubCodec = strings.ToUpper(ms.Codec)
 					}
-				}
-			}
-		}
-		es.SubsCount = subs
-
-// GetActiveSessions returns only sessions that have a NowPlayingItem.
-func (c *Client) GetActiveSessions() ([]EmbySession, error) {
-	u := fmt.Sprintf("%s/emby/Sessions", c.BaseURL)
-	q := url.Values{}
-	q.Set("api_key", c.APIKey)
-
-	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
-	// Some setups prefer header token; keep header for compatibility.
-	req.Header.Set("X-Emby-Token", c.APIKey)
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	var raw []rawSession
-	if err := readJSON(resp, &raw); err != nil {
-		return nil, err
-	}
-
-	out := make([]EmbySession, 0, len(raw))
-	for _, rs := range raw {
-		// Only show active playback
-		if rs.NowPlayingItem == nil || rs.NowPlayingItem.Id == "" {
-			continue
-		}
-
-		es := EmbySession{
-			SessionID: rs.Id,
-			UserID:    rs.UserID,
-			UserName:  rs.UserName,
-			App:       rs.Client,
-			Device:    rs.DeviceName,
-		}
-
-		// Item + duration
-		es.ItemID = rs.NowPlayingItem.Id
-		es.ItemName = rs.NowPlayingItem.Name
-		es.ItemType = rs.NowPlayingItem.Type
-		es.DurationTicks = rs.NowPlayingItem.RunTimeTicks
-
-		// Capture additional media info defaults
-		es.Container = strings.ToUpper(rs.NowPlayingItem.Container)
-
-		// Extract remote address
-		es.RemoteAddress = rs.RemoteEndPoint
-
-		// Extract transcoding reasons if transcoding is active
-		if rs.TranscodingInfo != nil {
-			es.TransReasons = rs.TranscodingInfo.TranscodeReasons
-		}
-
-		// Per-track and stream info
-		subs := 0
-		streamKbpsSum := int64(0)
-		var sourceVideoCodec, sourceAudioCodec string
-
-		// Resolution / HDR / audio lang & channels / subs info
-		for _, ms := range rs.NowPlayingItem.MediaStreams {
-			switch strings.ToLower(ms.Type) {
-			case "video":
-				if es.VideoCodec == "" && ms.Codec != "" {
-					es.VideoCodec = strings.ToUpper(ms.Codec)
-				}
-				// Always assign sourceVideoCodec if present
-				if ms.Codec != "" {
-					sourceVideoCodec = strings.ToUpper(ms.Codec)
-				}
-				if es.Width == 0 && ms.Width > 0 {
-					es.Width = ms.Width
-					es.Height = ms.Height
-				}
-				// HDR/DV detection (prefer DV if present)
-				vr := strings.ToLower(strings.TrimSpace(ms.VideoRange))
-				vrt := strings.ToLower(strings.TrimSpace(ms.VideoRangeType))
-				if (ms.DvProfile != nil && *ms.DvProfile > 0) ||
-					vr == "dovi" || vr == "dolby vision" || vr == "dolbyvision" ||
-					vrt == "dv" || vrt == "dolbyvision" {
-					es.DolbyVision = true
-				}
-				if ms.Hdr10 || ms.Hdr || ms.IsHdr ||
-					strings.Contains(vr, "hdr") || vrt == "hdr10" || vrt == "hdr10plus" {
-					es.HDR10 = true
-				}
-				if ms.BitRate > 0 {
-					streamKbpsSum += ms.BitRate
-				} else if ms.Bitrate > 0 {
-					streamKbpsSum += ms.Bitrate
-				}
-			case "audio":
-				if es.AudioCodec == "" && ms.Codec != "" {
-					es.AudioCodec = strings.ToUpper(ms.Codec)
-				}
-				// Always assign sourceAudioCodec if not set and present
-				if sourceAudioCodec == "" && ms.Codec != "" {
-					sourceAudioCodec = strings.ToUpper(ms.Codec)
-				}
-				// Keep language as-is (don't force uppercase) so "English" stays "English"
-				if es.AudioLang == "" && ms.Language != "" {
-					es.AudioLang = ms.Language
-				}
-				if es.AudioCh == 0 && ms.Channels > 0 {
-					es.AudioCh = ms.Channels
-				}
-				// NEW: detect default audio track
-				if ms.IsDefault || ms.Default {
-					es.AudioDefault = true
-				}
-				if ms.BitRate > 0 {
-					streamKbpsSum += ms.BitRate
-				} else if ms.Bitrate > 0 {
-					streamKbpsSum += ms.Bitrate
-				}
-
-			case "subtitle":
-				subs++
-				// Keep first sub details for convenience
-				if es.SubLang == "" && ms.Language != "" {
-					es.SubLang = strings.ToUpper(ms.Language)
-				}
-				if es.SubCodec == "" && ms.Codec != "" {
-					es.SubCodec = strings.ToUpper(ms.Codec)
 				}
 			}
 		}
