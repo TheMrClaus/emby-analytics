@@ -3,7 +3,6 @@ package stats
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 
@@ -45,16 +44,16 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 			days = 30
 		}
 
-		// Prefer using play_sessions.play_method + started_at (unix seconds)
-		// started_at/ended_at are defined in the schema migrations.
-		// We count sessions whose started_at is within the last N days.
+		// Enhanced query to get detailed method breakdown
 		query := `
 			SELECT
-				COALESCE(play_method, '') AS raw_method,
+				COALESCE(video_method, 'DirectPlay') AS video_method,
+				COALESCE(audio_method, 'DirectPlay') AS audio_method,
+				COALESCE(play_method, 'Unknown') AS overall_method,
 				COUNT(*) AS cnt
 			FROM play_sessions
 			WHERE started_at >= (strftime('%s','now') - (? * 86400))
-			GROUP BY raw_method
+			GROUP BY video_method, audio_method, overall_method
 		`
 
 		rows, err := db.Query(query, days)
@@ -63,35 +62,51 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 		}
 		defer rows.Close()
 
-		out := map[string]int{
-			"DirectPlay":   0,
-			"DirectStream": 0,
-			"Transcode":    0,
-			"Unknown":      0,
+		// Detailed breakdown
+		methodBreakdown := make(map[string]int)
+
+		// High-level summary for backwards compatibility
+		summary := map[string]int{
+			"DirectPlay":    0,
+			"VideoOnly":     0,
+			"AudioOnly":     0,
+			"BothTranscode": 0,
+			"Unknown":       0,
 		}
 
-		// DEBUG: Log what we're getting from the database
-		var debugRaw []string
-
+		// Process results
 		for rows.Next() {
-			var raw string
+			var videoMethod, audioMethod, overallMethod string
 			var cnt int
-			if err := rows.Scan(&raw, &cnt); err != nil {
+			if err := rows.Scan(&videoMethod, audioMethod, overallMethod, &cnt); err != nil {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 			}
 
-			// DEBUG: Collect raw values for logging
-			debugRaw = append(debugRaw, fmt.Sprintf("'%s'->%s (%d)", raw, normalize(raw), cnt))
+			// Create detailed key
+			key := fmt.Sprintf("%s|%s", videoMethod, audioMethod)
+			methodBreakdown[key] = cnt
 
-			out[normalize(raw)] += cnt
+			// Categorize for high-level summary
+			if videoMethod == "DirectPlay" && audioMethod == "DirectPlay" {
+				summary["DirectPlay"] += cnt
+			} else if videoMethod == "Transcode" && audioMethod == "DirectPlay" {
+				summary["VideoOnly"] += cnt
+			} else if videoMethod == "DirectPlay" && audioMethod == "Transcode" {
+				summary["AudioOnly"] += cnt
+			} else if videoMethod == "Transcode" && audioMethod == "Transcode" {
+				summary["BothTranscode"] += cnt
+			} else {
+				summary["Unknown"] += cnt
+			}
 		}
 		if err := rows.Err(); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
 
-		// DEBUG: Log all raw values we found
-		log.Printf("[PlayMethods] Raw DB values: %v", debugRaw)
-
-		return c.JSON(fiber.Map{"methods": out})
+		return c.JSON(fiber.Map{
+			"methods":  summary,         // High-level categories for charts
+			"detailed": methodBreakdown, // Detailed breakdown
+			"days":     days,
+		})
 	}
 }
