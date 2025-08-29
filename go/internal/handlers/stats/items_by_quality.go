@@ -53,11 +53,12 @@ func ItemsByQuality(db *sql.DB) fiber.Handler {
 		case "SD":
 			whereClause = "WHERE li.height >= 1 AND li.height < 720"
 			heightRange = "1p-719p"
-		case "Unknown":
+		case "Unknown", "Resolution Not Available":
+			// Handle both legacy "Unknown" and current "Resolution Not Available"
 			whereClause = "WHERE li.height IS NULL OR li.height = 0"
 			heightRange = "No height data"
 		default:
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid quality parameter. Must be: 4K, 1080p, 720p, SD, or Unknown"})
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid quality parameter. Must be: 4K, 1080p, 720p, SD, Unknown, or Resolution Not Available"})
 		}
 
 		// Add media type filter if specified
