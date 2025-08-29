@@ -207,7 +207,7 @@ func (w *EmbyWS) handleSessionsEvent(evt EmbyEvent) {
 			SessionID:        session.SessionID,
 			DeviceID:         session.DeviceID,
 			Client:           session.Client,
-			PlayMethod:       session.PlayMethod,
+			PlayMethod:       detectPlayMethod(session),
 			RemoteEndPoint:   session.RemoteEndPoint,
 			TranscodeReasons: session.TranscodeReasons,
 			NowPlaying: struct {
@@ -252,6 +252,27 @@ func (w *EmbyWS) handleSessionsEvent(evt EmbyEvent) {
 		// Send to intervalizer
 		w.Handler(syntheticEvent)
 	}
+}
+
+// detectPlayMethod applies the same logic as GetActiveSessions to determine PlayMethod
+func detectPlayMethod(session SessionData) string {
+	// Check if there are transcode reasons - strong indicator of transcoding
+	if len(session.TranscodeReasons) > 0 {
+		return "Transcode"
+	}
+
+	// Check the PlayMethod field from Emby if it exists
+	if session.PlayMethod != "" {
+		// If it starts with "trans", it's transcoding
+		if strings.HasPrefix(strings.ToLower(session.PlayMethod), "trans") {
+			return "Transcode"
+		}
+		// Otherwise treat as direct
+		return "DirectPlay"
+	}
+
+	// Default to DirectPlay if no indicators of transcoding
+	return "DirectPlay"
 }
 
 // SessionData represents the structure of Sessions event data
