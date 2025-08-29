@@ -10,10 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"emby-analytics/internal/config"
 	db "emby-analytics/internal/db"
 	emby "emby-analytics/internal/emby"
 	admin "emby-analytics/internal/handlers/admin"
-	config "emby-analytics/internal/handlers/config"
+	configHandler "emby-analytics/internal/handlers/config"
 	health "emby-analytics/internal/handlers/health"
 	images "emby-analytics/internal/handlers/images"
 	items "emby-analytics/internal/handlers/items"
@@ -165,7 +166,7 @@ func main() {
 	app.Get("/stats/items/by-quality/:quality", stats.ItemsByQuality(sqlDB))
 
 	// Configuration Routes
-	app.Get("/config", config.GetConfig(cfg))
+	app.Get("/config", configHandler.GetConfig(cfg))
 
 	// Item & Image Routes
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
