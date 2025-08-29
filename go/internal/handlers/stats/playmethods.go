@@ -19,8 +19,14 @@ func normalize(method string) string {
 		return "DirectStream"
 	case "transcode", "transcoding":
 		return "Transcode"
-	case "direct": // ADD THIS LINE - handles the "Direct" value from Emby
+	case "direct": // handles the "Direct" value from Emby
 		return "DirectPlay"
+	case "remux", "copy", "directcopy":
+		return "DirectStream"
+	case "convert", "encoding":
+		return "Transcode"
+	case "":
+		return "Unknown"
 	default:
 		return "Unknown"
 	}
