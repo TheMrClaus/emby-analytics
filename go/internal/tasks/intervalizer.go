@@ -236,13 +236,13 @@ func upsertSession(db *sql.DB, d emby.PlaybackProgressData) (int64, error) {
 		videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo := determineDetailedMethods(d)
 
 		_, updateErr := db.Exec(`
-    UPDATE play_sessions 
-    SET user_id=?, device_id=?, client_name=?, item_name=?, item_type=?, play_method=?, 
-        started_at=?, ended_at=NULL, is_active=true, transcode_reasons=?, remote_address=?,
-        video_method=?, audio_method=?, video_codec_from=?, video_codec_to=?, 
-        audio_codec_from=?, audio_codec_to=?
-    WHERE id=?
-`, d.UserID, d.DeviceID, d.Client, d.NowPlaying.Name, d.NowPlaying.Type, d.PlayMethod, now, transcodeReasonsStr, d.RemoteEndPoint, videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo, id)
+			UPDATE play_sessions 
+			SET user_id=?, device_id=?, client_name=?, item_name=?, item_type=?, play_method=?, 
+				started_at=?, ended_at=NULL, is_active=true, transcode_reasons=?, remote_address=?,
+				video_method=?, audio_method=?, video_codec_from=?, video_codec_to=?, 
+				audio_codec_from=?, audio_codec_to=?
+			WHERE id=?
+		`, d.UserID, d.DeviceID, d.Client, d.NowPlaying.Name, d.NowPlaying.Type, d.PlayMethod, now, transcodeReasonsStr, d.RemoteEndPoint, videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo, id)
 		if updateErr != nil {
 			return 0, updateErr
 		}
@@ -262,9 +262,9 @@ func upsertSession(db *sql.DB, d emby.PlaybackProgressData) (int64, error) {
 	videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo := determineDetailedMethods(d)
 
 	res, err := db.Exec(`
-    INSERT INTO play_sessions(user_id, session_id, device_id, client_name, item_id, item_name, item_type, play_method, started_at, is_active, transcode_reasons, remote_address, video_method, audio_method, video_codec_from, video_codec_to, audio_codec_from, audio_codec_to)
-    VALUES(?,?,?,?,?,?,?,?,?,true,?,?,?,?,?,?,?,?)
-`, d.UserID, d.SessionID, d.DeviceID, d.Client, d.NowPlaying.ID, d.NowPlaying.Name, d.NowPlaying.Type, d.PlayMethod, now, transcodeReasonsStr, d.RemoteEndPoint, videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo)
+		INSERT INTO play_sessions(user_id, session_id, device_id, client_name, item_id, item_name, item_type, play_method, started_at, is_active, transcode_reasons, remote_address, video_method, audio_method, video_codec_from, video_codec_to, audio_codec_from, audio_codec_to)
+		VALUES(?,?,?,?,?,?,?,?,?,true,?,?,?,?,?,?,?,?)
+	`, d.UserID, d.SessionID, d.DeviceID, d.Client, d.NowPlaying.ID, d.NowPlaying.Name, d.NowPlaying.Type, d.PlayMethod, now, transcodeReasonsStr, d.RemoteEndPoint, videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo)
 	if err != nil {
 		return 0, err
 	}
