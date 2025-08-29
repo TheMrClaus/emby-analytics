@@ -220,10 +220,31 @@ func (iz *Intervalizer) closeInterval(s *liveState, start time.Time, end time.Ti
 // ... (upsertSession, insertEvent, boolToInt are unchanged)
 func upsertSession(db *sql.DB, d emby.PlaybackProgressData) (int64, error) {
 	var id int64
-	err := db.QueryRow(`SELECT id FROM play_sessions WHERE session_id=? AND item_id=? AND is_active = true`, d.SessionID, d.NowPlaying.ID).Scan(&id)
+	// Check for ANY existing session (active or inactive)
+	err := db.QueryRow(`SELECT id FROM play_sessions WHERE session_id=? AND item_id=?`, d.SessionID, d.NowPlaying.ID).Scan(&id)
 	if err == nil {
+		// Found existing session, reactivate it
+		now := time.Now().UTC().Unix()
+
+		// Convert TranscodeReasons slice to comma-separated string
+		var transcodeReasonsStr string
+		if len(d.TranscodeReasons) > 0 {
+			transcodeReasonsStr = strings.Join(d.TranscodeReasons, ",")
+		}
+
+		_, updateErr := db.Exec(`
+			UPDATE play_sessions 
+			SET user_id=?, device_id=?, client_name=?, item_name=?, item_type=?, play_method=?, 
+				started_at=?, ended_at=NULL, is_active=true, transcode_reasons=?, remote_address=?
+			WHERE id=?
+		`, d.UserID, d.DeviceID, d.Client, d.NowPlaying.Name, d.NowPlaying.Type, d.PlayMethod, now, transcodeReasonsStr, d.RemoteEndPoint, id)
+		if updateErr != nil {
+			return 0, updateErr
+		}
 		return id, nil
 	}
+
+	// No existing session found, create new one
 	now := time.Now().UTC().Unix()
 
 	// Convert TranscodeReasons slice to comma-separated string
