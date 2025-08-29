@@ -162,6 +162,7 @@ func main() {
 	app.Get("/stats/user/:id", stats.UserDetailHandler(sqlDB))
 	app.Get("/stats/play-methods", stats.PlayMethods(sqlDB))
 	app.Get("/stats/items/by-codec/:codec", stats.ItemsByCodec(sqlDB))
+	app.Get("/stats/items/by-quality/:quality", stats.ItemsByQuality(sqlDB))
 
 	// Item & Image Routes
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))

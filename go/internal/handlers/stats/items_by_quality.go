@@ -1,0 +1,127 @@
+package stats
+
+import (
+	"database/sql"
+
+	"github.com/gofiber/fiber/v3"
+)
+
+// ItemsByQualityResponse holds the response structure for quality-based queries
+type ItemsByQualityResponse struct {
+	Items       []LibraryItemResponse `json:"items"`
+	Total       int                   `json:"total"`
+	Quality     string                `json:"quality"`
+	HeightRange string                `json:"height_range"`
+	Page        int                   `json:"page"`
+	PageSize    int                   `json:"page_size"`
+}
+
+// ItemsByQuality returns all library items for a specific quality/resolution with pagination
+func ItemsByQuality(db *sql.DB) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		quality := c.Params("quality")
+		if quality == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "quality parameter is required"})
+		}
+
+		// Parse query parameters
+		page := parseQueryInt(c, "page", 1)
+		if page < 1 {
+			page = 1
+		}
+		pageSize := parseQueryInt(c, "page_size", 50)
+		if pageSize < 1 || pageSize > 500 {
+			pageSize = 50
+		}
+		mediaType := c.Query("media_type", "")
+
+		// Build quality-based WHERE clause
+		var whereClause string
+		var heightRange string
+		args := []interface{}{}
+
+		switch quality {
+		case "4K":
+			whereClause = "WHERE li.height >= 2160"
+			heightRange = "≥2160p"
+		case "1080p":
+			whereClause = "WHERE li.height >= 1080 AND li.height < 2160"
+			heightRange = "1080p-2159p"
+		case "720p":
+			whereClause = "WHERE li.height >= 720 AND li.height < 1080"
+			heightRange = "720p-1079p"
+		case "SD":
+			whereClause = "WHERE li.height >= 1 AND li.height < 720"
+			heightRange = "1p-719p"
+		case "Unknown":
+			whereClause = "WHERE li.height IS NULL OR li.height = 0"
+			heightRange = "No height data"
+		default:
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid quality parameter. Must be: 4K, 1080p, 720p, SD, or Unknown"})
+		}
+
+		// Add media type filter if specified
+		if mediaType != "" {
+			whereClause += " AND COALESCE(li.media_type, 'Unknown') = ?"
+			args = append(args, mediaType)
+		}
+
+		// Exclude live/TV channel types
+		whereClause += " AND COALESCE(li.media_type, 'Unknown') NOT IN ('TvChannel', 'LiveTv', 'Channel')"
+
+		// Get total count
+		countQuery := `
+			SELECT COUNT(*)
+			FROM library_item li
+			` + whereClause
+
+		var total int
+		if err := db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		// Get paginated items
+		offset := (page - 1) * pageSize
+		itemsQuery := `
+			SELECT 
+				li.id,
+				COALESCE(li.name, 'Unknown') as name,
+				COALESCE(li.media_type, 'Unknown') as media_type,
+				li.height,
+				li.width,
+				COALESCE(li.video_codec, 'Unknown') as codec
+			FROM library_item li
+			` + whereClause + `
+			ORDER BY li.name ASC
+			LIMIT ? OFFSET ?`
+
+		args = append(args, pageSize, offset)
+		rows, err := db.Query(itemsQuery, args...)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		defer rows.Close()
+
+		var items []LibraryItemResponse
+		for rows.Next() {
+			var item LibraryItemResponse
+			if err := rows.Scan(&item.ID, &item.Name, &item.MediaType, &item.Height, &item.Width, &item.Codec); err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			}
+			items = append(items, item)
+		}
+
+		if err := rows.Err(); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		return c.JSON(ItemsByQualityResponse{
+			Items:       items,
+			Total:       total,
+			Quality:     quality,
+			HeightRange: heightRange,
+			Page:        page,
+			PageSize:    pageSize,
+		})
+	}
+}
