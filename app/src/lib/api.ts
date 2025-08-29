@@ -53,6 +53,8 @@ export const fetchActiveUsersLifetime = (limit = 10) =>
 export const fetchTotalUsers = () => j<number>("/stats/users/total");
 export const fetchItemsByIds = (ids: string[]) =>
   j<ItemRow[]>(`/items/by-ids?ids=${encodeURIComponent(ids.join(","))}`);
+export const fetchPlayMethods = () =>
+  j<{ methods: { [k: string]: number } }>("/stats/play-methods?days=30");
 
 // Admin refresh
 export const startRefresh = () =>
