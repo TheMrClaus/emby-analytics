@@ -13,8 +13,7 @@ export default function QualitiesTable() {
     fetchQualities().then(setData).catch(() => {});
   }, []);
 
-  const order = ["4K", "1080p", "720p", "SD", "Resolution Not Available"];
-  const rows = useMemo(() => {
+    const order = ["8K", "4K", "1080p", "720p", "SD", "Resolution Not Available"];  const rows = useMemo(() => {
     if (!data?.buckets) return [];
     return order.map((label) => ({
       label,
