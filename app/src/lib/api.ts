@@ -141,6 +141,7 @@ export async function fetchItemsByQuality(
 
 export interface ConfigResponse {
   emby_external_url: string;
+  emby_server_id: string;
 }
 
 export const fetchConfig = async (): Promise<ConfigResponse> => {

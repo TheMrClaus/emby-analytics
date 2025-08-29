@@ -908,3 +908,30 @@ func (c *Client) SendMessage(sessionID, header, text string, timeoutMs int) erro
 	_, err := c.http.Do(req)
 	return err
 }
+
+type EmbySystemInfo struct {
+	ID   string `json:"Id"`
+	Name string `json:"ServerName"`
+}
+
+// GetSystemInfo fetches server information including the server ID
+func (c *Client) GetSystemInfo() (*EmbySystemInfo, error) {
+	u := fmt.Sprintf("%s/emby/System/Info", c.BaseURL)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	req.Header.Set("X-Emby-Token", c.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var info EmbySystemInfo
+	if err := readJSON(resp, &info); err != nil {
+		return nil, err
+	}
+
+	return &info, nil
+}

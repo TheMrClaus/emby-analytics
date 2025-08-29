@@ -16,6 +16,7 @@ export default function QualityDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [embyExternalUrl, setEmbyExternalUrl] = useState<string>('');
+  const [embyServerId, setEmbyServerId] = useState<string>('');
 
   useEffect(() => {
     if (!quality || typeof quality !== "string") return;
@@ -40,7 +41,10 @@ export default function QualityDetailPage() {
   // Fetch config once on component mount to get Emby external URL
   useEffect(() => {
     fetchConfig()
-      .then(config => setEmbyExternalUrl(config.emby_external_url))
+      .then(config => {
+        setEmbyExternalUrl(config.emby_external_url);
+        setEmbyServerId(config.emby_server_id);
+      })
       .catch(err => console.error('Failed to fetch config:', err));
   }, []);
 
@@ -153,7 +157,7 @@ export default function QualityDetailPage() {
                         <tr
                           key={item.id}
                           className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 cursor-pointer transition-colors"
-                          onClick={() => openInEmby(item.id, embyExternalUrl)}  
+                          onClick={() => openInEmby(item.id, embyExternalUrl, embyServerId)}  
                           title="Click to open in Emby"
                         >
                           <td className="py-3 font-medium">{item.name}</td>
