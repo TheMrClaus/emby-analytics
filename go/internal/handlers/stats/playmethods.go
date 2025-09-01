@@ -43,17 +43,24 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 			days = 30
 		}
 
-		// Check if enhanced columns exist
-		var testCol string
-		err = db.QueryRow("SELECT video_method FROM play_sessions LIMIT 1").Scan(&testCol)
-		hasEnhancedColumns := (err == nil)
+		// Check if enhanced columns exist by checking table structure
+		var hasVideoMethod bool
+		row := db.QueryRow(`
+			SELECT COUNT(*) 
+			FROM pragma_table_info('play_sessions') 
+			WHERE name = 'video_method'
+		`)
+		var count int
+		if err := row.Scan(&count); err == nil && count > 0 {
+			hasVideoMethod = true
+		}
 
-		if !hasEnhancedColumns {
+		if !hasVideoMethod {
 			log.Printf("[PlayMethods] Enhanced columns not found, using legacy mode")
 			return legacyPlayMethods(c, db, days)
 		}
 
-		// Enhanced query with new columns
+		// Enhanced query with new columns - fixed to use Unix timestamp properly
 		query := `
 			SELECT
 				COALESCE(video_method, 'DirectPlay') AS video_method,
@@ -61,6 +68,7 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 				COUNT(*) AS cnt
 			FROM play_sessions
 			WHERE started_at >= (strftime('%s','now') - (? * 86400))
+				AND started_at IS NOT NULL
 			GROUP BY video_method, audio_method
 		`
 
@@ -77,6 +85,8 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 		// High-level summary
 		summary := map[string]int{
 			"DirectPlay":    0,
+			"DirectStream":  0,
+			"Transcode":     0,
 			"VideoOnly":     0,
 			"AudioOnly":     0,
 			"BothTranscode": 0,
@@ -90,7 +100,7 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 
 			if err := rows.Scan(&videoMethod, &audioMethod, &cnt); err != nil {
 				log.Printf("[PlayMethods] Scan error: %v", err)
-				return legacyPlayMethods(c, db, days)
+				continue
 			}
 
 			// Create detailed key
@@ -100,10 +110,14 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 			// Categorize for high-level summary
 			if videoMethod == "DirectPlay" && audioMethod == "DirectPlay" {
 				summary["DirectPlay"] += cnt
+			} else if videoMethod == "DirectStream" && audioMethod == "DirectPlay" {
+				summary["DirectStream"] += cnt // Fixed: was VideoOnly
 			} else if videoMethod == "Transcode" && audioMethod == "DirectPlay" {
 				summary["VideoOnly"] += cnt
 			} else if videoMethod == "DirectPlay" && audioMethod == "Transcode" {
 				summary["AudioOnly"] += cnt
+			} else if videoMethod == "DirectStream" && audioMethod == "Transcode" {
+				summary["Transcode"] += cnt // Remux with audio transcode
 			} else if videoMethod == "Transcode" && audioMethod == "Transcode" {
 				summary["BothTranscode"] += cnt
 			} else {
@@ -113,6 +127,12 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 
 		if err := rows.Err(); err != nil {
 			log.Printf("[PlayMethods] Rows error: %v", err)
+			return legacyPlayMethods(c, db, days)
+		}
+
+		// Ensure we have the basic methods even if not in data
+		if summary["DirectPlay"] == 0 && summary["DirectStream"] == 0 && summary["Transcode"] == 0 {
+			// If no data, try legacy mode as fallback
 			return legacyPlayMethods(c, db, days)
 		}
 
@@ -132,12 +152,24 @@ func legacyPlayMethods(c fiber.Ctx, db *sql.DB, days int) error {
 			COUNT(*) AS cnt
 		FROM play_sessions
 		WHERE started_at >= (strftime('%s','now') - (? * 86400))
+			AND started_at IS NOT NULL
 		GROUP BY raw_method
 	`
 
 	rows, err := db.Query(query, days)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		log.Printf("[PlayMethods] Legacy query failed: %v", err)
+		// Return empty data instead of error
+		return c.JSON(fiber.Map{
+			"methods": map[string]int{
+				"DirectPlay":   0,
+				"DirectStream": 0,
+				"Transcode":    0,
+				"Unknown":      0,
+			},
+			"detailed": make(map[string]int),
+			"days":     days,
+		})
 	}
 	defer rows.Close()
 
@@ -152,26 +184,21 @@ func legacyPlayMethods(c fiber.Ctx, db *sql.DB, days int) error {
 		var raw string
 		var cnt int
 		if err := rows.Scan(&raw, &cnt); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			log.Printf("[PlayMethods] Legacy scan error: %v", err)
+			continue
 		}
-		out[normalize(raw)] += cnt
+		normalized := normalize(raw)
+		out[normalized] += cnt
 	}
+
 	if err := rows.Err(); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		log.Printf("[PlayMethods] Legacy rows error: %v", err)
 	}
 
-	// Convert to new format for compatibility
-	summary := map[string]int{
-		"DirectPlay":    out["DirectPlay"] + out["DirectStream"],
-		"VideoOnly":     0,
-		"AudioOnly":     0,
-		"BothTranscode": out["Transcode"],
-		"Unknown":       out["Unknown"],
-	}
-
+	// Return in the format expected by frontend
 	return c.JSON(fiber.Map{
-		"methods":  summary,
-		"detailed": make(map[string]int), // Empty detailed for legacy
+		"methods":  out, // Return the simple format for legacy
+		"detailed": make(map[string]int),
 		"days":     days,
 	})
 }
