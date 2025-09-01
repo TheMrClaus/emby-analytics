@@ -189,8 +189,8 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 			defer sessionRows.Close()
 			for sessionRows.Next() {
 				var session SessionDetail
-				if err := sessionRows.Scan(&session.ItemName, &session.ItemType, &session.ItemID, 
-					&session.DeviceID, &session.ClientName, &session.VideoMethod, &session.AudioMethod); err != nil {
+				if err := sessionRows.Scan(&session.ItemName, &session.ItemType, &session.DeviceID, 
+					&session.ClientName, &session.ItemID, &session.VideoMethod, &session.AudioMethod); err != nil {
 					log.Printf("[PlayMethods] Session scan error: %v", err)
 					continue
 				}
