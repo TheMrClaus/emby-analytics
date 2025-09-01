@@ -173,9 +173,8 @@ func (iz *Intervalizer) onStop(d emby.PlaybackProgressData) {
 	if s.IsIntervalOpen {
 		// If an interval was open, close it normally.
 		iz.closeInterval(s, s.IntervalStartTS, now, s.IntervalStartPos, d.PlayState.PositionTicks, false)
-	} else if !s.SessionStartTS.IsZero() {
-		// **THE FIX**: If no interval was open (e.g., a very short play),
-		// create one from the absolute session start time.
+	} else if !s.SessionStartTS.IsZero() && s.LastPosTicks > 0 {
+		// FIX: Create interval for very short plays that never triggered a progress event
 		iz.closeInterval(s, s.SessionStartTS, now, 0, d.PlayState.PositionTicks, false)
 	}
 
