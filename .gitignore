@@ -9,6 +9,7 @@ __pycache__/
 *.pyc
 compose.yml
 CLAUDE.md
+GEMINI.md
 
 # SQLite DB and runtime data
 data/
