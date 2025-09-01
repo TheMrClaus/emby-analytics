@@ -23,7 +23,30 @@ type TopItem struct {
 
 func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		timeframe := c.Query("timeframe", "14d")
+		timeframe := c.Query("timeframe", "")
+		if timeframe == "" {
+			// Fallback to days parameter if timeframe not provided
+			days := parseQueryInt(c, "days", 14)
+			if days <= 0 {
+				timeframe = "all-time"
+			} else if days == 1 {
+				timeframe = "1d"
+			} else if days == 3 {
+				timeframe = "3d"
+			} else if days == 7 {
+				timeframe = "7d"
+			} else if days == 14 {
+				timeframe = "14d"
+			} else if days == 30 {
+				timeframe = "30d"
+			} else {
+				timeframe = "30d" // Default for large day values
+			}
+		}
+		if timeframe == "" {
+			timeframe = "14d" // Final fallback
+		}
+		
 		limit := parseQueryInt(c, "limit", 10)
 		if limit <= 0 || limit > 100 {
 			limit = 10
