@@ -188,6 +188,11 @@ func main() {
 	app.Get("/stats/items/by-codec/:codec", stats.ItemsByCodec(sqlDB))
 	app.Get("/stats/items/by-quality/:quality", stats.ItemsByQuality(sqlDB))
 
+	// Backward compatibility routes (hyphenated versions)
+	app.Get("/stats/top-users", stats.TopUsers(sqlDB))
+	app.Get("/stats/top-items", stats.TopItems(sqlDB, em))
+	app.Get("/stats/playback-methods", stats.PlayMethods(sqlDB))
+
 	// Configuration Routes
 	app.Get("/config", configHandler.GetConfig(cfg))
 
@@ -221,7 +226,7 @@ func main() {
 	// Static UI Serving
 	app.Use("/", static.New(cfg.WebPath))
 	app.Use(func(c fiber.Ctx) error {
-		if c.Method() == fiber.MethodGet && !strings.HasPrefix(c.Path(), "/api") {
+		if c.Method() == fiber.MethodGet && !startsWithAny(c.Path(), "/api", "/stats", "/health", "/admin", "/now", "/config", "/items", "/img") {
 			return c.SendFile(filepath.Join(cfg.WebPath, "index.html"))
 		}
 		return c.Next()
