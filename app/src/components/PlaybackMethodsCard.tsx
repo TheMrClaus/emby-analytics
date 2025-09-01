@@ -58,7 +58,7 @@ export default function PlaybackMethodsCard() {
   const summaryChartData = useMemo(() => {
     const methods = data?.methods || {};
     return [
-      { name: 'DirectPlay', value: methods.DirectPlay || 0, color: '#22c55e' }, // green-500 to match Now Playing
+      { name: 'Direct', value: methods.DirectPlay || 0, color: '#22c55e' }, // green-500 to match Now Playing
       { name: 'Transcode', value: methods.Transcode || 0, color: '#f97316' }      // orange-500 to match Now Playing
     ].filter(d => d.value > 0);
   }, [data]);

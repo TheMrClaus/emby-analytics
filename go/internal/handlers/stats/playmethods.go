@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
+	"emby-analytics/internal/db"
+	"emby-analytics/internal/emby"
 )
 
 // normalize maps various casings/variants into our 4 buckets.
@@ -165,11 +167,11 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 			} else {
 				summary["Transcode"] += cnt
 				
-				// Track detailed transcode reasons
-				if videoMethod == "Transcode" || videoMethod != "DirectPlay" {
+				// Track detailed transcode reasons  
+				if videoMethod == "Transcode" {
 					transcodeDetails["TranscodeVideo"] += cnt
 				}
-				if audioMethod == "Transcode" || audioMethod != "DirectPlay" {
+				if audioMethod == "Transcode" {
 					transcodeDetails["TranscodeAudio"] += cnt
 				}
 				// TODO: Add subtitle transcoding detection when available
@@ -197,6 +199,9 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 				sessionDetails = append(sessionDetails, session)
 			}
 		}
+
+		// Enrich episode display names using existing logic
+		sessionDetails = enrichSessionDetails(sessionDetails, db)
 
 		// Ensure we have the basic methods even if not in data
 		if summary["DirectPlay"] == 0 && summary["Transcode"] == 0 {
@@ -285,4 +290,74 @@ func legacyPlayMethods(c fiber.Ctx, db *sql.DB, days int) error {
 		"sessionDetails":   []interface{}{}, // empty for legacy mode
 		"days":             days,
 	})
+}
+
+// enrichSessionDetails enriches episode names with proper formatting
+func enrichSessionDetails(sessions []SessionDetail, database *sql.DB) []SessionDetail {
+	if len(sessions) == 0 {
+		return sessions
+	}
+
+	// Get episode IDs for enrichment
+	episodeIDs := make([]string, 0)
+	for _, session := range sessions {
+		if strings.EqualFold(session.ItemType, "Episode") {
+			episodeIDs = append(episodeIDs, session.ItemID)
+		}
+	}
+
+	if len(episodeIDs) == 0 {
+		return sessions // No episodes to enrich
+	}
+
+	// Get Emby client from database connection (similar to existing pattern)
+	em := db.GetEmbyClient()
+	if em == nil {
+		log.Printf("[PlayMethods] Emby client is nil, cannot enrich episodes")
+		return sessions
+	}
+
+	// Fetch episode details from Emby API
+	if items, err := em.ItemsByIDs(episodeIDs); err == nil {
+		// Create lookup map for enriched data
+		enriched := make(map[string]string)
+		for _, item := range items {
+			if item.Id == "" {
+				continue
+			}
+
+			// Use existing episode formatting logic
+			displayName := item.Name
+			if item.ParentIndexNumber != nil && item.IndexNumber != nil {
+				season := *item.ParentIndexNumber
+				episode := *item.IndexNumber
+				epcode := fmt.Sprintf("S%02dE%02d", season, episode)
+				
+				// Get series name from parent
+				seriesName := ""
+				if item.SeriesName != "" {
+					seriesName = item.SeriesName
+				}
+
+				// Format: "Episode Name - sXXeXX - Show Name"
+				if seriesName != "" {
+					displayName = fmt.Sprintf("%s - %s - %s", item.Name, epcode, seriesName)
+				} else {
+					displayName = fmt.Sprintf("%s - %s", item.Name, epcode)
+				}
+			}
+			enriched[item.Id] = displayName
+		}
+
+		// Apply enrichment to sessions
+		for i, session := range sessions {
+			if enrichedName, exists := enriched[session.ItemID]; exists {
+				sessions[i].ItemName = enrichedName
+			}
+		}
+	} else {
+		log.Printf("[PlayMethods] Emby API error for episodes: %v", err)
+	}
+
+	return sessions
 }
