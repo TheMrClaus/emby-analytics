@@ -61,9 +61,36 @@ func TopUsers(db *sql.DB) fiber.Handler {
 		winStart := now.AddDate(0, 0, -days).Unix()
 
 		// 1. Get historical data from the database (fetch a high number to merge before limiting)
-		historicalRows, err := queries.TopUsersByWatchSeconds(c, db, winStart, winEnd, 1000)
+		historicalRows, err := queries.TopUsersByWatchSeconds(c.Context(), db, winStart, winEnd, 1000)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		if err != nil || len(historicalRows) == 0 {
+			// Fallback to counting sessions if intervals aren't populated
+			rows, err := db.Query(`
+        SELECT 
+            u.id, 
+            u.name, 
+            COUNT(DISTINCT ps.id) * 0.5 as hours
+        FROM emby_user u
+        LEFT JOIN play_sessions ps ON ps.user_id = u.id
+        WHERE ps.started_at >= ? AND ps.started_at <= ?
+        GROUP BY u.id, u.name
+        ORDER BY hours DESC
+        LIMIT ?
+    `, winStart, winEnd, 1000)
+
+			if err == nil {
+				defer rows.Close()
+				historicalRows = []queries.TopUserRow{}
+				for rows.Next() {
+					var r queries.TopUserRow
+					if err := rows.Scan(&r.UserID, &r.Name, &r.Hours); err == nil {
+						historicalRows = append(historicalRows, r)
+					}
+				}
+			}
 		}
 
 		// 2. Prepare to combine historical and live data
