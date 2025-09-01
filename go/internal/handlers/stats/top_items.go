@@ -45,6 +45,35 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 			return c.Status(500).JSON(fiber.Map{"error": "database query failed: " + err.Error()})
 		}
 
+		if err != nil || len(historicalRows) == 0 {
+			// Fallback to counting sessions if intervals aren't populated
+			rows, err := db.Query(`
+        SELECT 
+            li.id,
+            li.name,
+            li.media_type,
+            COUNT(DISTINCT ps.id) * 0.5 as hours
+        FROM library_item li
+        LEFT JOIN play_sessions ps ON ps.item_id = li.id
+        WHERE ps.started_at >= ? AND ps.started_at <= ?
+        GROUP BY li.id, li.name, li.media_type
+        ORDER BY hours DESC
+        LIMIT ?
+    `, winStart, winEnd, 1000)
+
+			if err == nil {
+				defer rows.Close()
+				historicalRows = []queries.TopItemRow{}
+				for rows.Next() {
+					var r queries.TopItemRow
+					if err := rows.Scan(&r.ItemID, &r.Name, &r.Type, &r.Hours); err == nil {
+						r.Display = r.Name
+						historicalRows = append(historicalRows, r)
+					}
+				}
+			}
+		}
+
 		// 2. Prepare to combine historical and live data
 		combinedHours := make(map[string]float64)
 		itemDetails := make(map[string]TopItem)
