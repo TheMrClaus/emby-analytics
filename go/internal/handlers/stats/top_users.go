@@ -61,7 +61,7 @@ func TopUsers(db *sql.DB) fiber.Handler {
 		winStart := now.AddDate(0, 0, -days).Unix()
 
 		// 1. Get historical data from the database (fetch a high number to merge before limiting)
-		historicalRows, err := queries.TopUsersByWatchSeconds(c.Context(), db, winStart, winEnd, 1000)
+		historicalRows, err := queries.TopUsersByWatchSeconds(c, db, winStart, winEnd, 1000)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
