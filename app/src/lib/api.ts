@@ -53,12 +53,24 @@ export const fetchActiveUsersLifetime = (limit = 10) =>
 export const fetchTotalUsers = () => j<number>("/stats/users/total");
 export const fetchItemsByIds = (ids: string[]) =>
   j<ItemRow[]>(`/items/by-ids?ids=${encodeURIComponent(ids.join(","))}`);
-export const fetchPlayMethods = () =>
+type SessionDetail = {
+  item_name: string;
+  item_type: string;
+  item_id: string;
+  device_id: string;
+  client_name: string;
+  video_method: string;
+  audio_method: string;
+};
+
+export const fetchPlayMethods = (days = 30) =>
   j<{ 
     methods: Record<string, number>;
     detailed: Record<string, number>;
+    transcodeDetails: Record<string, number>;
+    sessionDetails: SessionDetail[];
     days: number;
-  }>("/stats/play-methods?days=30");
+  }>(`/stats/play-methods?days=${days}`);
 
 // Admin refresh
 export const startRefresh = () =>
