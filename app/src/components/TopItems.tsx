@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTopItems } from "../hooks/useData";
 import { imgPrimary } from "../lib/api";
-import { fmtTooltipTime } from "../lib/format";
+import { fmtTooltipTime, fmtHours } from "../lib/format";
 import Card from "./ui/Card";
 
 const timeframeOptions = [
@@ -85,7 +85,7 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
                 </td>
                 <td className="py-3">{displayType}</td>
                 <td className="py-3 text-right" title={fmtTooltipTime(r.hours)}>
-                  {r.hours.toFixed(2)}
+                  {fmtHours(r.hours)}
                 </td>
               </tr>
             );

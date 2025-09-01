@@ -4,7 +4,9 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
-    "preview": "npx serve out -l 3000"
+    "preview": "npx serve out -l 3000",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "next": "^14.2.31",

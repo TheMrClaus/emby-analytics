@@ -10,6 +10,7 @@ __pycache__/
 compose.yml
 CLAUDE.md
 GEMINI.md
+AGENTS.md
 
 # SQLite DB and runtime data
 data/

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUsage, useNowSnapshot, useRefreshStatus } from '../hooks/useData';
 import { startRefresh } from '../lib/api';
+import { fmtHours } from '../lib/format';
 
 type SnapshotEntry = {
   play_method?: string;
@@ -84,7 +85,7 @@ export default function Header() {
               {usageError ? (
                 <span className="text-red-400 text-sm">Error</span>
               ) : (
-                weeklyHours.toFixed(1)
+                fmtHours(weeklyHours)
               )}
             </div>
           </div>

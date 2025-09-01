@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTopUsers } from "../hooks/useData";
-import { fmtTooltipTime } from "../lib/format";
+import { fmtTooltipTime, fmtHours } from "../lib/format";
 import Card from "./ui/Card";
 
 const timeframeOptions = [
@@ -64,7 +64,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
             <tr key={i} className="border-b border-neutral-800 last:border-0">
               <td className="py-1">{r.name}</td>
               <td className="py-1 text-right tabular-nums" title={fmtTooltipTime(r.hours)}>
-                {r.hours.toFixed(2)}
+                {fmtHours(r.hours)}
               </td>
             </tr>
           ))}

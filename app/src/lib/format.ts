@@ -24,3 +24,12 @@ export const fmtTooltipTime = (hours: number) => {
 };
 
 export const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+
+// hours (float) -> display time like "1h 25m" or "25m" for UI cards
+export const fmtHours = (hours: number) => {
+  const totalSec = Math.round(hours * 3600);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  return `${m}m`;
+};
