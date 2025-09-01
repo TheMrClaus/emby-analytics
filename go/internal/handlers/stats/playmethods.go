@@ -18,7 +18,7 @@ func normalize(method string) string {
 		return "DirectPlay"
 	case "directstream", "direct stream":
 		return "DirectStream"
-	case "transcode", "transcoding":
+	case "transcode", "transcoding", "h264", "h265", "hevc":
 		return "Transcode"
 	case "direct": // handles the "Direct" value from Emby
 		return "DirectPlay"
@@ -60,16 +60,24 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 			return legacyPlayMethods(c, db, days)
 		}
 
-		// Enhanced query with new columns - fixed to use Unix timestamp properly
+		// Enhanced query with new columns - handle empty strings and NULLs properly
 		query := `
 			SELECT
-				COALESCE(video_method, 'DirectPlay') AS video_method,
-				COALESCE(audio_method, 'DirectPlay') AS audio_method,
+				CASE 
+					WHEN video_method IS NULL OR video_method = '' THEN 
+						CASE WHEN play_method = 'Transcode' THEN 'Transcode' ELSE 'DirectPlay' END
+					ELSE video_method 
+				END AS video_method,
+				CASE 
+					WHEN audio_method IS NULL OR audio_method = '' THEN 
+						CASE WHEN play_method = 'Transcode' THEN 'Transcode' ELSE 'DirectPlay' END
+					ELSE audio_method 
+				END AS audio_method,
 				COUNT(*) AS cnt
 			FROM play_sessions
 			WHERE started_at >= (strftime('%s','now') - (? * 86400))
 				AND started_at IS NOT NULL
-			GROUP BY video_method, audio_method
+			GROUP BY 1, 2
 		`
 
 		rows, err := db.Query(query, days)
@@ -103,23 +111,37 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 				continue
 			}
 
-			// Create detailed key
-			key := fmt.Sprintf("%s|%s", videoMethod, audioMethod)
+			// Normalize the methods to handle variations
+			normalizedVideo := normalize(videoMethod)
+			normalizedAudio := normalize(audioMethod)
+
+			// Create detailed key with normalized values
+			key := fmt.Sprintf("%s|%s", normalizedVideo, normalizedAudio)
 			methodBreakdown[key] = cnt
+
+			// Update variables for categorization logic
+			videoMethod = normalizedVideo
+			audioMethod = normalizedAudio
 
 			// Categorize for high-level summary
 			if videoMethod == "DirectPlay" && audioMethod == "DirectPlay" {
 				summary["DirectPlay"] += cnt
 			} else if videoMethod == "DirectStream" && audioMethod == "DirectPlay" {
-				summary["DirectStream"] += cnt // Fixed: was VideoOnly
+				summary["DirectStream"] += cnt
 			} else if videoMethod == "Transcode" && audioMethod == "DirectPlay" {
 				summary["VideoOnly"] += cnt
 			} else if videoMethod == "DirectPlay" && audioMethod == "Transcode" {
 				summary["AudioOnly"] += cnt
 			} else if videoMethod == "DirectStream" && audioMethod == "Transcode" {
-				summary["Transcode"] += cnt // Remux with audio transcode
+				summary["Transcode"] += cnt // DirectStream video with audio transcode
 			} else if videoMethod == "Transcode" && audioMethod == "Transcode" {
 				summary["BothTranscode"] += cnt
+			} else if videoMethod == "DirectPlay" && audioMethod == "DirectStream" {
+				summary["DirectStream"] += cnt // DirectPlay video with DirectStream audio
+			} else if videoMethod == "DirectStream" && audioMethod == "DirectStream" {
+				summary["DirectStream"] += cnt // Both DirectStream
+			} else if videoMethod == "Transcode" && audioMethod == "DirectStream" {
+				summary["Transcode"] += cnt // Video transcode with DirectStream audio
 			} else {
 				summary["Unknown"] += cnt
 			}
