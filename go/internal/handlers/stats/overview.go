@@ -15,19 +15,19 @@ type OverviewData struct {
 
 func Overview(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		data := OverviewData{} // ensure all fields start at 0
+		data := OverviewData{}
 
-		// This query is correct and does not need to change.
+		// Count users
 		_ = db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&data.TotalUsers)
 
-		// This query is also correct.
+		// Count library items (excluding live TV)
 		_ = db.QueryRow(`SELECT COUNT(*) FROM library_item WHERE media_type NOT IN ('TvChannel', 'LiveTv', 'Channel')`).Scan(&data.TotalItems)
 
-		// CORRECTED: Count sessions instead of old play events.
-		_ = db.QueryRow(`SELECT COUNT(*) FROM play_sessions`).Scan(&data.TotalPlays)
+		// Count total play sessions (not events)
+		_ = db.QueryRow(`SELECT COUNT(*) FROM play_sessions WHERE started_at IS NOT NULL`).Scan(&data.TotalPlays)
 
-		// CORRECTED: Count unique items from sessions.
-		_ = db.QueryRow(`SELECT COUNT(DISTINCT item_id) FROM play_sessions`).Scan(&data.UniquePlays)
+		// Count unique items played
+		_ = db.QueryRow(`SELECT COUNT(DISTINCT item_id) FROM play_sessions WHERE started_at IS NOT NULL`).Scan(&data.UniquePlays)
 
 		return c.JSON(data)
 	}
