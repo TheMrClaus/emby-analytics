@@ -13,12 +13,13 @@ import (
 
 // Broadcaster manages a single Emby API poller and broadcasts to multiple WebSocket clients
 type Broadcaster struct {
-	mu         sync.RWMutex
-	clients    map[*ws.Conn]bool
-	embyClient *emby.Client
-	interval   time.Duration
-	ctx        context.Context
-	cancel     context.CancelFunc
+	mu                  sync.RWMutex
+	clients             map[*ws.Conn]bool
+	embyClient          *emby.Client
+	interval            time.Duration
+	ctx                 context.Context
+	cancel              context.CancelFunc
+	SessionProcessor func(activeSessions []emby.EmbySession) // NEW: callback for hybrid session processing
 }
 
 // NewBroadcaster creates a new broadcaster instance
@@ -137,6 +138,12 @@ func (b *Broadcaster) fetchNowPlayingEntries() ([]NowEntry, error) {
 	sessions, err := b.embyClient.GetActiveSessions()
 	if err != nil {
 		return nil, err // Return the error instead of an empty slice
+	}
+
+	// NEW: Process sessions using hybrid state-polling approach (like playback_reporting plugin)
+	if b.SessionProcessor != nil {
+		log.Printf("[broadcaster] Found %d active sessions from Emby API", len(sessions))
+		b.SessionProcessor(sessions) // Pass the full session list for processing
 	}
 
 	nowTime := time.Now().UnixMilli()

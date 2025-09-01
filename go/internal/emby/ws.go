@@ -19,10 +19,11 @@ type WSConfig struct {
 }
 
 type EmbyWS struct {
-	Cfg     WSConfig
-	conn    *websocket.Conn
-	cancel  context.CancelFunc
-	Handler func(evt EmbyEvent)
+	Cfg                 WSConfig
+	conn                *websocket.Conn
+	cancel              context.CancelFunc
+	Handler             func(evt EmbyEvent)
+	StoppedSessionCheck func(activeSessionKeys map[string]bool) // NEW: callback for stopped session detection
 }
 
 type EmbyEvent struct {
@@ -214,65 +215,77 @@ func (w *EmbyWS) handleSessionsEvent(evt EmbyEvent) {
 		return
 	}
 
+	// Track which sessions are currently active
+	activeSessionKeys := make(map[string]bool)
+
 	for _, session := range sessions {
-		if session.NowPlayingItem == nil {
-			continue // No active playback
+		sessionKey := session.SessionID + "|" + session.DeviceID // Use DeviceID as fallback identifier
+		
+		if session.NowPlayingItem != nil {
+			// Active session - create PlaybackProgress event
+			activeSessionKeys[sessionKey] = true
+			
+			// Convert to PlaybackProgressData format
+			progressData := PlaybackProgressData{
+				UserID:           session.UserID,
+				SessionID:        session.SessionID,
+				DeviceID:         session.DeviceID,
+				Client:           session.Client,
+				PlayMethod:       detectPlayMethod(session),
+				RemoteEndPoint:   session.RemoteEndPoint,
+				TranscodeReasons: session.TranscodeReasons,
+				NowPlaying: struct {
+					ID           string `json:"Id"`
+					RunTimeTicks int64  `json:"RunTimeTicks"`
+					Type         string `json:"Type"`
+					Name         string `json:"Name"`
+				}{
+					ID:           session.NowPlayingItem.ID,
+					RunTimeTicks: session.NowPlayingItem.RunTimeTicks,
+					Type:         session.NowPlayingItem.Type,
+					Name:         session.NowPlayingItem.Name,
+				},
+				PlayState: struct {
+					IsPaused            bool    `json:"IsPaused"`
+					PositionTicks       int64   `json:"PositionTicks"`
+					PlaybackRate        float64 `json:"PlaybackRate"`
+					AudioStreamIndex    *int    `json:"AudioStreamIndex"`
+					SubtitleStreamIndex *int    `json:"SubtitleStreamIndex"`
+				}{
+					IsPaused:            session.PlayState.IsPaused,
+					PositionTicks:       session.PlayState.PositionTicks,
+					PlaybackRate:        session.PlayState.PlaybackRate,
+					AudioStreamIndex:    session.PlayState.AudioStreamIndex,
+					SubtitleStreamIndex: session.PlayState.SubtitleStreamIndex,
+				},
+			}
+
+			// Create a synthetic PlaybackProgress event
+			syntheticEvent := EmbyEvent{
+				MessageType: "PlaybackProgress",
+				Data:        nil, // Will be marshaled below
+			}
+
+			// Marshal the progress data
+			data, err := json.Marshal(progressData)
+			if err != nil {
+				log.Printf("[emby-ws] Failed to marshal progress data: %v", err)
+				continue
+			}
+			syntheticEvent.Data = json.RawMessage(data)
+
+			log.Printf("[emby-ws] Created synthetic PlaybackProgress for user %s, item %s",
+				progressData.UserID, progressData.NowPlaying.Name)
+
+			// Send to intervalizer
+			w.Handler(syntheticEvent)
 		}
+	}
 
-		// Convert to PlaybackProgressData format
-		progressData := PlaybackProgressData{
-			UserID:           session.UserID,
-			SessionID:        session.SessionID,
-			DeviceID:         session.DeviceID,
-			Client:           session.Client,
-			PlayMethod:       detectPlayMethod(session),
-			RemoteEndPoint:   session.RemoteEndPoint,
-			TranscodeReasons: session.TranscodeReasons,
-			NowPlaying: struct {
-				ID           string `json:"Id"`
-				RunTimeTicks int64  `json:"RunTimeTicks"`
-				Type         string `json:"Type"`
-				Name         string `json:"Name"`
-			}{
-				ID:           session.NowPlayingItem.ID,
-				RunTimeTicks: session.NowPlayingItem.RunTimeTicks,
-				Type:         session.NowPlayingItem.Type,
-				Name:         session.NowPlayingItem.Name,
-			},
-			PlayState: struct {
-				IsPaused            bool    `json:"IsPaused"`
-				PositionTicks       int64   `json:"PositionTicks"`
-				PlaybackRate        float64 `json:"PlaybackRate"`
-				AudioStreamIndex    *int    `json:"AudioStreamIndex"` // Pass through stream indices
-				SubtitleStreamIndex *int    `json:"SubtitleStreamIndex"`
-			}{
-				IsPaused:            session.PlayState.IsPaused,
-				PositionTicks:       session.PlayState.PositionTicks,
-				PlaybackRate:        session.PlayState.PlaybackRate,
-				AudioStreamIndex:    session.PlayState.AudioStreamIndex,
-				SubtitleStreamIndex: session.PlayState.SubtitleStreamIndex,
-			},
-		}
-
-		// Create a synthetic PlaybackProgress event
-		syntheticEvent := EmbyEvent{
-			MessageType: "PlaybackProgress",
-			Data:        nil, // Will be marshaled below
-		}
-
-		// Marshal the progress data
-		data, err := json.Marshal(progressData)
-		if err != nil {
-			log.Printf("[emby-ws] Failed to marshal progress data: %v", err)
-			continue
-		}
-		syntheticEvent.Data = json.RawMessage(data)
-
-		log.Printf("[emby-ws] Created synthetic PlaybackProgress for user %s, item %s",
-			progressData.UserID, progressData.NowPlaying.Name)
-
-		// Send to intervalizer
-		w.Handler(syntheticEvent)
+	// NEW: Detect stopped sessions by comparing with live sessions
+	// This is the critical fix for session completion detection
+	if w.StoppedSessionCheck != nil {
+		w.StoppedSessionCheck(activeSessionKeys)
 	}
 }
 

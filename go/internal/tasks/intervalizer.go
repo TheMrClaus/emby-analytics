@@ -19,6 +19,8 @@ type Intervalizer struct {
 
 type liveState struct {
 	SessionFK        int64
+	SessionID        string  // Session identifier from Emby
+	DeviceID         string  // Device identifier from Emby
 	UserID           string
 	ItemID           string
 	LastPosTicks     int64
@@ -109,6 +111,8 @@ func (iz *Intervalizer) onStart(d emby.PlaybackProgressData) {
 	insertEvent(iz.DB, sessionFK, "start", d.PlayState.IsPaused, d.PlayState.PositionTicks)
 	s := &liveState{
 		SessionFK:      sessionFK,
+		SessionID:      d.SessionID,
+		DeviceID:       d.DeviceID,
 		UserID:         d.UserID,
 		ItemID:         d.NowPlaying.ID,
 		LastPosTicks:   d.PlayState.PositionTicks,
@@ -180,6 +184,70 @@ func (iz *Intervalizer) onStop(d emby.PlaybackProgressData) {
 
 	_, _ = iz.DB.Exec(`UPDATE play_sessions SET ended_at = ?, is_active = false WHERE id = ?`, now.Unix(), s.SessionFK)
 	delete(LiveSessions, k)
+}
+
+// DetectStoppedSessions identifies sessions that are no longer active and creates PlaybackStopped events
+func (iz *Intervalizer) DetectStoppedSessions(activeSessionKeys map[string]bool) {
+	LiveMutex.Lock()
+	defer LiveMutex.Unlock()
+	
+	log.Printf("[intervalizer] DetectStoppedSessions called with %d active sessions, %d live sessions", len(activeSessionKeys), len(LiveSessions))
+	
+	for liveSessionKey, liveSession := range LiveSessions {
+		// Check if this session is still active by SessionID only
+		// This avoids the Device vs DeviceID mismatch between WebSocket and REST API
+		sessionFound := false
+		for activeKey := range activeSessionKeys {
+			if strings.HasPrefix(activeKey, liveSession.SessionID+"|") {
+				sessionFound = true
+				break
+			}
+		}
+		
+		// If this live session is not in the current active sessions, it has stopped
+		if !sessionFound {
+			log.Printf("[intervalizer] Detected stopped session: %s (user: %s)", liveSessionKey, liveSession.UserID)
+			
+			// Create synthetic PlaybackStopped event data
+			stoppedData := emby.PlaybackProgressData{
+				UserID:    liveSession.UserID,
+				SessionID: liveSession.SessionID,
+				DeviceID:  liveSession.DeviceID,
+				NowPlaying: struct {
+					ID           string `json:"Id"`
+					RunTimeTicks int64  `json:"RunTimeTicks"`
+					Type         string `json:"Type"`
+					Name         string `json:"Name"`
+				}{
+					ID: liveSession.ItemID,
+					// We don't have full item data, but ID is sufficient for session cleanup
+				},
+				PlayState: struct {
+					IsPaused            bool    `json:"IsPaused"`
+					PositionTicks       int64   `json:"PositionTicks"`
+					PlaybackRate        float64 `json:"PlaybackRate"`
+					AudioStreamIndex    *int    `json:"AudioStreamIndex"`
+					SubtitleStreamIndex *int    `json:"SubtitleStreamIndex"`
+				}{
+					PositionTicks: liveSession.LastPosTicks,
+				},
+			}
+			
+			syntheticStopEvent := emby.EmbyEvent{
+				MessageType: "PlaybackStopped",
+			}
+			
+			data, err := json.Marshal(stoppedData)
+			if err != nil {
+				log.Printf("[intervalizer] Failed to marshal stopped data: %v", err)
+				continue
+			}
+			syntheticStopEvent.Data = json.RawMessage(data)
+			
+			log.Printf("[intervalizer] Created synthetic PlaybackStopped for session %s", liveSessionKey)
+			iz.Handle(syntheticStopEvent)
+		}
+	}
 }
 
 func (iz *Intervalizer) TickTimeoutSweep() {
