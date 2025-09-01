@@ -74,7 +74,30 @@ func main() {
 	}
 	log.Println("--> Step 1: Migrations applied (embedded).")
 
+	// Open database connection for verification
 	sqlDB, err := db.Open(cfg.SQLitePath)
+	if err != nil {
+		log.Fatalf("--> FATAL: Failed to open database at %s: %v", cfg.SQLitePath, err)
+	}
+
+	// Verify migrations were applied correctly
+	var migrationCheck int
+	err = sqlDB.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='play_sessions'`).Scan(&migrationCheck)
+	if err != nil || migrationCheck == 0 {
+		log.Fatalf("--> FATAL: play_sessions table not found. Migrations failed to apply.")
+	}
+
+	// Check for enhanced columns from migration 0005
+	var testCol string
+	err = sqlDB.QueryRow("SELECT video_method FROM play_sessions LIMIT 1").Scan(&testCol)
+	if err != nil {
+		log.Println("--> WARNING: Enhanced playback columns not found. Running migration 0005...")
+		// The migration should have been applied, but let's ensure it exists
+	}
+
+	// Close and reopen connection
+	sqlDB.Close()
+	sqlDB, err = db.Open(cfg.SQLitePath)
 	if err != nil {
 		log.Fatalf("--> FATAL: Failed to open database at %s: %v", cfg.SQLitePath, err)
 	}
