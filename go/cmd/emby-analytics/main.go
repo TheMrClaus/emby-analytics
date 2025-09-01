@@ -216,6 +216,7 @@ func main() {
 	app.Post("/admin/users/force-sync", admin.ForceUserSync(sqlDB, em))
 	app.All("/admin/fix-pos-units", admin.FixPosUnits(sqlDB))
 	app.Get("/admin/debug/users", admin.DebugUsers(em))
+	app.Post("/admin/recover-intervals", admin.RecoverIntervalsHandler(sqlDB))
 
 	// Static UI Serving
 	app.Use("/", static.New(cfg.WebPath))
