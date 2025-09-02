@@ -4,7 +4,7 @@ import { ResponsiveContainer, CartesianGrid, BarChart, Bar, XAxis, YAxis, Toolti
 import { useCodecs } from "../hooks/useData";
 import type { CodecBuckets } from "../types";
 import { fmtInt } from "../lib/format";
-import ChartLegend from './charts/Legend';
+
 import { colors } from '../theme/colors';
 
 export default function CodecsChart() {

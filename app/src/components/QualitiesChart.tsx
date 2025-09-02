@@ -4,7 +4,7 @@ import { ResponsiveContainer, CartesianGrid, BarChart, Bar, XAxis, YAxis, Toolti
 import { useQualities } from "../hooks/useData";
 import type { QualityBuckets } from "../types";
 import { fmtInt } from "../lib/format";
-import ChartLegend from "./charts/Legend";
+
 import { colors } from '../theme/colors';
 
 type QualityRow = { label: string; Movie: number; Episode: number };
