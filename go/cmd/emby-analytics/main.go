@@ -204,6 +204,8 @@ func main() {
 	app.All("/admin/fix-pos-units", admin.FixPosUnits(sqlDB))
 	app.Get("/admin/debug/users", admin.DebugUsers(em))
 	app.Post("/admin/recover-intervals", admin.RecoverIntervalsHandler(sqlDB))
+    app.Post("/admin/cleanup/intervals/dedupe", admin.CleanupDuplicateIntervals(sqlDB))
+    app.Get("/admin/cleanup/intervals/dedupe", admin.CleanupDuplicateIntervals(sqlDB))
 
 	// Static UI Serving
 	app.Use("/", static.New(cfg.WebPath))

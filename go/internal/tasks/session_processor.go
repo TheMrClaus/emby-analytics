@@ -137,23 +137,39 @@ func (sp *SessionProcessor) finalizeSession(tracked *TrackedSession, endTime tim
 
 // createOrUpdateInterval creates or updates a play interval
 func (sp *SessionProcessor) createOrUpdateInterval(tracked *TrackedSession, endTime time.Time, duration int) {
-	if duration < 1 {
-		return // Skip very short intervals
-	}
+    if duration < 1 {
+        return // Skip very short intervals
+    }
 
-	// For simplicity, create a single interval spanning the entire session
-	// In a more sophisticated implementation, you'd track position changes
-	_, err := sp.DB.Exec(`
-		INSERT OR REPLACE INTO play_intervals 
-		(session_fk, item_id, user_id, start_ts, end_ts, start_pos_ticks, end_pos_ticks, duration_seconds, seeked)
-		SELECT id, item_id, user_id, ?, ?, 0, 0, ?, 0
-		FROM play_sessions
-		WHERE id = ?
-	`, tracked.StartTime.Unix(), endTime.Unix(), duration, tracked.SessionFK)
-	
-	if err != nil {
-		log.Printf("[session-processor] Failed to create interval: %v", err)
-	}
+    // Maintain a single interval per session in this processor:
+    // - If an interval already exists for this session_fk, update its end_ts and duration_seconds
+    // - Otherwise, insert a new interval
+    var existingID int64
+    err := sp.DB.QueryRow(`SELECT id FROM play_intervals WHERE session_fk = ? LIMIT 1`, tracked.SessionFK).Scan(&existingID)
+    if err == nil {
+        // Update existing interval (keep original start_ts)
+        _, uerr := sp.DB.Exec(`
+            UPDATE play_intervals
+            SET end_ts = ?, duration_seconds = ?
+            WHERE id = ?
+        `, endTime.Unix(), duration, existingID)
+        if uerr != nil {
+            log.Printf("[session-processor] Failed to update interval: %v", uerr)
+        }
+        return
+    }
+
+    // No existing interval; insert a new one
+    _, ierr := sp.DB.Exec(`
+        INSERT INTO play_intervals 
+        (session_fk, item_id, user_id, start_ts, end_ts, start_pos_ticks, end_pos_ticks, duration_seconds, seeked)
+        SELECT id, item_id, user_id, ?, ?, 0, 0, ?, 0
+        FROM play_sessions
+        WHERE id = ?
+    `, tracked.StartTime.Unix(), endTime.Unix(), duration, tracked.SessionFK)
+    if ierr != nil {
+        log.Printf("[session-processor] Failed to insert interval: %v", ierr)
+    }
 }
 
 // createPlaySession creates a new play_session record in the database

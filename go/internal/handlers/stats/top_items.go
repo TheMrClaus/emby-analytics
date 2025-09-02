@@ -148,45 +148,51 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 
 // Your original enrichment logic, now in a helper function for clarity.
 func enrichItems(items []TopItem, em *emby.Client) {
-	allEnrichIDs := make([]string, 0)
-	for _, item := range items {
-		if strings.EqualFold(item.Type, "Episode") || item.Name == "Unknown" || item.Type == "Unknown" {
-			allEnrichIDs = append(allEnrichIDs, item.ItemID)
-		}
-	}
+    allEnrichIDs := make([]string, 0)
+    for _, item := range items {
+        if strings.EqualFold(item.Type, "Episode") || item.Name == "Unknown" || item.Type == "Unknown" {
+            allEnrichIDs = append(allEnrichIDs, item.ItemID)
+        }
+    }
 
-	if len(allEnrichIDs) > 0 && em != nil {
-		if embyItems, err := em.ItemsByIDs(allEnrichIDs); err == nil {
-			embyMap := make(map[string]*emby.EmbyItem)
-			for i := range embyItems {
-				embyMap[embyItems[i].Id] = &embyItems[i]
-			}
-			for i := range items {
-				item := &items[i]
-				if it, ok := embyMap[item.ItemID]; ok {
-					if strings.EqualFold(item.Type, "Episode") || it.Type == "Episode" {
-						if (item.Name == "" || item.Name == "Unknown" || item.Name == it.Name) && it.Name != "" {
-							item.Name = it.Name
-						}
-						if it.SeriesName != "" {
-							epcode := ""
-							if it.ParentIndexNumber != nil && it.IndexNumber != nil {
-								epcode = fmt.Sprintf("S%02dE%02d", *it.ParentIndexNumber, *it.IndexNumber)
-							}
-							if epcode != "" && item.Name != "" {
-								item.Display = fmt.Sprintf("%s - %s (%s)", it.SeriesName, item.Name, epcode)
-							} else {
-								item.Display = fmt.Sprintf("%s - %s", it.SeriesName, item.Name)
-							}
-							item.Type = "Series"
-						} else {
-							item.Display = item.Name
-						}
-					} else {
-						if it.Name != "" && (item.Name == "Unknown" || item.Name == "") {
-							item.Name = it.Name
-							item.Display = it.Name
-						}
+    if len(allEnrichIDs) > 0 && em != nil {
+        if embyItems, err := em.ItemsByIDs(allEnrichIDs); err == nil {
+            embyMap := make(map[string]*emby.EmbyItem)
+            for i := range embyItems {
+                embyMap[embyItems[i].Id] = &embyItems[i]
+            }
+            for i := range items {
+                item := &items[i]
+                if it, ok := embyMap[item.ItemID]; ok {
+                    if strings.EqualFold(item.Type, "Episode") || it.Type == "Episode" {
+                        // For episodes, always use the canonical episode title from Emby
+                        if it.Name != "" {
+                            item.Name = it.Name
+                        }
+                        if it.SeriesName != "" {
+                            epcode := ""
+                            if it.ParentIndexNumber != nil && it.IndexNumber != nil {
+                                epcode = fmt.Sprintf("S%02dE%02d", *it.ParentIndexNumber, *it.IndexNumber)
+                            }
+                            if epcode != "" && item.Name != "" {
+                                item.Display = fmt.Sprintf("%s - %s (%s)", it.SeriesName, item.Name, epcode)
+                            } else if item.Name != "" {
+                                item.Display = fmt.Sprintf("%s - %s", it.SeriesName, item.Name)
+                            } else {
+                                item.Display = it.SeriesName
+                            }
+                            // Keep the type as Episode for clarity
+                            item.Type = "Episode"
+                        } else {
+                            // No series name: just show the episode name
+                            item.Display = item.Name
+                            item.Type = "Episode"
+                        }
+                    } else {
+                        if it.Name != "" && (item.Name == "Unknown" || item.Name == "") {
+                            item.Name = it.Name
+                            item.Display = it.Name
+                        }
 						if it.Type != "" && (item.Type == "Unknown" || item.Type == "") {
 							item.Type = it.Type
 						}

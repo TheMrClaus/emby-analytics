@@ -21,20 +21,30 @@ type TopItemRow struct {
 
 // TopUsersByWatchSeconds calculates top users based on interval overlap in a time window.
 func TopUsersByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd int64, limit int) ([]TopUserRow, error) {
-	query := `
-		SELECT
-			pi.user_id,
-			u.name,
-			SUM(MIN(pi.end_ts, ?) - MAX(pi.start_ts, ?)) / 3600.0 AS hours
-		FROM play_intervals pi
-		JOIN emby_user u ON u.id = pi.user_id
-		WHERE
-			pi.start_ts <= ? AND pi.end_ts >= ? -- Filter for intervals that overlap the window
-		GROUP BY pi.user_id, u.name
-		ORDER BY hours DESC
-		LIMIT ?;
-	`
-	rows, err := db.QueryContext(ctx, query, winEnd, winStart, winEnd, winStart, limit)
+    // Use only the latest interval per session to avoid double-counting
+    query := `
+        WITH latest AS (
+            SELECT pi.*
+            FROM play_intervals pi
+            JOIN (
+                SELECT session_fk, MAX(id) AS latest_id
+                FROM play_intervals
+                GROUP BY session_fk
+            ) m ON m.latest_id = pi.id
+        )
+        SELECT
+            l.user_id,
+            u.name,
+            SUM(MIN(l.end_ts, ?) - MAX(l.start_ts, ?)) / 3600.0 AS hours
+        FROM latest l
+        JOIN emby_user u ON u.id = l.user_id
+        WHERE
+            l.start_ts <= ? AND l.end_ts >= ?
+        GROUP BY l.user_id, u.name
+        ORDER BY hours DESC
+        LIMIT ?;
+    `
+    rows, err := db.QueryContext(ctx, query, winEnd, winStart, winEnd, winStart, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -53,21 +63,31 @@ func TopUsersByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd in
 
 // TopItemsByWatchSeconds calculates top items based on interval overlap.
 func TopItemsByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd int64, limit int) ([]TopItemRow, error) {
-	query := `
-		SELECT
-			pi.item_id,
-			li.name,
-			li.media_type,
-			SUM(MIN(pi.end_ts, ?) - MAX(pi.start_ts, ?)) / 3600.0 AS hours
-		FROM play_intervals pi
-		JOIN library_item li ON li.id = pi.item_id
-		WHERE
-			pi.start_ts <= ? AND pi.end_ts >= ? -- Filter for intervals that overlap the window
-		GROUP BY pi.item_id, li.name, li.media_type
-		ORDER BY hours DESC
-		LIMIT ?;
-	`
-	rows, err := db.QueryContext(ctx, query, winEnd, winStart, winEnd, winStart, limit)
+    // Use only the latest interval per session to avoid double-counting
+    query := `
+        WITH latest AS (
+            SELECT pi.*
+            FROM play_intervals pi
+            JOIN (
+                SELECT session_fk, MAX(id) AS latest_id
+                FROM play_intervals
+                GROUP BY session_fk
+            ) m ON m.latest_id = pi.id
+        )
+        SELECT
+            l.item_id,
+            li.name,
+            li.media_type,
+            SUM(MIN(l.end_ts, ?) - MAX(l.start_ts, ?)) / 3600.0 AS hours
+        FROM latest l
+        JOIN library_item li ON li.id = l.item_id
+        WHERE
+            l.start_ts <= ? AND l.end_ts >= ?
+        GROUP BY l.item_id, li.name, li.media_type
+        ORDER BY hours DESC
+        LIMIT ?;
+    `
+    rows, err := db.QueryContext(ctx, query, winEnd, winStart, winEnd, winStart, limit)
 	if err != nil {
 		return nil, err
 	}
