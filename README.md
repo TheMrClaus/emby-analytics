@@ -94,6 +94,9 @@ The frontend dev server will proxy API requests to the Go backend.
 
 ## Production Deployment
 
+**Security Note:** Authentication is not yet implemented. If you are going to expose this to the public internet, you should have a reverse proxy in place to handle authentication.
+
+
 ### Option 1: Docker Compose (Recommended)
 ```bash
 # Copy docker-compose-example.yml to docker-compose.yml
