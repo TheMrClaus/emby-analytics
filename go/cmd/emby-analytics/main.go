@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -109,18 +108,20 @@ func main() {
 	tasks.RunUserSyncOnce(sqlDB, em)
 	log.Println("--> Initial user sync complete.")
 
-	// ---- Real-time Session Processing (WebSocket) ----
-	intervalizer := &tasks.Intervalizer{
-		DB:                sqlDB,
-		NoProgressTimeout: 90 * time.Second,
-		SeekThreshold:     10 * time.Second,
-	}
-	log.Println("--> Step 5: Intervalizer (real-time processor) initialized.")
+	// ---- Session Processing (Hybrid State-Polling Approach) ----
+	sessionProcessor := tasks.NewSessionProcessor(sqlDB)
+	log.Println("--> Step 5: Session processor initialized (using playback_reporting approach).")
 
-	embyWS := &emby.EmbyWS{Cfg: emby.WSConfig{BaseURL: cfg.EmbyBaseURL, APIKey: cfg.EmbyAPIKey}, Handler: intervalizer.Handle}
-	embyWS.Start(context.Background())
-	log.Printf("--> Step 6: Emby WebSocket listener started.")
-	defer embyWS.Stop()
+	pollInterval := time.Duration(cfg.NowPollSec) * time.Second
+	if pollInterval <= 0 {
+		pollInterval = 5 * time.Second
+	}
+	broadcaster := now.NewBroadcaster(em, pollInterval)
+	broadcaster.SessionProcessor = sessionProcessor.ProcessActiveSessions // Connect session processing
+	now.SetBroadcaster(broadcaster)
+	broadcaster.Start()
+	log.Printf("--> Step 6: REST API session polling started (every %v).", pollInterval)
+	defer broadcaster.Stop()
 
 	// ---- Fiber App and Routes ----
 	app := fiber.New(fiber.Config{
@@ -158,6 +159,7 @@ func main() {
 	app.Get("/stats/overview", stats.Overview(sqlDB))
 	app.Get("/stats/usage", stats.Usage(sqlDB))
 	app.Get("/stats/top/users", stats.TopUsers(sqlDB))
+	
 	app.Get("/stats/top/items", stats.TopItems(sqlDB, em))
 	app.Get("/stats/qualities", stats.Qualities(sqlDB))
 	app.Get("/stats/codecs", stats.Codecs(sqlDB))
