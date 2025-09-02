@@ -10,58 +10,51 @@ The project is structured as a monorepo with the Go backend in the `go/` directo
 
 ## Building and Running
 
-### Backend (Go)
+### Development
 
-To run the backend in a development environment:
+To run the backend and frontend in a development environment:
 
-1.  **Navigate to the Go directory:**
+1.  **Backend (Go):**
+    *   **Navigate to the Go directory:**
+        ```bash
+        cd go
+        ```
+    *   **Install dependencies:**
+        ```bash
+        go mod tidy
+        ```
+    *   **Run the application:**
+        ```bash
+        go run ./cmd/emby-analytics
+        ```
+
+2.  **Frontend (Next.js):**
+    *   **Navigate to the app directory:**
+        ```bash
+        cd app
+        ```
+    *   **Install dependencies:**
+        ```bash
+        npm install
+        ```
+    *   **Run the development server:**
+        ```bash
+        npm run dev
+        ```
+    The frontend development server will proxy API requests to the Go backend.
+
+### Production (Docker Compose Recommended)
+
+The recommended way to run this project in production is using Docker Compose.
+
+1.  **Copy Docker Compose example:**
     ```bash
-    cd go
+    cp docker-compose-example.yml docker-compose.yml
     ```
-2.  **Install dependencies:**
+2.  **Edit `docker-compose.yml`:** Update environment variables (`EMBY_BASE_URL`, `EMBY_API_KEY`) and the data volume path (`/path/to/data`).
+3.  **Build and run with Docker Compose:**
     ```bash
-    go mod tidy
-    ```
-3.  **Run the application:**
-    ```bash
-    go run ./cmd/emby-analytics
-    ```
-
-### Frontend (Next.js)
-
-To run the frontend in a development environment:
-
-1.  **Navigate to the app directory:**
-    ```bash
-    cd app
-    ```
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-3.  **Run the development server:**
-    ```bash
-    npm run dev
-    ```
-
-The frontend development server will proxy API requests to the Go backend.
-
-### Production
-
-The recommended way to run this project in production is by using the provided `Dockerfile`.
-
-1.  **Build the Docker image:**
-    ```bash
-    docker build -t emby-analytics .
-    ```
-2.  **Run the Docker container:**
-    ```bash
-    docker run -d \
-      -p 8080:8080 \
-      -v /path/to/data:/var/lib/emby-analytics \
-      -e EMBY_BASE_URL=http://your-emby:8096 \
-      -e EMBY_API_KEY=your_api_key \
-      emby-analytics
+    docker compose up -d --build
     ```
 
 ## Development Conventions

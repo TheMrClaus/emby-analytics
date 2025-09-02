@@ -50,6 +50,7 @@ Emby Analytics is a self-hosted dashboard and API service for monitoring and vis
 │   └── next.config.js           # Next.js config (static export)
 ├── Dockerfile                   # Multi-stage Docker build
 ├── .env.example                 # Environment variables template
+├── docker-compose-example.yml   # Docker Compose example configuration
 └── README.md
 ```
 
@@ -93,16 +94,18 @@ The frontend dev server will proxy API requests to the Go backend.
 
 ## Production Deployment
 
-### Option 1: Docker (Recommended)
+### Option 1: Docker Compose (Recommended)
 ```bash
-# Build and run with Docker
-docker build -t emby-analytics .
-docker run -d \
-  -p 8080:8080 \
-  -v /path/to/data:/var/lib/emby-analytics \
-  -e EMBY_BASE_URL=http://your-emby:8096 \
-  -e EMBY_API_KEY=your_api_key \
-  emby-analytics
+# Copy docker-compose-example.yml to docker-compose.yml
+cp docker-compose-example.yml docker-compose.yml
+
+# Edit docker-compose.yml with your Emby server details and data path
+# EMBY_BASE_URL=http://your-emby:8096
+# EMBY_API_KEY=your_api_key_here
+# - /path/to/data:/var/lib/emby-analytics
+
+# Build and run with Docker Compose
+docker compose up -d --build
 ```
 
 ### Option 2: Manual Build
@@ -130,35 +133,56 @@ Key environment variables (see `.env.example` for complete list):
 - `EMBY_API_KEY`: Emby API key (Settings → Advanced → API Keys)
 - `SQLITE_PATH`: Database location (default: `/var/lib/emby-analytics/emby.db`)
 - `WEB_PATH`: Static UI files path (default: `/app/web`)
-- `SYNC_INTERVAL`: Background sync interval in seconds (default: 60)
-- `HISTORY_DAYS`: Days of history to sync (default: 2)
+- `REFRESH_INTERVAL`: Interval in seconds for background library refresh (default: `60`)
+- `REFRESH_CHUNK_SIZE`: Number of items to process per refresh chunk (default: `100`)
+- `HISTORY_DAYS`: Number of days of playback history to sync (default: `2`)
+- `NOW_POLL_SEC`: Interval in seconds for polling "Now Playing" data (default: `5`)
+- `LOG_LEVEL`: Logging level (e.g., `info`, `debug`, `warn`, `error`) (default: `info`)
 
 ## API Endpoints
 
 ### Statistics
 - `GET /stats/overview` - General library overview
 - `GET /stats/usage` - Usage analytics by user/day
-- `GET /stats/top/users` - Top users by watch time
-- `GET /stats/top/items` - Most watched content
+- `GET /stats/top/users` - Top users by watch time (also `/stats/top-users`)
+- `GET /stats/top/items` - Most watched content (also `/stats/top-items`)
 - `GET /stats/qualities` - Quality distribution
 - `GET /stats/codecs` - Codec statistics
-- `GET /stats/activity` - Activity timeline
+- `GET /stats/active-users` - Active users over lifetime
+- `GET /stats/users/total` - Total user count
+- `GET /stats/user/:id` - User detail statistics
+- `GET /stats/play-methods` - Playback method distribution (also `/stats/playback-methods`)
+- `GET /stats/items/by-codec/:codec` - Items by specific codec
+- `GET /stats/items/by-quality/:quality` - Items by specific quality
 
 ### Now Playing
-- `GET /now` - Current playback snapshot
-- `GET /now/stream` - SSE stream of live updates
-- `POST /now/sessions/:id/pause` - Pause session
-- `POST /now/sessions/:id/stop` - Stop session
+- `GET /now/snapshot` - Current playback snapshot
+- `GET /now/ws` - WebSocket for live updates
+- `POST /now/:id/pause` - Pause session
+- `POST /now/:id/stop` - Stop session
+- `POST /now/:id/message` - Send message to session
 
 ### Admin
-- `POST /admin/refresh` - Start library refresh
+- `POST /admin/refresh/start` - Start library refresh
 - `GET /admin/refresh/status` - Refresh progress
-- `POST /admin/users/sync` - Sync users from Emby
-- `POST /admin/reset-all-data` - Reset all data
+- `POST /admin/reset-all` - Reset all data
+- `POST /admin/reset-lifetime` - Reset lifetime watch data
+- `POST /admin/users/force-sync` - Force user sync from Emby
+- `ALL /admin/fix-pos-units` - Fix position units (internal)
+- `GET /admin/debug/users` - Debug user data
+- `POST /admin/recover-intervals` - Recover missing intervals (internal)
 
 ### Health
 - `GET /health` - Database health
 - `GET /health/emby` - Emby connection health
+
+### Configuration
+- `GET /config` - Get application configuration
+
+### Items & Images
+- `GET /items/by-ids` - Get items by IDs
+- `GET /img/primary/:id` - Get primary image
+- `GET /img/backdrop/:id` - Get backdrop image
 
 ## Features in Detail
 
