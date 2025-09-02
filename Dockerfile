@@ -24,3 +24,5 @@ COPY --from=ui /ui/app/out /app/web
 
 VOLUME ["/var/lib/emby-analytics"]
 EXPOSE 8080
+USER 1000:1000
+ENTRYPOINT ["/app/emby-analytics"]
