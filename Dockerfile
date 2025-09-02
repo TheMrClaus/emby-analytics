@@ -16,7 +16,7 @@ RUN go mod tidy
 RUN CGO_ENABLED=0 go build -o /emby-analytics ./cmd/emby-analytics
 
 # ---------- Stage 2: Final rootless distroless (UID:GID 1000:1000) ----------
-FROM gcr.io/distroless/static-debian12@sha256:695a7090b8f36c56b7c5ec4d1b64e03f56e0d9b43e74c833d791244e8379df4b
+FROM gcr.io/distroless/static-debian12@sha256:f2ff10a709b0fd153997059b698ada702e4870745b6077eff03a5f4850ca91b6
 WORKDIR /app
 COPY --from=builder /emby-analytics /app/emby-analytics
 # Copy the statically-exported UI to be served by the Go app
