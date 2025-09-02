@@ -166,14 +166,14 @@ func main() {
 	app.Get("/stats/active-users", stats.ActiveUsersLifetime(sqlDB))
 	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))
 	app.Get("/stats/user/:id", stats.UserDetailHandler(sqlDB))
-	app.Get("/stats/play-methods", stats.PlayMethods(sqlDB))
+    app.Get("/stats/play-methods", stats.PlayMethods(sqlDB, em))
 	app.Get("/stats/items/by-codec/:codec", stats.ItemsByCodec(sqlDB))
 	app.Get("/stats/items/by-quality/:quality", stats.ItemsByQuality(sqlDB))
 
 	// Backward compatibility routes (hyphenated versions)
 	app.Get("/stats/top-users", stats.TopUsers(sqlDB))
 	app.Get("/stats/top-items", stats.TopItems(sqlDB, em))
-	app.Get("/stats/playback-methods", stats.PlayMethods(sqlDB))
+    app.Get("/stats/playback-methods", stats.PlayMethods(sqlDB, em))
 
 	// Configuration Routes
 	app.Get("/config", configHandler.GetConfig(cfg))

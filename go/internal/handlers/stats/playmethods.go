@@ -1,13 +1,15 @@
 package stats
 
 import (
-	"database/sql"
-	"fmt"
-	"log"
-	"strconv"
-	"strings"
+    "database/sql"
+    "fmt"
+    "log"
+    "strconv"
+    "strings"
 
-	"github.com/gofiber/fiber/v3"
+    emby "emby-analytics/internal/emby"
+
+    "github.com/gofiber/fiber/v3"
 )
 
 // normalize maps various casings/variants into our 4 buckets.
@@ -34,7 +36,17 @@ func normalize(method string) string {
 }
 
 // PlayMethods returns a breakdown of playback methods over the last N days (default 30).
-func PlayMethods(db *sql.DB) fiber.Handler {
+type SessionDetail struct {
+    ItemName    string `json:"item_name"`
+    ItemType    string `json:"item_type"`
+    ItemID      string `json:"item_id"`
+    DeviceID    string `json:"device_id"`
+    ClientName  string `json:"client_name"`
+    VideoMethod string `json:"video_method"`
+    AudioMethod string `json:"audio_method"`
+}
+
+func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		// Fiber v3: parse query param manually
 		daysStr := c.Query("days", "30")
@@ -125,17 +137,8 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 			"TranscodeSubtitle": 0,
 		}
 
-		// Store session details for frontend
-		type SessionDetail struct {
-			ItemName    string `json:"item_name"`
-			ItemType    string `json:"item_type"`
-			ItemID      string `json:"item_id"`
-			DeviceID    string `json:"device_id"`
-			ClientName  string `json:"client_name"`
-			VideoMethod string `json:"video_method"`
-			AudioMethod string `json:"audio_method"`
-		}
-		var sessionDetails []SessionDetail
+        // Store session details for frontend
+        var sessionDetails []SessionDetail
 
 		// Process results with proper variable declarations
 		for rows.Next() {
@@ -198,8 +201,8 @@ func PlayMethods(db *sql.DB) fiber.Handler {
 			}
 		}
 
-		// TODO: Add episode enrichment when needed
-		// sessionDetails = enrichSessionDetails(sessionDetails, db)
+        // Enrich item names for episodes: "Series - Episode (SxxExx)"
+        sessionDetails = enrichSessionDetails(sessionDetails, em)
 
 		// Ensure we have the basic methods even if not in data
 		if summary["DirectPlay"] == 0 && summary["Transcode"] == 0 {
@@ -288,4 +291,71 @@ func legacyPlayMethods(c fiber.Ctx, db *sql.DB, days int) error {
 		"sessionDetails":   []interface{}{}, // empty for legacy mode
 		"days":             days,
 	})
+}
+
+// enrichSessionDetails updates ItemName for episodes to "Series - Episode (SxxExx)"
+func enrichSessionDetails(details []SessionDetail, em *emby.Client) []SessionDetail {
+    if em == nil || len(details) == 0 {
+        return details
+    }
+    // Collect unique item IDs
+    idSet := make(map[string]struct{})
+    for _, d := range details {
+        if d.ItemID != "" {
+            idSet[d.ItemID] = struct{}{}
+        }
+    }
+    if len(idSet) == 0 {
+        return details
+    }
+    ids := make([]string, 0, len(idSet))
+    for id := range idSet {
+        ids = append(ids, id)
+    }
+    items, err := em.ItemsByIDs(ids)
+    if err != nil {
+        // Best effort; return unmodified on error
+        return details
+    }
+    byID := make(map[string]*emby.EmbyItem, len(items))
+    for i := range items {
+        it := items[i]
+        byID[it.Id] = &it
+    }
+    for i := range details {
+        d := &details[i]
+        it, ok := byID[d.ItemID]
+        if !ok || it == nil {
+            continue
+        }
+        // Normalize type if missing
+        if d.ItemType == "" && it.Type != "" {
+            d.ItemType = it.Type
+        }
+        if strings.EqualFold(it.Type, "Episode") {
+            // Use canonical episode name
+            epTitle := it.Name
+            series := it.SeriesName
+            epcode := ""
+            if it.ParentIndexNumber != nil && it.IndexNumber != nil {
+                epcode = fmt.Sprintf("S%02dE%02d", *it.ParentIndexNumber, *it.IndexNumber)
+            }
+            if series != "" && epTitle != "" && epcode != "" {
+                d.ItemName = fmt.Sprintf("%s - %s (%s)", series, epTitle, epcode)
+            } else if series != "" && epTitle != "" {
+                d.ItemName = fmt.Sprintf("%s - %s", series, epTitle)
+            } else if epTitle != "" {
+                d.ItemName = epTitle
+            }
+            if d.ItemType == "" {
+                d.ItemType = "Episode"
+            }
+        } else if it.Name != "" {
+            d.ItemName = it.Name
+            if d.ItemType == "" && it.Type != "" {
+                d.ItemType = it.Type
+            }
+        }
+    }
+    return details
 }
