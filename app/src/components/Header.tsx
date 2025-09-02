@@ -1,5 +1,5 @@
 // app/src/components/Header.tsx
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { useUsage, useNowSnapshot, useRefreshStatus } from '../hooks/useData';
 import { startRefresh } from '../lib/api';
 import { fmtHours } from '../lib/format';
@@ -9,8 +9,6 @@ type SnapshotEntry = {
 };
 
 export default function Header() {
-  const [refreshing, setRefreshing] = useState(false);
-
   // SWR-powered data
   const { data: weeklyUsage = [], error: usageError } = useUsage(7);
   const { data: nowPlaying = [], error: snapshotError } = useNowSnapshot();
@@ -30,21 +28,8 @@ export default function Header() {
   const progress =
     total > 0 ? Math.max(0, Math.min(100, (imported / total) * 100)) : 0;
 
-  // The backend is running if it says so; otherwise fall back to our local state
-  const isBackendRunning = Boolean(refreshStatus?.running);
-  const isRunning = isBackendRunning || refreshing;
-
-  // When backend says it stopped (or errored), end our local "refreshing" state.
-  useEffect(() => {
-    if (!refreshing) return;
-    if (refreshStatus?.running === false) {
-      setRefreshing(false);
-    }
-    if (refreshStatus?.error) {
-      setRefreshing(false);
-      console.error('Refresh failed:', refreshStatus.error);
-    }
-  }, [refreshStatus, refreshing]);
+  // The running state is now driven directly by the SWR hook
+  const isRunning = Boolean(refreshStatus?.running);
 
   // ---- Double-click / spam click guard ----
   const clickLockRef = useRef(false);
@@ -60,10 +45,8 @@ export default function Header() {
     }, 1200);
 
     try {
-      setRefreshing(true); // disable instantly
       await startRefresh(); // Fiber v3: kicks off the job; progress read via useRefreshStatus
     } catch (err) {
-      setRefreshing(false);
       console.error('Failed to start refresh:', err);
     }
   };
@@ -113,7 +96,7 @@ export default function Header() {
           <div className="relative">
             <button
               onClick={handleRefresh}
-              disabled={isRunning} // disable if either local or backend says running
+              disabled={isRunning}
               className={[
                 'relative rounded-lg px-4 py-2 font-semibold text-black',
                 'bg-amber-600 hover:bg-amber-500 active:translate-y-[1px]',
