@@ -1,20 +1,15 @@
 // app/src/components/CodecsTable.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
-import { fetchCodecs } from "../lib/api";
-import type { CodecBuckets } from "../types";
+import { useCodecs } from "../hooks/useData";
 import { fmtInt } from "../lib/format";
 import Card from "./ui/Card";
 
 export default function CodecsTable() {
-  const [data, setData] = useState<CodecBuckets | null>(null);
-
-  useEffect(() => {
-    fetchCodecs().then(setData).catch(() => {});
-  }, []);
+  const { data, isLoading } = useCodecs();
 
   const rows = useMemo(() => {
-    if (!data?.codecs) return [];
+    if (!data?.codecs || isLoading) return [];
     return Object.keys(data.codecs)
       .map((codec) => ({
         codec,
@@ -22,10 +17,15 @@ export default function CodecsTable() {
         episodes: data.codecs[codec]?.Episode || 0,
       }))
       .sort((a, b) => b.movies + b.episodes - (a.movies + a.episodes));
-  }, [data]);
+  }, [data, isLoading]);
 
   return (
-    <Card title="Media Codecs">
+    <Card
+      title={
+        <>
+          Media Codecs {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}
+        </>
+      }>
       <table className="w-full text-sm text-left text-gray-300">
         <thead className="text-gray-400 border-b border-neutral-700">
           <tr>
@@ -73,6 +73,9 @@ export default function CodecsTable() {
           ))}
         </tbody>
       </table>
+      {rows.length === 0 && !isLoading && (
+        <div className="text-gray-500 text-center py-4">No codec data found</div>
+      )}
     </Card>
   );
 }
