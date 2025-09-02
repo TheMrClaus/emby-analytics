@@ -159,7 +159,7 @@ func main() {
 	app.Get("/stats/overview", stats.Overview(sqlDB))
 	app.Get("/stats/usage", stats.Usage(sqlDB))
 	app.Get("/stats/top/users", stats.TopUsers(sqlDB))
-	app.Get("/stats/top/users/accurate", stats.AccurateTopUsers(sqlDB))
+	
 	app.Get("/stats/top/items", stats.TopItems(sqlDB, em))
 	app.Get("/stats/qualities", stats.Qualities(sqlDB))
 	app.Get("/stats/codecs", stats.Codecs(sqlDB))
