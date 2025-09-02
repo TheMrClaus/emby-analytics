@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"emby-analytics/internal/db"
-
 	"github.com/gofiber/fiber/v3"
 )
 
