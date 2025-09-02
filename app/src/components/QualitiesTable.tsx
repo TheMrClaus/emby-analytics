@@ -1,29 +1,30 @@
 // app/src/components/QualitiesTable.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
-import { fetchQualities } from "../lib/api";
-import type { QualityBuckets } from "../types";
+import { useQualities } from "../hooks/useData";
 import { fmtInt } from "../lib/format";
 import Card from "./ui/Card";
 
 export default function QualitiesTable() {
-  const [data, setData] = useState<QualityBuckets | null>(null);
+  const { data, isLoading } = useQualities();
 
-  useEffect(() => {
-    fetchQualities().then(setData).catch(() => {});
-  }, []);
-
-    const order = ["8K", "4K", "1080p", "720p", "SD", "Resolution Not Available"];  const rows = useMemo(() => {
-    if (!data?.buckets) return [];
+  const order = ["8K", "4K", "1080p", "720p", "SD", "Resolution Not Available"];
+  const rows = useMemo(() => {
+    if (!data?.buckets || isLoading) return [];
     return order.map((label) => ({
       label,
       movies: data.buckets[label]?.Movie || 0,
       episodes: data.buckets[label]?.Episode || 0,
     }));
-  }, [data]);
+  }, [data, isLoading]);
 
   return (
-    <Card title="Media Qualities">
+    <Card
+      title={
+        <>
+          Media Qualities {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}
+        </>
+      }>
       <table className="w-full text-sm text-left text-gray-300">
         <thead className="text-gray-400 border-b border-neutral-700">
           <tr>
@@ -71,6 +72,9 @@ export default function QualitiesTable() {
           ))}
         </tbody>
       </table>
+      {rows.length === 0 && !isLoading && (
+        <div className="text-gray-500 text-center py-4">No quality data found</div>
+      )}
     </Card>
   );
 }
