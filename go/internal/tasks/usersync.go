@@ -95,7 +95,7 @@ func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) {
 			// - PlaybackPositionTicks=0 (no resume position)
 			
 			hasLastPlayedDate := item.UserData.LastPlayedDate != ""
-			hasPlaybackPosition := item.UserData.PlaybackPositionTicks > 0
+			hasPlaybackPosition := item.UserData.PlaybackPos > 0
 			hasPlayCount := item.UserData.PlayCount > 0
 			
 			// Consider it Trakt-synced if it's marked played but has no Emby streaming evidence
