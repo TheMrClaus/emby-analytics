@@ -655,8 +655,9 @@ type EmbySession struct {
 	TransHeight       int      `json:"TransHeight,omitempty"`
 	TransReasons      []string `json:"TransReasons,omitempty"`
 	TransCompletion   float64  `json:"TransCompletion,omitempty"`
-	TransPosTicks     int64    `json:"TransPosTicks,omitempty"`
-	RemoteAddress     string   `json:"RemoteAddress,omitempty"`
+    TransPosTicks     int64    `json:"TransPosTicks,omitempty"`
+    RemoteAddress     string   `json:"RemoteAddress,omitempty"`
+    IsPaused          bool     `json:"IsPaused,omitempty"`
 }
 
 type rawSession struct {
@@ -892,17 +893,18 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 		}
 		es.SubsCount = subs
 
-		// PlayState
-		if rs.PlayState != nil {
-			es.PosTicks = rs.PlayState.PositionTicks
-			if rs.PlayState.PlayMethod != "" {
-				if strings.HasPrefix(strings.ToLower(rs.PlayState.PlayMethod), "trans") {
-					es.PlayMethod = "Transcode"
-				} else {
-					es.PlayMethod = "Direct"
-				}
-			}
-		}
+        // PlayState
+        if rs.PlayState != nil {
+            es.PosTicks = rs.PlayState.PositionTicks
+            es.IsPaused = rs.PlayState.IsPaused
+            if rs.PlayState.PlayMethod != "" {
+                if strings.HasPrefix(strings.ToLower(rs.PlayState.PlayMethod), "trans") {
+                    es.PlayMethod = "Transcode"
+                } else {
+                    es.PlayMethod = "Direct"
+                }
+            }
+        }
 		if es.PlayMethod == "" {
 			es.PlayMethod = "Direct"
 		}

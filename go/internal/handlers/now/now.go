@@ -67,11 +67,14 @@ type NowEntry struct {
 	TransReason  string `json:"trans_reason,omitempty"`
 
 	// For the red transcode bar
-	TransPct float64 `json:"trans_pct,omitempty"`
+    TransPct float64 `json:"trans_pct,omitempty"`
 
 	// For parentheses after lines when transcoding
-	TransAudioBitrate int64 `json:"trans_audio_bitrate,omitempty"`
-	TransVideoBitrate int64 `json:"trans_video_bitrate,omitempty"`
+    TransAudioBitrate int64 `json:"trans_audio_bitrate,omitempty"`
+    TransVideoBitrate int64 `json:"trans_video_bitrate,omitempty"`
+
+    // Playback state
+    IsPaused bool `json:"is_paused,omitempty"`
 }
 
 // sanitizeMessageInput cleans user input to prevent injection attacks
@@ -321,8 +324,8 @@ func Snapshot(c fiber.Ctx) error {
 		if s.ItemID != "" {
 			poster = "/img/primary/" + s.ItemID
 		}
-    out = append(out, NowEntry{
-			Timestamp:   nowMs,
+        out = append(out, NowEntry{
+            Timestamp:   nowMs,
 			Title:       s.ItemName,
 			User:        s.UserName,
 			App:         s.App,
@@ -334,11 +337,11 @@ func Snapshot(c fiber.Ctx) error {
 			Bitrate:     s.Bitrate,
 			ProgressPct: progressPct,
 			PositionSec: func() int64 { if s.PosTicks>0 { return s.PosTicks / 10_000_000 }; return 0 }(),
-			DurationSec: func() int64 { if s.DurationTicks>0 { return s.DurationTicks / 10_000_000 }; return 0 }(),
-			Poster:      poster,
-			SessionID:   s.SessionID,
-			ItemID:      s.ItemID,
-			ItemType:    s.ItemType,
+            DurationSec: func() int64 { if s.DurationTicks>0 { return s.DurationTicks / 10_000_000 }; return 0 }(),
+            Poster:      poster,
+            SessionID:   s.SessionID,
+            ItemID:      s.ItemID,
+            ItemType:    s.ItemType,
 
 			Container: s.Container,
 
@@ -399,9 +402,11 @@ func Snapshot(c fiber.Ctx) error {
 			}(),
 
 			// expose targets/bitrates once (no duplicates)
-			TransAudioBitrate: s.TransAudioBitrate,
-			TransVideoBitrate: s.TransVideoBitrate,
-		})
+            TransAudioBitrate: s.TransAudioBitrate,
+            TransVideoBitrate: s.TransVideoBitrate,
+
+            IsPaused: s.IsPaused,
+        })
 	}
 	return c.JSON(out)
 }
@@ -481,8 +486,8 @@ func Stream(c fiber.Ctx) error {
 			if s.ItemID != "" {
 				poster = "/img/primary/" + s.ItemID
 			}
-			out = append(out, NowEntry{
-				Timestamp:   nowMs,
+            out = append(out, NowEntry{
+                Timestamp:   nowMs,
 				Title:       s.ItemName,
 				User:        s.UserName,
 				App:         s.App,
@@ -494,11 +499,11 @@ func Stream(c fiber.Ctx) error {
 				Bitrate:     s.Bitrate,
 				ProgressPct: progressPct,
 				PositionSec: func() int64 { if s.PosTicks>0 { return s.PosTicks / 10_000_000 }; return 0 }(),
-				DurationSec: func() int64 { if s.DurationTicks>0 { return s.DurationTicks / 10_000_000 }; return 0 }(),
-				Poster:      poster,
-				SessionID:   s.SessionID,
-				ItemID:      s.ItemID,
-				ItemType:    s.ItemType,
+                DurationSec: func() int64 { if s.DurationTicks>0 { return s.DurationTicks / 10_000_000 }; return 0 }(),
+                Poster:      poster,
+                SessionID:   s.SessionID,
+                ItemID:      s.ItemID,
+                ItemType:    s.ItemType,
 
 				Container: s.Container,
 
@@ -557,9 +562,10 @@ func Stream(c fiber.Ctx) error {
 				}(),
 
 				// expose targets/bitrates once (no duplicates)
-				TransAudioBitrate: s.TransAudioBitrate,
-				TransVideoBitrate: s.TransVideoBitrate,
-			})
+                TransAudioBitrate: s.TransAudioBitrate,
+                TransVideoBitrate: s.TransVideoBitrate,
+                IsPaused: s.IsPaused,
+            })
 		}
 		b, _ := json.Marshal(out)
 		if _, err := w.WriteString("data: " + string(b) + "\n\n"); err != nil {

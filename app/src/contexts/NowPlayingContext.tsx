@@ -15,6 +15,7 @@ export type NowEntry = {
   progress_pct: number;
   position_sec?: number;
   duration_sec?: number;
+  is_paused?: boolean;
   poster: string;
   session_id: string;
   item_id: string;

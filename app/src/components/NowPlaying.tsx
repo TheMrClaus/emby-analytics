@@ -49,6 +49,13 @@ export default function NowPlaying() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Local ticking state to update time display every second without burdening server
+  const [clockTick, setClockTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setClockTick((t) => (t + 1) % 1_000_000), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const send = async (
     sessionId: string,
     action: "pause" | "unpause" | "stop" | "message",
@@ -189,6 +196,11 @@ export default function NowPlaying() {
               const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
               const progress = pct(s.progress_pct);
               const hasTime = (s.duration_sec ?? 0) > 0;
+              // Derive client-side ticking position using server timestamp
+              const deltaSec = Math.max(0, Math.floor((Date.now() - s.timestamp) / 1000));
+              const livePos = hasTime
+                ? Math.min(s.duration_sec as number, (s.position_sec || 0) + (s.is_paused ? 0 : deltaSec))
+                : undefined;
               const top = topBadge(s);
               const v = videoStatus(s);
               const a = audioStatus(s);
@@ -241,7 +253,7 @@ export default function NowPlaying() {
                           <span>Progress</span>
                           <span>
                             {hasTime
-                              ? `${fmtHMS(s.position_sec)} / ${fmtHMS(s.duration_sec)}`
+                              ? `${fmtHMS(livePos)} / ${fmtHMS(s.duration_sec)}`
                               : `${progress}%`}
                           </span>
                         </div>

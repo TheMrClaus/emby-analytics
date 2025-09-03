@@ -189,6 +189,7 @@ func (b *Broadcaster) fetchNowPlayingEntries() ([]NowEntry, error) {
 			AudioMethod:    s.AudioMethod,
 			TransReason:    reasonText(s.VideoMethod, s.AudioMethod, s.TransReasons),
 			TransPct:       s.TransCompletion,
+			IsPaused:       s.IsPaused,
 		})
 	}
 
