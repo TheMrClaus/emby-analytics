@@ -75,29 +75,24 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 		// Enhanced query with new columns - handle empty strings and NULLs properly
         query := `
             SELECT
-                -- Derive video method using columns first, then reasons
+                -- Derive video method: columns indicate Transcode OR codec change OR reason mentions video/subtitle/burn
                 CASE 
-                    WHEN COALESCE(video_method,'') <> '' THEN video_method
+                    WHEN lower(COALESCE(video_method,'')) = 'transcode' THEN 'Transcode'
                     WHEN COALESCE(video_codec_from,'') <> '' AND COALESCE(video_codec_to,'') <> '' 
                         AND lower(video_codec_from) <> lower(video_codec_to) THEN 'Transcode'
-                    WHEN play_method = 'Transcode' THEN 
-                        CASE 
-                            WHEN instr(lower(COALESCE(transcode_reasons,'')), 'subtitle') > 0 OR instr(lower(COALESCE(transcode_reasons,'')), 'burn') > 0 THEN 'Transcode'
-                            WHEN instr(lower(COALESCE(transcode_reasons,'')), 'video') > 0 THEN 'Transcode'
-                            ELSE 'DirectPlay'
-                        END
+                    WHEN play_method = 'Transcode' AND (
+                        instr(lower(COALESCE(transcode_reasons,'')), 'subtitle') > 0 OR 
+                        instr(lower(COALESCE(transcode_reasons,'')), 'burn') > 0 OR 
+                        instr(lower(COALESCE(transcode_reasons,'')), 'video') > 0
+                    ) THEN 'Transcode'
                     ELSE 'DirectPlay'
                 END AS video_method,
-                -- Derive audio method using columns first, then reasons
+                -- Derive audio method: columns indicate Transcode OR codec change OR reason mentions audio
                 CASE 
-                    WHEN COALESCE(audio_method,'') <> '' THEN audio_method
+                    WHEN lower(COALESCE(audio_method,'')) = 'transcode' THEN 'Transcode'
                     WHEN COALESCE(audio_codec_from,'') <> '' AND COALESCE(audio_codec_to,'') <> '' 
                         AND lower(audio_codec_from) <> lower(audio_codec_to) THEN 'Transcode'
-                    WHEN play_method = 'Transcode' THEN 
-                        CASE 
-                            WHEN instr(lower(COALESCE(transcode_reasons,'')), 'audio') > 0 THEN 'Transcode'
-                            ELSE 'DirectPlay'
-                        END
+                    WHEN play_method = 'Transcode' AND instr(lower(COALESCE(transcode_reasons,'')), 'audio') > 0 THEN 'Transcode'
                     ELSE 'DirectPlay'
                 END AS audio_method,
                 COUNT(*) AS cnt
@@ -111,28 +106,23 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
         sessionQuery := `
             SELECT 
                 item_name, item_type, device_id, client_name, item_id,
-                -- Columns first, then reasons
+                -- Derive consistent methods for session details
                 CASE 
-                    WHEN COALESCE(video_method,'') <> '' THEN video_method
+                    WHEN lower(COALESCE(video_method,'')) = 'transcode' THEN 'Transcode'
                     WHEN COALESCE(video_codec_from,'') <> '' AND COALESCE(video_codec_to,'') <> '' 
                         AND lower(video_codec_from) <> lower(video_codec_to) THEN 'Transcode'
-                    WHEN play_method = 'Transcode' THEN 
-                        CASE 
-                            WHEN instr(lower(COALESCE(transcode_reasons,'')), 'subtitle') > 0 OR instr(lower(COALESCE(transcode_reasons,'')), 'burn') > 0 THEN 'Transcode'
-                            WHEN instr(lower(COALESCE(transcode_reasons,'')), 'video') > 0 THEN 'Transcode'
-                            ELSE 'DirectPlay'
-                        END
+                    WHEN play_method = 'Transcode' AND (
+                        instr(lower(COALESCE(transcode_reasons,'')), 'subtitle') > 0 OR 
+                        instr(lower(COALESCE(transcode_reasons,'')), 'burn') > 0 OR 
+                        instr(lower(COALESCE(transcode_reasons,'')), 'video') > 0
+                    ) THEN 'Transcode'
                     ELSE 'DirectPlay'
                 END AS video_method,
                 CASE 
-                    WHEN COALESCE(audio_method,'') <> '' THEN audio_method
+                    WHEN lower(COALESCE(audio_method,'')) = 'transcode' THEN 'Transcode'
                     WHEN COALESCE(audio_codec_from,'') <> '' AND COALESCE(audio_codec_to,'') <> '' 
                         AND lower(audio_codec_from) <> lower(audio_codec_to) THEN 'Transcode'
-                    WHEN play_method = 'Transcode' THEN 
-                        CASE 
-                            WHEN instr(lower(COALESCE(transcode_reasons,'')), 'audio') > 0 THEN 'Transcode'
-                            ELSE 'DirectPlay'
-                        END
+                    WHEN play_method = 'Transcode' AND instr(lower(COALESCE(transcode_reasons,'')), 'audio') > 0 THEN 'Transcode'
                     ELSE 'DirectPlay'
                 END AS audio_method
             FROM play_sessions 
