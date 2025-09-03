@@ -2,6 +2,7 @@ package stats
 
 import (
 	"database/sql"
+	"emby-analytics/internal/handlers/settings"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -20,13 +21,22 @@ func ActiveUsersLifetime(db *sql.DB) fiber.Handler {
 			limit = 5
 		}
 
+		// Get the setting for whether to include Trakt items
+		includeTrakt := settings.GetSettingBool(db, "include_trakt_items", false)
+
 		rows, err := db.Query(`
-			SELECT u.name, COALESCE(lw.total_ms,0)
+			SELECT 
+				u.name,
+				COALESCE(lw.emby_ms, 0) AS emby_ms,
+				COALESCE(lw.trakt_ms, 0) AS trakt_ms
 			FROM lifetime_watch lw
 			JOIN emby_user u ON u.id = lw.user_id
-			ORDER BY lw.total_ms DESC
+			WHERE lw.emby_ms > 0 OR lw.trakt_ms > 0
+			ORDER BY 
+				CASE WHEN ? = 1 THEN (COALESCE(lw.emby_ms, 0) + COALESCE(lw.trakt_ms, 0))
+				     ELSE COALESCE(lw.emby_ms, 0) END DESC
 			LIMIT ?;
-		`, limit)
+		`, includeTrakt, limit)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -35,9 +45,15 @@ func ActiveUsersLifetime(db *sql.DB) fiber.Handler {
 		out := []ActiveUserLifetime{}
 		for rows.Next() {
 			var name string
-			var totalMs int64
-			if err := rows.Scan(&name, &totalMs); err != nil {
+			var embyMs, traktMs int64
+			if err := rows.Scan(&name, &embyMs, &traktMs); err != nil {
 				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+			}
+
+			// Calculate total based on setting
+			totalMs := embyMs
+			if includeTrakt {
+				totalMs += traktMs
 			}
 
 			// Convert milliseconds to days/hours/minutes

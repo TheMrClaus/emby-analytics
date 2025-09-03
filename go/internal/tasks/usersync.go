@@ -80,10 +80,10 @@ func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) {
 		return
 	}
 
-	// Check if Trakt-synced items should be included
+	// Check if Trakt-synced items should be included for backward compatibility
 	includeTrakt := settings.GetSettingBool(db, "include_trakt_items", false)
 	
-	var totalWatchMs int64
+	var embyWatchMs, traktWatchMs, totalWatchMs int64
 	var traktItems, embyItems int
 	
 	for _, item := range userDataItems {
@@ -101,28 +101,36 @@ func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) {
 			// Consider it Trakt-synced if it's marked played but has no Emby streaming evidence
 			isTraktSynced := !hasLastPlayedDate && !hasPlaybackPosition && !hasPlayCount
 			
+			watchTimeMs := item.RunTimeTicks / 10000
+			
 			if isTraktSynced {
 				traktItems++
-				if !includeTrakt {
-					continue // Skip Trakt-synced items if setting is disabled
+				traktWatchMs += watchTimeMs
+				if includeTrakt {
+					totalWatchMs += watchTimeMs
 				}
 			} else {
 				embyItems++
+				embyWatchMs += watchTimeMs
+				totalWatchMs += watchTimeMs
 			}
-			
-			totalWatchMs += item.RunTimeTicks / 10000
 		}
 	}
 	
 	// Log the breakdown for debugging
 	if traktItems > 0 || embyItems > 0 {
-		log.Printf("[usersync] %s: %d Emby items, %d Trakt items, includeTrakt=%v", userName, embyItems, traktItems, includeTrakt)
+		log.Printf("[usersync] %s: %d Emby items (%dms), %d Trakt items (%dms), includeTrakt=%v", 
+			userName, embyItems, embyWatchMs, traktItems, traktWatchMs, includeTrakt)
 	}
 	
-	_, err = db.Exec(`INSERT INTO lifetime_watch (user_id, total_ms)
-	                  VALUES (?, ?)
-	                  ON CONFLICT(user_id) DO UPDATE SET total_ms = excluded.total_ms`,
-		userID, totalWatchMs)
+	// Store all three values: separate breakdown plus total for backward compatibility
+	_, err = db.Exec(`INSERT INTO lifetime_watch (user_id, total_ms, emby_ms, trakt_ms)
+	                  VALUES (?, ?, ?, ?)
+	                  ON CONFLICT(user_id) DO UPDATE SET 
+	                      total_ms = excluded.total_ms,
+	                      emby_ms = excluded.emby_ms,
+	                      trakt_ms = excluded.trakt_ms`,
+		userID, totalWatchMs, embyWatchMs, traktWatchMs)
 	if err != nil {
 		log.Printf("[usersync] failed to update lifetime watch for %s: %v", userName, err)
 	}

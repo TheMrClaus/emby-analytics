@@ -185,6 +185,8 @@ func main() {
 	app.Get("/stats/active-users", stats.ActiveUsersLifetime(sqlDB))
 	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))
 	app.Get("/stats/user/:id", stats.UserDetailHandler(sqlDB))
+	app.Get("/stats/user/:id/watch-time", stats.UserWatchTimeHandler(sqlDB))
+	app.Get("/stats/users/watch-time", stats.AllUsersWatchTimeHandler(sqlDB))
 	app.Get("/stats/play-methods", stats.PlayMethods(sqlDB, em))
 	app.Get("/stats/items/by-codec/:codec", stats.ItemsByCodec(sqlDB))
 	app.Get("/stats/items/by-quality/:quality", stats.ItemsByQuality(sqlDB))
