@@ -174,20 +174,29 @@ func (sp *SessionProcessor) createOrUpdateInterval(tracked *TrackedSession, endT
 
 // createPlaySession creates a new play_session record in the database
 func (sp *SessionProcessor) createPlaySession(session emby.EmbySession, startTime time.Time) (int64, error) {
-	res, err := sp.DB.Exec(`
-		INSERT INTO play_sessions
-		(user_id, session_id, device_id, client_name, item_id, item_name, item_type, 
-		 play_method, started_at, is_active, transcode_reasons, remote_address,
-		 video_method, audio_method, video_codec_from, video_codec_to, 
-		 audio_codec_from, audio_codec_to)
-		VALUES(?,?,?,?,?,?,?,?,?,true,'','','','','','','','')
-	`, session.UserID, session.SessionID, session.Device, session.App, 
-		session.ItemID, session.ItemName, session.ItemType, session.PlayMethod, 
-		startTime.Unix())
-		
-	if err != nil {
-		return 0, err
-	}
-	
-	return res.LastInsertId()
+    // Check if a session already exists for this SessionID+ItemID
+    var existingID int64
+    err := sp.DB.QueryRow(`SELECT id FROM play_sessions WHERE session_id=? AND item_id=?`, session.SessionID, session.ItemID).Scan(&existingID)
+    if err == nil {
+        // Reactivate existing row to avoid UNIQUE constraint issues
+        _, _ = sp.DB.Exec(`UPDATE play_sessions SET is_active = true, ended_at = NULL WHERE id = ?`, existingID)
+        return existingID, nil
+    }
+
+    res, ierr := sp.DB.Exec(`
+        INSERT INTO play_sessions
+        (user_id, session_id, device_id, client_name, item_id, item_name, item_type, 
+         play_method, started_at, is_active, transcode_reasons, remote_address,
+         video_method, audio_method, video_codec_from, video_codec_to, 
+         audio_codec_from, audio_codec_to)
+        VALUES(?,?,?,?,?,?,?,?,?,true,'','','','','','','','')
+    `, session.UserID, session.SessionID, session.Device, session.App, 
+        session.ItemID, session.ItemName, session.ItemType, session.PlayMethod, 
+        startTime.Unix())
+        
+    if ierr != nil {
+        return 0, ierr
+    }
+    
+    return res.LastInsertId()
 }
