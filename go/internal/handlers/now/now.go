@@ -647,16 +647,23 @@ func StopSession(c fiber.Ctx) error {
 // POST /now/sessions/:id/message  body: {header?, text, timeout_ms?}
 func MessageSession(c fiber.Ctx) error {
 	id := c.Params("id")
-	var body struct {
-		Header    string `json:"header"`
-		Text      string `json:"text"`
-		TimeoutMs int    `json:"timeout_ms"`
-	}
+    var body struct {
+        Header    string `json:"header"`
+        Text      string `json:"text"`
+        // Accept alternate field name for convenience
+        Message   string `json:"message"`
+        TimeoutMs int    `json:"timeout_ms"`
+    }
 	if err := c.Bind().Body(&body); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON body"})
 	}
 
-	// Sanitize inputs
+    // If client sent {message: "..."}, treat as text
+    if strings.TrimSpace(body.Text) == "" && strings.TrimSpace(body.Message) != "" {
+        body.Text = body.Message
+    }
+
+    // Sanitize inputs
 	const maxHeaderLength = 100
 	const maxTextLength = 500
 

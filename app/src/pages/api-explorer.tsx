@@ -68,7 +68,9 @@ const endpoints: Endpoint[] = [
   // Add 'message' as a body parameter so the explorer can send it
   { id: 'now-message', category: 'Now', method: 'POST', path: '/now/:id/message', description: 'Send on-screen message to session.', usage: 'Inform users about maintenance, etc.', params: [
     { key: 'id', kind: 'path', required: true, placeholder: 'session-id' },
-    { key: 'message', kind: 'body', required: true, placeholder: 'Hello there 👋' },
+    { key: 'header', kind: 'body', required: false, placeholder: 'Emby Analytics' },
+    { key: 'text', kind: 'body', required: true, placeholder: 'Hello there 👋' },
+    { key: 'timeout_ms', kind: 'body', required: false, placeholder: '5000' },
   ] },
 
   // Admin - Refresh & scheduler
