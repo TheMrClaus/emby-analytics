@@ -13,4 +13,10 @@ services:
       # Change these to match your setup
       EMBY_BASE_URL: "http://emby:8096"
       EMBY_API_KEY: "your-emby-api-key"
+      # Optional: Protect admin endpoints with a fixed token (otherwise generated automatically)
+      # ADMIN_TOKEN: "your-secure-admin-token"
+      # Optional: webhook signature secret
+      WEBHOOK_SECRET: "your-secure-webhook-secret"
+      # Optional: set true to auto-auth UI via HttpOnly cookie (auto-enabled when ADMIN_TOKEN is not set)
+      # ADMIN_AUTO_COOKIE: "true"
       KEEPALIVE_SEC: 15

@@ -94,7 +94,7 @@ The frontend dev server will proxy API requests to the Go backend.
 
 ## Production Deployment
 
-**Security Note:** Authentication is not yet implemented. If you are going to expose this to the public internet, you should have a reverse proxy in place to handle authentication.
+**Security Note:** Admin endpoints are protected with a token. If `ADMIN_TOKEN` is not set, the server will generate one automatically, persist it under the data directory, and (by default) set an HttpOnly cookie so the UI is authenticated without user action. For internet exposure, still place behind a reverse proxy.
 
 
 ### Option 1: Docker Compose (Recommended)
@@ -141,6 +141,25 @@ Key environment variables (see `.env.example` for complete list):
 - `HISTORY_DAYS`: Number of days of playback history to sync (default: `2`)
 - `NOW_POLL_SEC`: Interval in seconds for polling "Now Playing" data (default: `5`)
 - `LOG_LEVEL`: Logging level (e.g., `info`, `debug`, `warn`, `error`) (default: `info`)
+
+### Admin Authentication
+
+- Backend: set `ADMIN_TOKEN` to explicitly control the admin token, or omit it and let the server auto-generate and persist one.
+- Frontend: to enable admin actions from the UI:
+  - Set `NEXT_PUBLIC_ADMIN_TOKEN` during build, or
+  - Use the UI prompt (Header → Admin Token) to store a token in the browser.
+  - You can also set it manually in `localStorage` under key `emby_admin_token`.
+
+All admin requests include `Authorization: Bearer <token>` automatically when configured.
+
+#### Automatic UI authentication (no user step)
+
+When `ADMIN_TOKEN` is not provided, the server will:
+
+- Generate and save a token to `<data dir>/admin_token` (same directory as the SQLite DB).
+- Enable `ADMIN_AUTO_COOKIE` automatically (unless explicitly set), setting an HttpOnly cookie (`admin_token`) so the UI can call admin routes without any manual step.
+
+You can also explicitly set `ADMIN_AUTO_COOKIE=true` with your own `ADMIN_TOKEN` if desired. Only enable this in private/trusted deployments or behind an auth proxy.
 
 ## API Endpoints
 

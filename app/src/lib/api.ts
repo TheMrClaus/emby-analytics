@@ -14,12 +14,46 @@ import {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
+// --- Admin token handling ---
+// Source order: localStorage (runtime) -> NEXT_PUBLIC_ADMIN_TOKEN (build time)
+const ADMIN_TOKEN_STORAGE_KEY = 'emby_admin_token';
+
+function readAdminToken(): string | null {
+  try {
+    if (typeof window !== 'undefined') {
+      const t = window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+      if (t) return t;
+    }
+  } catch { /* ignore */ }
+  return process.env.NEXT_PUBLIC_ADMIN_TOKEN ?? null;
+}
+
+export function setAdminToken(token: string) {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+  }
+}
+
+export function clearAdminToken() {
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+  }
+}
+
 // Generic JSON fetch helper
 async function j<T>(path: string, init?: RequestInit): Promise<T> {
+  const isAdmin = path.startsWith('/admin');
+  const maybeToken = isAdmin ? readAdminToken() : null;
+  const authHeaders: Record<string, string> = {};
+  if (maybeToken) {
+    authHeaders['Authorization'] = `Bearer ${maybeToken}`;
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders,
       ...(init?.headers ?? {}),
     },
   });

@@ -1,7 +1,7 @@
 // app/src/components/Header.tsx
 import { useRef } from 'react';
 import { useUsage, useNowSnapshot, useRefreshStatus } from '../hooks/useData';
-import { startRefresh } from '../lib/api';
+import { startRefresh, setAdminToken, clearAdminToken } from '../lib/api';
 import { fmtHours } from '../lib/format';
 
 type SnapshotEntry = {
@@ -46,7 +46,21 @@ export default function Header() {
 
     try {
       await startRefresh(); // Fiber v3: kicks off the job; progress read via useRefreshStatus
-    } catch (err) {
+    } catch (err: any) {
+      const msg = String(err?.message || err || '');
+      // If unauthorized, prompt for admin token and retry once
+      if (typeof window !== 'undefined' && msg.startsWith('401')) {
+        const t = window.prompt('Enter admin token to use for admin actions:');
+        if (t && t.trim()) {
+          setAdminToken(t.trim());
+          try {
+            await startRefresh();
+            return;
+          } catch (e) {
+            console.error('Failed to start refresh after setting token:', e);
+          }
+        }
+      }
       console.error('Failed to start refresh:', err);
     }
   };
@@ -133,6 +147,27 @@ export default function Header() {
                   />
                 </span>
               )}
+            </button>
+          </div>
+
+          {/* Admin token quick actions */}
+          <div className="flex items-center gap-2 text-sm">
+            <button
+              className="text-gray-300 hover:text-white underline decoration-dotted"
+              onClick={() => {
+                if (typeof window === 'undefined') return;
+                const t = window.prompt('Set admin token');
+                if (t && t.trim()) setAdminToken(t.trim());
+              }}
+            >
+              Admin Token
+            </button>
+            <span className="text-gray-500">|</span>
+            <button
+              className="text-gray-400 hover:text-white underline decoration-dotted"
+              onClick={() => clearAdminToken()}
+            >
+              Clear
             </button>
           </div>
         </div>

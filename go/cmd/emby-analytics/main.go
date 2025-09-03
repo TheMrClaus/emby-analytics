@@ -155,6 +155,22 @@ func main() {
 	})
 
 	// Health Routes
+	// Optional: auto-auth cookie for UI
+	if cfg.AdminAutoCookie && cfg.AdminToken != "" {
+		app.Use(func(c fiber.Ctx) error {
+			if c.Cookies("admin_token") == "" {
+				c.Cookie(&fiber.Cookie{
+					Name:     "admin_token",
+					Value:    cfg.AdminToken,
+					HTTPOnly: true,
+					Path:     "/",
+				})
+			}
+			return c.Next()
+		})
+	}
+
+	// Health Routes
 	app.Get("/health", health.Health(sqlDB))
 	app.Get("/health/emby", health.Emby(em))
 	// Stats API Routes
