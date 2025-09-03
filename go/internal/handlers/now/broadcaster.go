@@ -166,6 +166,8 @@ func (b *Broadcaster) fetchNowPlayingEntries() ([]NowEntry, error) {
 			Subs:           s.SubLang,
 			Bitrate:        s.Bitrate,
 			ProgressPct:    pct,
+			PositionSec:    func() int64 { if s.PosTicks>0 { return s.PosTicks / 10_000_000 }; return 0 }(),
+			DurationSec:    func() int64 { if s.DurationTicks>0 { return s.DurationTicks / 10_000_000 }; return 0 }(),
 			Poster:         "/img/primary/" + s.ItemID,
 			SessionID:      s.SessionID,
 			ItemID:         s.ItemID,
