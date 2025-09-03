@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import Head from 'next/head';
 import Header from '../components/Header';
 import { useSettings } from '../hooks/useSettings';
-import { Settings, RotateCcw, Check, AlertCircle, Info } from 'lucide-react';
+import { Settings, RotateCcw, Check, AlertCircle, Info, ArrowLeft } from 'lucide-react';
 
 export default function SettingsPage() {
   const { data: settings, error, isLoading, updateSetting } = useSettings();
@@ -41,6 +41,13 @@ export default function SettingsPage() {
           <main className="p-4 md:p-6 border-t border-neutral-800">
             <div className="max-w-4xl mx-auto">
               <div className="flex items-center gap-3 mb-6">
+                <a 
+                  href="/" 
+                  className="flex items-center justify-center w-10 h-10 rounded-lg bg-neutral-700 hover:bg-neutral-600 transition-colors text-gray-300 hover:text-white"
+                  title="Back to Dashboard"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </a>
                 <Settings className="w-6 h-6 text-gray-400" />
                 <h1 className="text-2xl font-bold">Settings</h1>
               </div>
@@ -70,6 +77,13 @@ export default function SettingsPage() {
           <main className="p-4 md:p-6 border-t border-neutral-800">
             <div className="max-w-4xl mx-auto">
               <div className="flex items-center gap-3 mb-6">
+                <a 
+                  href="/" 
+                  className="flex items-center justify-center w-10 h-10 rounded-lg bg-neutral-700 hover:bg-neutral-600 transition-colors text-gray-300 hover:text-white"
+                  title="Back to Dashboard"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </a>
                 <Settings className="w-6 h-6 text-gray-400" />
                 <h1 className="text-2xl font-bold">Settings</h1>
               </div>
@@ -97,7 +111,14 @@ export default function SettingsPage() {
         <main className="p-4 md:p-6 border-t border-neutral-800">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center gap-3 mb-6">
-              <span className="text-2xl">⚙️</span>
+              <a 
+                href="/" 
+                className="flex items-center justify-center w-10 h-10 rounded-lg bg-neutral-700 hover:bg-neutral-600 transition-colors text-gray-300 hover:text-white"
+                title="Back to Dashboard"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </a>
+              <Settings className="w-6 h-6 text-gray-400" />
               <h1 className="text-2xl font-bold">Settings</h1>
             </div>
 

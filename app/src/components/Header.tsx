@@ -70,7 +70,9 @@ export default function Header() {
       <div className="flex items-center justify-between">
         {/* Title + Clock */}
         <div className="flex items-center gap-8">
-          <h1 className="text-2xl font-bold text-white">Emby Analytics</h1>
+          <a href="/" className="text-2xl font-bold text-white hover:text-amber-300 transition-colors cursor-pointer">
+            Emby Analytics
+          </a>
         </div>
 
         {/* Stats + Refresh */}
