@@ -150,8 +150,10 @@ export default function Header() {
             </button>
           </div>
 
-          {/* Admin token quick actions */}
-          <div className="flex items-center gap-2 text-sm">
+          {/* Admin token quick actions + API Explorer */}
+          <div className="flex items-center gap-3 text-sm">
+            <a href="/api-explorer" className="text-blue-300 hover:text-white underline decoration-dotted">API Explorer</a>
+            <span className="text-gray-500">|</span>
             <button
               className="text-gray-300 hover:text-white underline decoration-dotted"
               onClick={() => {
