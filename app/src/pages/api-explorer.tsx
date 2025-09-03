@@ -147,8 +147,14 @@ export default function APIExplorerPage() {
     if (ep.note && ep.note.includes('Not runnable')) return;
 
     if (ep.dangerous) {
-      const ok = window.confirm(`This action may modify data. Proceed with ${ep.method} ${ep.path}?`);
-      if (!ok) return;
+      // Stronger confirmation for full reset
+      if (ep.id === 'admin-reset-all') {
+        const txt = window.prompt('This will WIPE analytics data (library + sessions). Type RESET to confirm.');
+        if (!txt || txt.trim().toUpperCase() !== 'RESET') return;
+      } else {
+        const ok = window.confirm(`This action may modify data. Proceed with ${ep.method} ${ep.path}?`);
+        if (!ok) return;
+      }
     }
 
     setBusy(ep.id);
@@ -194,7 +200,10 @@ export default function APIExplorerPage() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">API Explorer</h2>
+        <div className="flex items-center gap-3">
+          <a href="/" className="text-xs px-2 py-1 rounded bg-neutral-700 text-gray-200 hover:bg-neutral-600">← Back</a>
+          <h2 className="text-xl font-semibold text-white">API Explorer</h2>
+        </div>
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
