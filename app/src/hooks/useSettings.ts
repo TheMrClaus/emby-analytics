@@ -1,5 +1,17 @@
 import useSWR from 'swr';
-import { fetcher, apiPost } from '../lib/api';
+
+// Admin token handling (same pattern as api.ts)
+const ADMIN_TOKEN_STORAGE_KEY = 'emby_admin_token';
+
+function readAdminToken(): string | null {
+  try {
+    if (typeof window !== 'undefined') {
+      const t = window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+      if (t) return t;
+    }
+  } catch { /* ignore */ }
+  return process.env.NEXT_PUBLIC_ADMIN_TOKEN ?? null;
+}
 
 export interface Setting {
   key: string;
@@ -7,8 +19,17 @@ export interface Setting {
   updated_at: string;
 }
 
+// Fetch function for settings
+const fetchSettings = async (): Promise<Setting[]> => {
+  const response = await fetch('/settings');
+  if (!response.ok) {
+    throw new Error('Failed to fetch settings');
+  }
+  return response.json();
+};
+
 export function useSettings() {
-  const { data, error, mutate } = useSWR<Setting[]>('/settings', fetcher);
+  const { data, error, mutate } = useSWR<Setting[]>('/settings', fetchSettings);
 
   const updateSetting = async (key: string, value: string) => {
     // Optimistic update
@@ -32,11 +53,18 @@ export function useSettings() {
     mutate(optimisticData, false);
 
     try {
-      // Make API call
+      // Make API call with admin authentication
+      const maybeToken = readAdminToken();
+      const authHeaders: Record<string, string> = {};
+      if (maybeToken) {
+        authHeaders['Authorization'] = `Bearer ${maybeToken}`;
+      }
+
       const response = await fetch(`/settings/${key}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          ...authHeaders,
         },
         body: JSON.stringify({ value }),
       });
