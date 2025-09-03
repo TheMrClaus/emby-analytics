@@ -18,6 +18,7 @@ import (
 	images "emby-analytics/internal/handlers/images"
 	items "emby-analytics/internal/handlers/items"
 	now "emby-analytics/internal/handlers/now"
+	settings "emby-analytics/internal/handlers/settings"
 	stats "emby-analytics/internal/handlers/stats"
 	"emby-analytics/internal/middleware"
 	"emby-analytics/internal/sync"
@@ -195,6 +196,10 @@ func main() {
 
 	// Configuration Routes
 	app.Get("/config", configHandler.GetConfig(cfg))
+
+	// Settings Routes
+	app.Get("/settings", settings.GetSettings(sqlDB))
+	app.Put("/settings/:key", adminAuth, settings.UpdateSetting(sqlDB))
 
 	// Item & Image Routes
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))

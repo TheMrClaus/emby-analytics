@@ -7,6 +7,7 @@ import (
 
 	"emby-analytics/internal/config"
 	"emby-analytics/internal/emby"
+	"emby-analytics/internal/handlers/settings"
 )
 
 // StartUserSyncLoop now ONLY handles the periodic background syncs.
@@ -78,12 +79,36 @@ func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) {
 		log.Printf("[usersync] failed to get watch data for %s: %v", userName, err)
 		return
 	}
+
+	// Check if Trakt-synced items should be included
+	includeTrakt := settings.GetSettingBool(db, "include_trakt_items", false)
+	
 	var totalWatchMs int64
+	var traktItems, embyItems int
+	
 	for _, item := range userDataItems {
 		if item.UserData.Played && item.RunTimeTicks > 0 {
+			// Detect Trakt-synced items: Played=true but PlayCount=0
+			isTraktSynced := item.UserData.PlayCount == 0
+			
+			if isTraktSynced {
+				traktItems++
+				if !includeTrakt {
+					continue // Skip Trakt-synced items if setting is disabled
+				}
+			} else {
+				embyItems++
+			}
+			
 			totalWatchMs += item.RunTimeTicks / 10000
 		}
 	}
+	
+	// Log the breakdown for debugging
+	if traktItems > 0 || embyItems > 0 {
+		log.Printf("[usersync] %s: %d Emby items, %d Trakt items, includeTrakt=%v", userName, embyItems, traktItems, includeTrakt)
+	}
+	
 	_, err = db.Exec(`INSERT INTO lifetime_watch (user_id, total_ms)
 	                  VALUES (?, ?)
 	                  ON CONFLICT(user_id) DO UPDATE SET total_ms = excluded.total_ms`,
