@@ -73,46 +73,69 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 		}
 
 		// Enhanced query with new columns - handle empty strings and NULLs properly
-		query := `
-			SELECT
-				CASE 
-					WHEN video_method IS NULL OR video_method = '' THEN 
-						CASE WHEN play_method = 'Transcode' THEN 'Transcode' ELSE 'DirectPlay' END
-					ELSE video_method 
-				END AS video_method,
-				CASE 
-					WHEN audio_method IS NULL OR audio_method = '' THEN 
-						CASE WHEN play_method = 'Transcode' THEN 'Transcode' ELSE 'DirectPlay' END
-					ELSE audio_method 
-				END AS audio_method,
-				COUNT(*) AS cnt
-			FROM play_sessions
-			WHERE started_at >= (strftime('%s','now') - (? * 86400))
-				AND started_at IS NOT NULL
-			GROUP BY 1, 2
-		`
+        query := `
+            SELECT
+                -- Derive video method with reason-aware fallback
+                CASE 
+                    WHEN COALESCE(video_method,'') <> '' THEN video_method
+                    WHEN play_method = 'Transcode' THEN 
+                        CASE 
+                            WHEN instr(lower(COALESCE(transcode_reasons,'')), 'audio') > 0 THEN 'DirectPlay' -- audio-only
+                            WHEN instr(lower(COALESCE(transcode_reasons,'')), 'subtitle') > 0 OR instr(lower(COALESCE(transcode_reasons,'')), 'burn') > 0 THEN 'Transcode'
+                            WHEN instr(lower(COALESCE(transcode_reasons,'')), 'video') > 0 THEN 'Transcode'
+                            ELSE 'DirectPlay'
+                        END
+                    ELSE 'DirectPlay'
+                END AS video_method,
+                -- Derive audio method with reason-aware fallback
+                CASE 
+                    WHEN COALESCE(audio_method,'') <> '' THEN audio_method
+                    WHEN play_method = 'Transcode' THEN 
+                        CASE 
+                            WHEN instr(lower(COALESCE(transcode_reasons,'')), 'audio') > 0 THEN 'Transcode'
+                            ELSE 'DirectPlay'
+                        END
+                    ELSE 'DirectPlay'
+                END AS audio_method,
+                COUNT(*) AS cnt
+            FROM play_sessions
+            WHERE started_at >= (strftime('%s','now') - (? * 86400))
+                AND started_at IS NOT NULL
+            GROUP BY 1, 2
+        `
 
 		// Query for detailed sessions (only transcoding sessions)
-		sessionQuery := `
-			SELECT 
-				item_name, item_type, device_id, client_name, item_id,
-				CASE 
-					WHEN video_method IS NULL OR video_method = '' THEN 
-						CASE WHEN play_method = 'Transcode' THEN 'Transcode' ELSE 'DirectPlay' END
-					ELSE video_method 
-				END AS video_method,
-				CASE 
-					WHEN audio_method IS NULL OR audio_method = '' THEN 
-						CASE WHEN play_method = 'Transcode' THEN 'Transcode' ELSE 'DirectPlay' END
-					ELSE audio_method 
-				END AS audio_method
-			FROM play_sessions 
-			WHERE started_at >= (strftime('%s','now') - (? * 86400))
-				AND started_at IS NOT NULL
-				AND play_method = 'Transcode'
-			ORDER BY started_at DESC
-			LIMIT 50
-		`
+        sessionQuery := `
+            SELECT 
+                item_name, item_type, device_id, client_name, item_id,
+                -- Reason-aware fallback for video/audio methods
+                CASE 
+                    WHEN COALESCE(video_method,'') <> '' THEN video_method
+                    WHEN play_method = 'Transcode' THEN 
+                        CASE 
+                            WHEN instr(lower(COALESCE(transcode_reasons,'')), 'audio') > 0 THEN 'DirectPlay'
+                            WHEN instr(lower(COALESCE(transcode_reasons,'')), 'subtitle') > 0 OR instr(lower(COALESCE(transcode_reasons,'')), 'burn') > 0 THEN 'Transcode'
+                            WHEN instr(lower(COALESCE(transcode_reasons,'')), 'video') > 0 THEN 'Transcode'
+                            ELSE 'DirectPlay'
+                        END
+                    ELSE 'DirectPlay'
+                END AS video_method,
+                CASE 
+                    WHEN COALESCE(audio_method,'') <> '' THEN audio_method
+                    WHEN play_method = 'Transcode' THEN 
+                        CASE 
+                            WHEN instr(lower(COALESCE(transcode_reasons,'')), 'audio') > 0 THEN 'Transcode'
+                            ELSE 'DirectPlay'
+                        END
+                    ELSE 'DirectPlay'
+                END AS audio_method
+            FROM play_sessions 
+            WHERE started_at >= (strftime('%s','now') - (? * 86400))
+                AND started_at IS NOT NULL
+                AND play_method = 'Transcode'
+            ORDER BY started_at DESC
+            LIMIT 50
+        `
 
 		rows, err := db.Query(query, days)
 		if err != nil {
