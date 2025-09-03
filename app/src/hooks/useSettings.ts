@@ -21,7 +21,7 @@ export interface Setting {
 
 // Fetch function for settings
 const fetchSettings = async (): Promise<Setting[]> => {
-  const response = await fetch('/settings');
+  const response = await fetch('/api/settings');
   if (!response.ok) {
     throw new Error('Failed to fetch settings');
   }
@@ -29,7 +29,7 @@ const fetchSettings = async (): Promise<Setting[]> => {
 };
 
 export function useSettings() {
-  const { data, error, mutate } = useSWR<Setting[]>('/settings', fetchSettings);
+  const { data, error, mutate } = useSWR<Setting[]>('/api/settings', fetchSettings);
 
   const updateSetting = async (key: string, value: string) => {
     // Optimistic update
@@ -60,7 +60,7 @@ export function useSettings() {
         authHeaders['Authorization'] = `Bearer ${maybeToken}`;
       }
 
-      const response = await fetch(`/settings/${key}`, {
+      const response = await fetch(`/api/settings/${key}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

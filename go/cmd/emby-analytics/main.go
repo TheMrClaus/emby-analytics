@@ -220,8 +220,8 @@ func main() {
 	adminAuth := middleware.AdminAuth(cfg.AdminToken)
 
 	// Settings Routes (admin-protected for updates)
-	app.Get("/settings", settings.GetSettings(sqlDB))
-	app.Put("/settings/:key", adminAuth, settings.UpdateSetting(sqlDB))
+	app.Get("/api/settings", settings.GetSettings(sqlDB))
+	app.Put("/api/settings/:key", adminAuth, settings.UpdateSetting(sqlDB))
 
 	app.Post("/admin/refresh/start", adminAuth, admin.StartPostHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
 	app.Post("/admin/refresh/incremental", adminAuth, admin.StartIncrementalHandler(rm, sqlDB, em))
@@ -254,7 +254,7 @@ func main() {
 	// Static UI Serving
 	app.Use("/", static.New(cfg.WebPath))
 	app.Use(func(c fiber.Ctx) error {
-		if c.Method() == fiber.MethodGet && !startsWithAny(c.Path(), "/stats", "/health", "/admin", "/now", "/config", "/settings", "/items", "/img") {
+		if c.Method() == fiber.MethodGet && !startsWithAny(c.Path(), "/stats", "/health", "/admin", "/now", "/config", "/api", "/items", "/img") {
 			// If a static exported page exists at /path/index.html, serve it (supports clean URLs without trailing slash)
 			reqPath := c.Path()
 			// Normalize leading slash
