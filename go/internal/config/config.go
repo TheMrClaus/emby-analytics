@@ -34,6 +34,10 @@ type Config struct {
 	// Admin refresh
 	RefreshChunkSize int // e.g. 200
 
+	// Security
+	AdminToken    string // Authentication token for admin endpoints
+	WebhookSecret string // Secret for webhook signature validation
+
 	// Debug / trace
 	NowSseDebug     bool // LOG: /now/stream events
 	RefreshSseDebug bool // LOG: /admin/refresh/* SSE
@@ -64,6 +68,8 @@ func Load() Config {
 		ImgPrimaryMaxWidth:  envInt("IMG_PRIMARY_MAX_WIDTH", 300),
 		ImgBackdropMaxWidth: envInt("IMG_BACKDROP_MAX_WIDTH", 1280),
 		RefreshChunkSize:    envInt("REFRESH_CHUNK_SIZE", 200),
+		AdminToken:          env("ADMIN_TOKEN", ""),
+		WebhookSecret:       env("WEBHOOK_SECRET", ""),
 		NowSseDebug:         envBool("NOW_SSE_DEBUG", false),
 		RefreshSseDebug:     envBool("REFRESH_SSE_DEBUG", false),
 		UserSyncIntervalSec: envInt("USERSYNC_INTERVAL", 43200), // Changed from 3600 to 43200 (12 hours)
@@ -74,6 +80,12 @@ func Load() Config {
 	fmt.Printf("[INFO] Emby Base URL: %s\n", embyBase)
 	if embyKey == "" {
 		fmt.Println("[WARN] EMBY_API_KEY is not set! API calls to Emby will fail.")
+	}
+	if cfg.AdminToken == "" {
+		fmt.Println("[WARN] ADMIN_TOKEN is not set! Admin endpoints will be unprotected.")
+	}
+	if cfg.WebhookSecret == "" {
+		fmt.Println("[WARN] WEBHOOK_SECRET is not set! Webhook endpoint will be unprotected.")
 	}
 	return cfg
 }

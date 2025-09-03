@@ -2,10 +2,8 @@ package admin
 
 import (
 	"database/sql"
-	"encoding/json"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 
@@ -43,7 +41,7 @@ func WebhookHandler(rm *RefreshManager, db *sql.DB, em *emby.Client) fiber.Handl
 	return func(c fiber.Ctx) error {
 		// Parse webhook payload
 		var payload EmbyWebhookPayload
-		if err := c.BodyParser(&payload); err != nil {
+		if err := c.Bind().JSON(&payload); err != nil {
 			log.Printf("[webhook] Failed to parse webhook payload: %v", err)
 			return c.Status(400).JSON(fiber.Map{"error": "Invalid payload"})
 		}

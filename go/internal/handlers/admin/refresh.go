@@ -11,18 +11,11 @@ import (
 	"github.com/gofiber/fiber/v3"
 
 	"emby-analytics/internal/emby"
-	"emby-analytics/internal/sync"
+	syncpkg "emby-analytics/internal/sync"
+	"emby-analytics/internal/types"
 )
 
-type Progress struct {
-	Total     int    `json:"total"`
-	Processed int    `json:"processed"`
-	Message   string `json:"message"`
-	Done      bool   `json:"done"`
-	Error     string `json:"error,omitempty"`
-	Page      int    `json:"page"`
-	Running   bool   `json:"running"`
-}
+type Progress = types.Progress
 
 type RefreshManager struct {
 	mu       sync.Mutex
@@ -39,10 +32,15 @@ func (rm *RefreshManager) set(p Progress) {
 	rm.progress = p
 }
 
-func (rm *RefreshManager) get() Progress {
+func (rm *RefreshManager) Get() Progress {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 	return rm.progress
+}
+
+// get is kept for backward compatibility with existing handlers
+func (rm *RefreshManager) get() Progress {
+	return rm.Get()
 }
 
 // Start a background refresh with full sync
@@ -66,7 +64,7 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 		rm.set(Progress{Message: "Starting incremental sync...", Running: true})
 
 		// Get last sync timestamp
-		lastSync, err := sync.GetLastSyncTime(db, sync.SyncTypeLibraryIncremental)
+		lastSync, err := syncpkg.GetLastSyncTime(db, syncpkg.SyncTypeLibraryIncremental)
 		if err != nil {
 			rm.set(Progress{Error: "Failed to get last sync time: " + err.Error(), Done: true})
 			return
@@ -98,7 +96,7 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 		}
 
 		// Update sync timestamp
-		if err := sync.UpdateSyncTime(db, sync.SyncTypeLibraryIncremental, actualItemsProcessed); err != nil {
+		if err := syncpkg.UpdateSyncTime(db, syncpkg.SyncTypeLibraryIncremental, actualItemsProcessed); err != nil {
 			log.Printf("[incremental-sync] Failed to update sync timestamp: %v", err)
 		}
 
@@ -138,7 +136,7 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 			}
 
 			// Process library entries
-			dbEntriesInserted := rm.processLibraryEntries(db, em, libraryEntries)
+			_ = rm.processLibraryEntries(db, em, libraryEntries)
 
 			// Simple counting now that we have 1:1 mapping
 			actualItemsProcessed += len(libraryEntries)
@@ -155,7 +153,7 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 		}
 
 		// Update full sync timestamp
-		if err := sync.UpdateSyncTime(db, sync.SyncTypeLibraryFull, actualItemsProcessed); err != nil {
+		if err := syncpkg.UpdateSyncTime(db, syncpkg.SyncTypeLibraryFull, actualItemsProcessed); err != nil {
 			log.Printf("[full-sync] Failed to update sync timestamp: %v", err)
 		}
 	}

@@ -7,20 +7,19 @@ import (
 	"time"
 
 	"emby-analytics/internal/emby"
-	"emby-analytics/internal/handlers/admin"
 )
 
 // Scheduler manages automatic sync operations
 type Scheduler struct {
 	db  *sql.DB
 	em  *emby.Client
-	rm  *admin.RefreshManager
+	rm  RefreshManager
 	ctx context.Context
 	cancel context.CancelFunc
 }
 
 // NewScheduler creates a new sync scheduler
-func NewScheduler(db *sql.DB, em *emby.Client, rm *admin.RefreshManager) *Scheduler {
+func NewScheduler(db *sql.DB, em *emby.Client, rm RefreshManager) *Scheduler {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Scheduler{
 		db:     db,
@@ -82,7 +81,7 @@ func (s *Scheduler) Stop() {
 // runIncrementalSync performs an incremental sync if conditions are met
 func (s *Scheduler) runIncrementalSync() {
 	// Check if refresh manager is already running
-	status := s.rm.get()
+	status := s.rm.Get()
 	if status.Running {
 		log.Println("[scheduler] ⏸️  Skipping incremental sync - refresh already running")
 		return
@@ -102,7 +101,7 @@ func (s *Scheduler) runIncrementalSync() {
 // runFullSync performs a full library sync
 func (s *Scheduler) runFullSync() {
 	// Check if refresh manager is already running
-	status := s.rm.get()
+	status := s.rm.Get()
 	if status.Running {
 		log.Println("[scheduler] ⏸️  Skipping full sync - refresh already running")
 		return
@@ -140,17 +139,19 @@ func GetSchedulerStats(db *sql.DB) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 	
 	// Get last incremental sync
-	incrementalSync, err := GetSyncStats(db, SyncTypeLibraryIncremental)
+	incrementalSync, incrementalItems, err := GetSyncStats(db, SyncTypeLibraryIncremental)
 	if err == nil {
 		stats["last_incremental_sync"] = incrementalSync.Format("2006-01-02 15:04:05")
 		stats["incremental_sync_age_minutes"] = int(time.Since(incrementalSync).Minutes())
+		stats["incremental_items_processed"] = incrementalItems
 	}
 	
 	// Get last full sync
-	fullSync, err := GetSyncStats(db, SyncTypeLibraryFull)
+	fullSync, fullItems, err := GetSyncStats(db, SyncTypeLibraryFull)
 	if err == nil {
 		stats["last_full_sync"] = fullSync.Format("2006-01-02 15:04:05")
 		stats["full_sync_age_hours"] = int(time.Since(fullSync).Hours())
+		stats["full_items_processed"] = fullItems
 	}
 	
 	// Add scheduling info

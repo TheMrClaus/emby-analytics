@@ -19,6 +19,7 @@ import (
 	items "emby-analytics/internal/handlers/items"
 	now "emby-analytics/internal/handlers/now"
 	stats "emby-analytics/internal/handlers/stats"
+	"emby-analytics/internal/middleware"
 	"emby-analytics/internal/sync"
 	tasks "emby-analytics/internal/tasks"
 
@@ -160,21 +161,21 @@ func main() {
 	app.Get("/stats/overview", stats.Overview(sqlDB))
 	app.Get("/stats/usage", stats.Usage(sqlDB))
 	app.Get("/stats/top/users", stats.TopUsers(sqlDB))
-	
+
 	app.Get("/stats/top/items", stats.TopItems(sqlDB, em))
 	app.Get("/stats/qualities", stats.Qualities(sqlDB))
 	app.Get("/stats/codecs", stats.Codecs(sqlDB))
 	app.Get("/stats/active-users", stats.ActiveUsersLifetime(sqlDB))
 	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))
 	app.Get("/stats/user/:id", stats.UserDetailHandler(sqlDB))
-    app.Get("/stats/play-methods", stats.PlayMethods(sqlDB, em))
+	app.Get("/stats/play-methods", stats.PlayMethods(sqlDB, em))
 	app.Get("/stats/items/by-codec/:codec", stats.ItemsByCodec(sqlDB))
 	app.Get("/stats/items/by-quality/:quality", stats.ItemsByQuality(sqlDB))
 
 	// Backward compatibility routes (hyphenated versions)
 	app.Get("/stats/top-users", stats.TopUsers(sqlDB))
 	app.Get("/stats/top-items", stats.TopItems(sqlDB, em))
-    app.Get("/stats/playback-methods", stats.PlayMethods(sqlDB, em))
+	app.Get("/stats/playback-methods", stats.PlayMethods(sqlDB, em))
 
 	// Configuration Routes
 	app.Get("/config", configHandler.GetConfig(cfg))
@@ -195,22 +196,27 @@ func main() {
 	app.Post("/now/:id/pause", now.PauseSession)
 	app.Post("/now/:id/stop", now.StopSession)
 	app.Post("/now/:id/message", now.MessageSession)
-	// Admin Routes
+	// Admin Routes with Authentication
 	rm := admin.NewRefreshManager()
-	app.Post("/admin/refresh/start", admin.StartPostHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
-	app.Post("/admin/refresh/incremental", admin.StartIncrementalHandler(rm, sqlDB, em))
-	app.Get("/admin/refresh/status", admin.StatusHandler(rm))
-	// Webhook endpoint for Emby notifications
-	app.Post("/admin/webhook/emby", admin.WebhookHandler(rm, sqlDB, em))
-	app.Get("/admin/webhook/stats", admin.GetWebhookStats())
-	app.Post("/admin/reset-all", admin.ResetAllData(sqlDB, em))
-	app.Post("/admin/reset-lifetime", admin.ResetLifetimeWatch(sqlDB))
-	app.Post("/admin/users/force-sync", admin.ForceUserSync(sqlDB, em))
-	app.All("/admin/fix-pos-units", admin.FixPosUnits(sqlDB))
-	app.Get("/admin/debug/users", admin.DebugUsers(em))
-	app.Post("/admin/recover-intervals", admin.RecoverIntervalsHandler(sqlDB))
-    app.Post("/admin/cleanup/intervals/dedupe", admin.CleanupDuplicateIntervals(sqlDB))
-    app.Get("/admin/cleanup/intervals/dedupe", admin.CleanupDuplicateIntervals(sqlDB))
+
+	// Protected admin endpoints
+	adminAuth := middleware.AdminAuth(cfg.AdminToken)
+	app.Post("/admin/refresh/start", adminAuth, admin.StartPostHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
+	app.Post("/admin/refresh/incremental", adminAuth, admin.StartIncrementalHandler(rm, sqlDB, em))
+	app.Get("/admin/refresh/status", adminAuth, admin.StatusHandler(rm))
+	app.Get("/admin/webhook/stats", adminAuth, admin.GetWebhookStats())
+	app.Post("/admin/reset-all", adminAuth, admin.ResetAllData(sqlDB, em))
+	app.Post("/admin/reset-lifetime", adminAuth, admin.ResetLifetimeWatch(sqlDB))
+	app.Post("/admin/users/force-sync", adminAuth, admin.ForceUserSync(sqlDB, em))
+	app.All("/admin/fix-pos-units", adminAuth, admin.FixPosUnits(sqlDB))
+	app.Get("/admin/debug/users", adminAuth, admin.DebugUsers(em))
+	app.Post("/admin/recover-intervals", adminAuth, admin.RecoverIntervalsHandler(sqlDB))
+	app.Post("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
+	app.Get("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
+
+	// Webhook endpoint with separate authentication
+	webhookAuth := middleware.WebhookAuth(cfg.WebhookSecret)
+	app.Post("/admin/webhook/emby", webhookAuth, admin.WebhookHandler(rm, sqlDB, em))
 
 	// Static UI Serving
 	app.Use("/", static.New(cfg.WebPath))
@@ -226,8 +232,8 @@ func main() {
 	scheduler := sync.NewScheduler(sqlDB, em, rm)
 	scheduler.Start()
 
-	// Add scheduler stats endpoint
-	app.Get("/admin/scheduler/stats", func(c fiber.Ctx) error {
+	// Add scheduler stats endpoint (protected)
+	app.Get("/admin/scheduler/stats", adminAuth, func(c fiber.Ctx) error {
 		stats, err := sync.GetSchedulerStats(sqlDB)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
