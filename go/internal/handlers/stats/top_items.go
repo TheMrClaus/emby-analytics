@@ -106,61 +106,78 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 			itemDetails[row.ItemID] = TopItem{ItemID: row.ItemID, Name: row.Name, Type: row.Type}
 		}
 
-		// 2.5. Check for missing items from play_intervals that aren't in library_item
-		// This handles your specific case where new episodes had watch time but no metadata
-		if len(historicalRows) == 0 {
-			// Query play_intervals directly to find items with watch time that might be missing from library_item
-			intervalRows, err := db.Query(`
-				SELECT pi.item_id, SUM(pi.duration_seconds)/3600.0 as hours
-				FROM play_intervals pi
-				WHERE pi.start_ts >= ? AND pi.start_ts <= ?
-				GROUP BY pi.item_id
-				HAVING hours > 0
-				ORDER BY hours DESC
-				LIMIT ?
-			`, winStart, winEnd, 1000)
+        // 2.5. Always supplement from play_intervals to include items missing from library_item
+        // This ensures currently playing or newly seen items appear even before metadata sync.
+        {
+            intervalRows, err := db.Query(`
+                WITH latest AS (
+                    SELECT pi.*
+                    FROM play_intervals pi
+                    JOIN (
+                        SELECT session_fk, MAX(id) AS latest_id
+                        FROM play_intervals
+                        GROUP BY session_fk
+                    ) m ON m.latest_id = pi.id
+                )
+                SELECT l.item_id, SUM(MIN(l.end_ts, ?) - MAX(l.start_ts, ?)) / 3600.0 as hours
+                FROM latest l
+                WHERE l.start_ts <= ? AND l.end_ts >= ?
+                GROUP BY l.item_id
+                HAVING hours > 0
+                ORDER BY hours DESC
+                LIMIT ?
+            `, winEnd, winStart, winEnd, winStart, 2000)
 
-			if err == nil {
-				defer intervalRows.Close()
-				missingItemIDs := []string{}
-				
-				for intervalRows.Next() {
-					var itemID string
-					var hours float64
-					if err := intervalRows.Scan(&itemID, &hours); err == nil {
-						combinedHours[itemID] += hours
-						// Check if we have this item in library_item
-						var exists int
-						checkErr := db.QueryRow("SELECT 1 FROM library_item WHERE id = ?", itemID).Scan(&exists)
-						if checkErr != nil {
-							// Item not in library_item, add to missing list
-							missingItemIDs = append(missingItemIDs, itemID)
-							// Add placeholder details for now
-							itemDetails[itemID] = TopItem{ItemID: itemID, Name: "Loading...", Type: "Unknown"}
-						}
-					}
-				}
+            if err == nil {
+                defer intervalRows.Close()
+                missingItemIDs := []string{}
 
-				// Fetch missing items from Emby in batch
-				if len(missingItemIDs) > 0 && em != nil {
-					if embyItems, fetchErr := em.ItemsByIDs(missingItemIDs); fetchErr == nil {
-						for _, item := range embyItems {
-							// Update item details
-							itemDetails[item.Id] = TopItem{ItemID: item.Id, Name: item.Name, Type: item.Type}
-							// Insert into database for future use
-							_, _ = db.Exec(`
-								INSERT INTO library_item (id, server_id, item_id, name, media_type, created_at, updated_at)
-								VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-								ON CONFLICT(id) DO UPDATE SET
-									name = excluded.name,
-									media_type = excluded.media_type,
-									updated_at = CURRENT_TIMESTAMP
-							`, item.Id, item.Id, item.Id, item.Name, item.Type)
-						}
-					}
-				}
-			}
-		}
+                for intervalRows.Next() {
+                    var itemID string
+                    var hours float64
+                    if err := intervalRows.Scan(&itemID, &hours); err == nil {
+                        // Merge without double-counting: add only additional hours
+                        if _, exists := combinedHours[itemID]; !exists {
+                            combinedHours[itemID] = hours
+                        } else {
+                            // If intervals captured more accurate time than historical approx, prefer the max
+                            if hours > combinedHours[itemID] {
+                                combinedHours[itemID] = hours
+                            }
+                        }
+
+                        // Ensure we have details; if missing in library_item, mark for fetch
+                        if _, ok := itemDetails[itemID]; !ok {
+                            var name, itemType string
+                            scanErr := db.QueryRow("SELECT name, media_type FROM library_item WHERE id = ?", itemID).Scan(&name, &itemType)
+                            if scanErr != nil {
+                                missingItemIDs = append(missingItemIDs, itemID)
+                                itemDetails[itemID] = TopItem{ItemID: itemID, Name: "Loading...", Type: "Unknown"}
+                            } else {
+                                itemDetails[itemID] = TopItem{ItemID: itemID, Name: name, Type: itemType}
+                            }
+                        }
+                    }
+                }
+
+                // Fetch missing items from Emby in batch for display + persist to library_item
+                if len(missingItemIDs) > 0 && em != nil {
+                    if embyItems, fetchErr := em.ItemsByIDs(missingItemIDs); fetchErr == nil {
+                        for _, item := range embyItems {
+                            itemDetails[item.Id] = TopItem{ItemID: item.Id, Name: item.Name, Type: item.Type}
+                            _, _ = db.Exec(`
+                                INSERT INTO library_item (id, server_id, item_id, name, media_type, created_at, updated_at)
+                                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                                ON CONFLICT(id) DO UPDATE SET
+                                    name = excluded.name,
+                                    media_type = excluded.media_type,
+                                    updated_at = CURRENT_TIMESTAMP
+                            `, item.Id, item.Id, item.Id, item.Name, item.Type)
+                        }
+                    }
+                }
+            }
+        }
 
 		// 3. Get live data and merge
 		liveWatchTimes := tasks.GetLiveItemWatchTimes() // Returns seconds

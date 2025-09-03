@@ -29,7 +29,7 @@ func BackfillPlayMethods(db *sql.DB) fiber.Handler {
                     WHEN lower(COALESCE(video_method,'')) = 'transcode' THEN 'Transcode'
                     WHEN COALESCE(video_codec_from,'') <> '' AND COALESCE(video_codec_to,'') <> '' 
                          AND lower(video_codec_from) <> lower(video_codec_to) THEN 'Transcode'
-                    WHEN play_method = 'Transcode' AND (
+                    WHEN (
                         instr(lower(COALESCE(transcode_reasons,'')), 'subtitle') > 0 OR 
                         instr(lower(COALESCE(transcode_reasons,'')), 'burn') > 0 OR 
                         instr(lower(COALESCE(transcode_reasons,'')), 'video') > 0
@@ -53,7 +53,7 @@ func BackfillPlayMethods(db *sql.DB) fiber.Handler {
                     WHEN lower(COALESCE(audio_method,'')) = 'transcode' THEN 'Transcode'
                     WHEN COALESCE(audio_codec_from,'') <> '' AND COALESCE(audio_codec_to,'') <> '' 
                          AND lower(audio_codec_from) <> lower(audio_codec_to) THEN 'Transcode'
-                    WHEN play_method = 'Transcode' AND instr(lower(COALESCE(transcode_reasons,'')), 'audio') > 0 THEN 'Transcode'
+                    WHEN instr(lower(COALESCE(transcode_reasons,'')), 'audio') > 0 THEN 'Transcode'
                     ELSE 'DirectPlay'
                 END
             )
@@ -68,4 +68,3 @@ func BackfillPlayMethods(db *sql.DB) fiber.Handler {
         return c.JSON(fiber.Map{"ok": true, "updated_window_days": days})
     }
 }
-

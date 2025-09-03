@@ -45,22 +45,32 @@ func (sp *SessionProcessor) ProcessActiveSessions(activeSessions []emby.EmbySess
 	currentTime := time.Now().UTC()
 	activeSessionMap := make(map[string]bool)
 
-	// Step B: Process Active Sessions
-	for _, session := range activeSessions {
-		sessionKey := session.SessionID // Use SessionID as the key
-		activeSessionMap[sessionKey] = true
+    // Step B: Process Active Sessions
+    for _, session := range activeSessions {
+        sessionKey := session.SessionID // Track by Emby SessionID
+        activeSessionMap[sessionKey] = true
 
-		if tracked, exists := sp.trackedSessions[sessionKey]; exists {
-			// Session already tracked - update duration in database
-			log.Printf("[session-processor] Updating existing session %s", sessionKey)
-			sp.updateSessionDuration(tracked, currentTime)
-			tracked.LastUpdate = currentTime
-		} else {
-			// New session - add to tracked list and create database entry
-			log.Printf("[session-processor] New session detected: %s (user: %s, item: %s)", sessionKey, session.UserID, session.ItemName)
-			sp.startNewSession(session, currentTime)
-		}
-	}
+        if tracked, exists := sp.trackedSessions[sessionKey]; exists {
+            // Detect item change within the same Emby session
+            if tracked.ItemID != session.ItemID {
+                log.Printf("[session-processor] Item changed within session %s: %s -> %s; rotating session row",
+                    sessionKey, tracked.ItemID, session.ItemID)
+                // Finalize previous item session
+                sp.finalizeSession(tracked, currentTime)
+                delete(sp.trackedSessions, sessionKey)
+                // Start new session for the new item
+                sp.startNewSession(session, currentTime)
+                continue
+            }
+            // Same item: update duration in database
+            sp.updateSessionDuration(tracked, currentTime)
+            tracked.LastUpdate = currentTime
+        } else {
+            // New session - add to tracked list and create database entry
+            log.Printf("[session-processor] New session detected: %s (user: %s, item: %s)", sessionKey, session.UserID, session.ItemName)
+            sp.startNewSession(session, currentTime)
+        }
+    }
 
 	// Step C: Find What's Missing (The Crucial Part)
 	for sessionKey, tracked := range sp.trackedSessions {
@@ -184,6 +194,7 @@ func (sp *SessionProcessor) createPlaySession(session emby.EmbySession, startTim
         _, _ = sp.DB.Exec(`
             UPDATE play_sessions 
             SET is_active = true, ended_at = NULL,
+                started_at = ?,
                 play_method = ?,
                 transcode_reasons = COALESCE(NULLIF(?, ''), transcode_reasons),
                 video_method = COALESCE(NULLIF(?, ''), video_method),
@@ -193,7 +204,7 @@ func (sp *SessionProcessor) createPlaySession(session emby.EmbySession, startTim
                 audio_codec_from = COALESCE(NULLIF(?, ''), audio_codec_from),
                 audio_codec_to   = COALESCE(NULLIF(?, ''), audio_codec_to)
             WHERE id = ?
-        `, session.PlayMethod, transcodeReasons, session.VideoMethod, session.AudioMethod,
+        `, startTime.Unix(), session.PlayMethod, transcodeReasons, session.VideoMethod, session.AudioMethod,
            session.TransVideoFrom, session.TransVideoTo, session.TransAudioFrom, session.TransAudioTo, existingID)
         return existingID, nil
     }

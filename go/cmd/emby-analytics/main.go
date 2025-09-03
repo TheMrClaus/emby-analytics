@@ -230,8 +230,16 @@ func main() {
 	app.Post("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
 	app.Get("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
 
+	// Debug: inspect recent play_sessions
+	app.Get("/admin/debug/sessions", adminAuth, admin.DebugSessions(sqlDB))
+
 	// Backfill playback methods for historical sessions (reason/codec-based)
 	app.Post("/admin/cleanup/backfill-playmethods", adminAuth, admin.BackfillPlayMethods(sqlDB))
+
+	// Debug: expose current active sessions from Emby
+	app.Get("/admin/debug/emby-sessions", adminAuth, admin.DebugEmbySessions(em))
+	// Debug: force-ingest current active Emby sessions into play_sessions
+	app.Post("/admin/debug/ingest-active", adminAuth, admin.IngestActiveSessions(sqlDB, em))
 
 	// Webhook endpoint with separate authentication
 	webhookAuth := middleware.WebhookAuth(cfg.WebhookSecret)
