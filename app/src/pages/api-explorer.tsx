@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '';
 
-type Param = { key: string; label?: string; kind: 'path' | 'query'; required?: boolean; placeholder?: string };
+type Param = { key: string; label?: string; kind: 'path' | 'query' | 'body'; required?: boolean; placeholder?: string };
 type Endpoint = {
   id: string;
   category: string;
@@ -64,7 +64,12 @@ const endpoints: Endpoint[] = [
   { id: 'now-ws', category: 'Now', method: 'GET', path: '/now/ws', description: 'WebSocket stream of active sessions.', usage: 'Live updates every poll.', note: 'Open in a WS client or via the UI card. Not runnable here.' },
   { id: 'now-pause', category: 'Now', method: 'POST', path: '/now/:id/pause', description: 'Pause a session by SessionId.', usage: 'Moderation or quick control.', params: [{ key: 'id', kind: 'path', required: true, placeholder: 'session-id' }] },
   { id: 'now-stop', category: 'Now', method: 'POST', path: '/now/:id/stop', description: 'Stop a session by SessionId.', usage: 'Moderation or quick control.', params: [{ key: 'id', kind: 'path', required: true, placeholder: 'session-id' }] },
-  { id: 'now-message', category: 'Now', method: 'POST', path: '/now/:id/message', description: 'Send on-screen message to session.', usage: 'Inform users about maintenance, etc.', params: [{ key: 'id', kind: 'path', required: true, placeholder: 'session-id' }] },
+  // Body expects: { message: string }
+  // Add 'message' as a body parameter so the explorer can send it
+  { id: 'now-message', category: 'Now', method: 'POST', path: '/now/:id/message', description: 'Send on-screen message to session.', usage: 'Inform users about maintenance, etc.', params: [
+    { key: 'id', kind: 'path', required: true, placeholder: 'session-id' },
+    { key: 'message', kind: 'body', required: true, placeholder: 'Hello there 👋' },
+  ] },
 
   // Admin - Refresh & scheduler
   { id: 'admin-refresh-start', category: 'Admin', method: 'POST', path: '/admin/refresh/start', description: 'Full library refresh (rebuild index).', usage: 'Initial import or resync. Protected.', dangerous: true },
@@ -125,6 +130,15 @@ export default function APIExplorerPage() {
     });
     const url = `${API_BASE}${path}${qs.toString() ? `?${qs.toString()}` : ''}`;
 
+    // Build JSON body if present
+    const bodyParams = Object.fromEntries(
+      (ep.params || [])
+        .filter(p => p.kind === 'body')
+        .map(p => [p.key, inputs[p.key]])
+        .filter(([_, v]) => v !== undefined && v !== '') as [string, string][]
+    );
+    const hasBody = Object.keys(bodyParams).length > 0 && ep.method === 'POST';
+
     // Don’t try to fetch binary here
     if (ep.binary) {
       window.open(url, '_blank');
@@ -146,6 +160,7 @@ export default function APIExplorerPage() {
           'Content-Type': 'application/json',
           ...adminAuthHeaderFor(ep.path),
         },
+        body: hasBody ? JSON.stringify(bodyParams) : undefined,
       });
       const dt = Math.round(performance.now() - t0);
       const text = await res.text();
@@ -155,6 +170,7 @@ export default function APIExplorerPage() {
         ...s,
         [ep.id]: {
           ...(s[ep.id] || {}),
+          request: { method: (ep.method === 'ALL' ? 'GET' : ep.method), url, body: hasBody ? bodyParams : undefined },
           status: `${res.status} ${res.statusText}`,
           ms: dt,
           output: body,
@@ -228,6 +244,18 @@ export default function APIExplorerPage() {
               {/* Output */}
               {st.status && (
                 <div className="mt-3 text-xs">
+                  {st.request && (
+                    <div className="text-gray-400 mb-1">
+                      Request: <span className="text-white">{st.request.method}</span>{' '}
+                      <code className="text-white break-all">{st.request.url}</code>
+                      {st.request.body && (
+                        <>
+                          <br />
+                          Body: <code className="text-white">{JSON.stringify(st.request.body)}</code>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <div className="text-gray-400 mb-1">Response: <span className="text-white">{st.status}</span>{typeof st.ms === 'number' && <span className="text-gray-500"> · {st.ms} ms</span>}</div>
                   <pre className="bg-neutral-900 border border-neutral-700 rounded p-2 overflow-x-auto whitespace-pre-wrap text-gray-200 max-h-64">{typeof st.output === 'string' ? st.output : JSON.stringify(st.output, null, 2)}</pre>
                 </div>
@@ -239,4 +267,3 @@ export default function APIExplorerPage() {
     </div>
   );
 }
-
