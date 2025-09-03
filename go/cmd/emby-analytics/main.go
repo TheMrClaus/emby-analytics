@@ -197,10 +197,6 @@ func main() {
 	// Configuration Routes
 	app.Get("/config", configHandler.GetConfig(cfg))
 
-	// Settings Routes
-	app.Get("/settings", settings.GetSettings(sqlDB))
-	app.Put("/settings/:key", adminAuth, settings.UpdateSetting(sqlDB))
-
 	// Item & Image Routes
 	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
 	imgOpts := images.NewOpts(cfg)
@@ -222,6 +218,11 @@ func main() {
 
 	// Protected admin endpoints
 	adminAuth := middleware.AdminAuth(cfg.AdminToken)
+
+	// Settings Routes (admin-protected for updates)
+	app.Get("/settings", settings.GetSettings(sqlDB))
+	app.Put("/settings/:key", adminAuth, settings.UpdateSetting(sqlDB))
+
 	app.Post("/admin/refresh/start", adminAuth, admin.StartPostHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
 	app.Post("/admin/refresh/incremental", adminAuth, admin.StartIncrementalHandler(rm, sqlDB, em))
 	app.Get("/admin/refresh/status", adminAuth, admin.StatusHandler(rm))
@@ -251,25 +252,25 @@ func main() {
 	app.Post("/admin/webhook/emby", webhookAuth, admin.WebhookHandler(rm, sqlDB, em))
 
 	// Static UI Serving
-    app.Use("/", static.New(cfg.WebPath))
-    app.Use(func(c fiber.Ctx) error {
-        if c.Method() == fiber.MethodGet && !startsWithAny(c.Path(), "/stats", "/health", "/admin", "/now", "/config", "/items", "/img") {
-            // If a static exported page exists at /path/index.html, serve it (supports clean URLs without trailing slash)
-            reqPath := c.Path()
-            // Normalize leading slash
-            if !strings.HasPrefix(reqPath, "/") {
-                reqPath = "/" + reqPath
-            }
-            // Try to serve /<path>/index.html
-            page := filepath.Join(cfg.WebPath, filepath.FromSlash(reqPath), "index.html")
-            if fi, err := os.Stat(page); err == nil && !fi.IsDir() {
-                return c.SendFile(page)
-            }
-            // Fallback to root index.html (for client-side routing if used)
-            return c.SendFile(filepath.Join(cfg.WebPath, "index.html"))
-        }
-        return c.Next()
-    })
+	app.Use("/", static.New(cfg.WebPath))
+	app.Use(func(c fiber.Ctx) error {
+		if c.Method() == fiber.MethodGet && !startsWithAny(c.Path(), "/stats", "/health", "/admin", "/now", "/config", "/settings", "/items", "/img") {
+			// If a static exported page exists at /path/index.html, serve it (supports clean URLs without trailing slash)
+			reqPath := c.Path()
+			// Normalize leading slash
+			if !strings.HasPrefix(reqPath, "/") {
+				reqPath = "/" + reqPath
+			}
+			// Try to serve /<path>/index.html
+			page := filepath.Join(cfg.WebPath, filepath.FromSlash(reqPath), "index.html")
+			if fi, err := os.Stat(page); err == nil && !fi.IsDir() {
+				return c.SendFile(page)
+			}
+			// Fallback to root index.html (for client-side routing if used)
+			return c.SendFile(filepath.Join(cfg.WebPath, "index.html"))
+		}
+		return c.Next()
+	})
 
 	// Start sync scheduler
 	log.Printf("--> Step 7: Starting smart sync scheduler...")

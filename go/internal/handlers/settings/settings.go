@@ -2,7 +2,6 @@ package settings
 
 import (
 	"database/sql"
-	"encoding/json"
 	"log"
 	"time"
 
