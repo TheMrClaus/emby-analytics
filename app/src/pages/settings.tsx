@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import Head from 'next/head';
 import Header from '../components/Header';
 import { useSettings } from '../hooks/useSettings';
-import { Settings, RotateCcw, Check, AlertCircle, Info } from 'lucide-react';
 
 export default function SettingsPage() {
   const { data: settings, error, isLoading, updateSetting } = useSettings();
@@ -41,7 +40,7 @@ export default function SettingsPage() {
           <main className="p-4 md:p-6 border-t border-neutral-800">
             <div className="max-w-4xl mx-auto">
               <div className="flex items-center gap-3 mb-6">
-                <Settings className="w-6 h-6" />
+                <span className="text-2xl">⚙️</span>
                 <h1 className="text-2xl font-bold">Settings</h1>
               </div>
               <div className="bg-neutral-800 rounded-lg p-6">
@@ -70,12 +69,12 @@ export default function SettingsPage() {
           <main className="p-4 md:p-6 border-t border-neutral-800">
             <div className="max-w-4xl mx-auto">
               <div className="flex items-center gap-3 mb-6">
-                <Settings className="w-6 h-6" />
+                <span className="text-2xl">⚙️</span>
                 <h1 className="text-2xl font-bold">Settings</h1>
               </div>
               <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-6">
                 <div className="flex items-center gap-3 text-red-400">
-                  <AlertCircle className="w-5 h-5" />
+                  <span className="text-red-400">⚠️</span>
                   <span>Failed to load settings: {error.message}</span>
                 </div>
               </div>
@@ -117,12 +116,12 @@ export default function SettingsPage() {
                         }`}>
                           {saveStatus.status === 'success' ? (
                             <>
-                              <Check className="w-4 h-4" />
+                              <span>✅</span>
                               <span>Saved</span>
                             </>
                           ) : (
                             <>
-                              <AlertCircle className="w-4 h-4" />
+                              <span>❌</span>
                               <span>Error saving</span>
                             </>
                           )}
@@ -134,7 +133,7 @@ export default function SettingsPage() {
                       When disabled, only items actually watched through Emby will be counted.
                     </p>
                     <div className="flex items-start gap-2 text-xs text-blue-300 bg-blue-900/20 border border-blue-500/30 rounded p-3">
-                      <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <span className="text-blue-300 text-sm mt-0.5 flex-shrink-0">ℹ️</span>
                       <div>
                         <strong>How it works:</strong> Trakt-synced items have "Played=true" but "PlayCount=0" in Emby, 
                         while actually watched items have "PlayCount &gt; 0". This setting lets you choose whether 
@@ -145,7 +144,7 @@ export default function SettingsPage() {
                   
                   <div className="flex items-center gap-3 ml-6">
                     {saving === 'include_trakt_items' && (
-                      <RotateCcw className="w-4 h-4 animate-spin text-gray-400" />
+                      <span className="text-gray-400 animate-spin inline-block">↻</span>
                     )}
                     <button
                       id="include_trakt_items"
