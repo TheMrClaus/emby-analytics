@@ -230,6 +230,9 @@ func main() {
 	app.Post("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
 	app.Get("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
 
+	// Backfill playback methods for historical sessions (reason/codec-based)
+	app.Post("/admin/cleanup/backfill-playmethods", adminAuth, admin.BackfillPlayMethods(sqlDB))
+
 	// Webhook endpoint with separate authentication
 	webhookAuth := middleware.WebhookAuth(cfg.WebhookSecret)
 	app.Post("/admin/webhook/emby", webhookAuth, admin.WebhookHandler(rm, sqlDB, em))
