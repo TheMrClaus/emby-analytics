@@ -106,6 +106,62 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 			itemDetails[row.ItemID] = TopItem{ItemID: row.ItemID, Name: row.Name, Type: row.Type}
 		}
 
+		// 2.5. Check for missing items from play_intervals that aren't in library_item
+		// This handles your specific case where new episodes had watch time but no metadata
+		if len(historicalRows) == 0 {
+			// Query play_intervals directly to find items with watch time that might be missing from library_item
+			intervalRows, err := db.Query(`
+				SELECT pi.item_id, SUM(pi.duration_seconds)/3600.0 as hours
+				FROM play_intervals pi
+				WHERE pi.start_ts >= ? AND pi.start_ts <= ?
+				GROUP BY pi.item_id
+				HAVING hours > 0
+				ORDER BY hours DESC
+				LIMIT ?
+			`, winStart, winEnd, 1000)
+
+			if err == nil {
+				defer intervalRows.Close()
+				missingItemIDs := []string{}
+				
+				for intervalRows.Next() {
+					var itemID string
+					var hours float64
+					if err := intervalRows.Scan(&itemID, &hours); err == nil {
+						combinedHours[itemID] += hours
+						// Check if we have this item in library_item
+						var exists int
+						checkErr := db.QueryRow("SELECT 1 FROM library_item WHERE id = ?", itemID).Scan(&exists)
+						if checkErr != nil {
+							// Item not in library_item, add to missing list
+							missingItemIDs = append(missingItemIDs, itemID)
+							// Add placeholder details for now
+							itemDetails[itemID] = TopItem{ItemID: itemID, Name: "Loading...", Type: "Unknown"}
+						}
+					}
+				}
+
+				// Fetch missing items from Emby in batch
+				if len(missingItemIDs) > 0 && em != nil {
+					if embyItems, fetchErr := em.ItemsByIDs(missingItemIDs); fetchErr == nil {
+						for _, item := range embyItems {
+							// Update item details
+							itemDetails[item.Id] = TopItem{ItemID: item.Id, Name: item.Name, Type: item.Type}
+							// Insert into database for future use
+							_, _ = db.Exec(`
+								INSERT INTO library_item (id, server_id, item_id, name, media_type, created_at, updated_at)
+								VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+								ON CONFLICT(id) DO UPDATE SET
+									name = excluded.name,
+									media_type = excluded.media_type,
+									updated_at = CURRENT_TIMESTAMP
+							`, item.Id, item.Id, item.Id, item.Name, item.Type)
+						}
+					}
+				}
+			}
+		}
+
 		// 3. Get live data and merge
 		liveWatchTimes := tasks.GetLiveItemWatchTimes() // Returns seconds
 		for itemID, seconds := range liveWatchTimes {
@@ -113,7 +169,28 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 			// Ensure we have item details, even if it only has a live session
 			if _, ok := itemDetails[itemID]; !ok {
 				var name, itemType string
-				_ = db.QueryRow("SELECT name, media_type FROM library_item WHERE id = ?", itemID).Scan(&name, &itemType)
+				err := db.QueryRow("SELECT name, media_type FROM library_item WHERE id = ?", itemID).Scan(&name, &itemType)
+				if err != nil && em != nil {
+					// Just-in-time fetch from Emby if not in database
+					if embyItems, fetchErr := em.ItemsByIDs([]string{itemID}); fetchErr == nil && len(embyItems) > 0 {
+						item := embyItems[0]
+						name = item.Name
+						itemType = item.Type
+						// Insert into database for future use
+						_, _ = db.Exec(`
+							INSERT INTO library_item (id, server_id, item_id, name, media_type, created_at, updated_at)
+							VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+							ON CONFLICT(id) DO UPDATE SET
+								name = excluded.name,
+								media_type = excluded.media_type,
+								updated_at = CURRENT_TIMESTAMP
+						`, item.Id, item.Id, item.Id, item.Name, item.Type)
+					} else {
+						// Fallback for unknown items
+						name = fmt.Sprintf("Unknown Item (%s)", itemID[:8])
+						itemType = "Unknown"
+					}
+				}
 				itemDetails[itemID] = TopItem{ItemID: itemID, Name: name, Type: itemType}
 			}
 		}

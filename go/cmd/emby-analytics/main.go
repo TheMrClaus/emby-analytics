@@ -19,6 +19,7 @@ import (
 	items "emby-analytics/internal/handlers/items"
 	now "emby-analytics/internal/handlers/now"
 	stats "emby-analytics/internal/handlers/stats"
+	"emby-analytics/internal/sync"
 	tasks "emby-analytics/internal/tasks"
 
 	"github.com/gofiber/fiber/v3"
@@ -197,7 +198,11 @@ func main() {
 	// Admin Routes
 	rm := admin.NewRefreshManager()
 	app.Post("/admin/refresh/start", admin.StartPostHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
+	app.Post("/admin/refresh/incremental", admin.StartIncrementalHandler(rm, sqlDB, em))
 	app.Get("/admin/refresh/status", admin.StatusHandler(rm))
+	// Webhook endpoint for Emby notifications
+	app.Post("/admin/webhook/emby", admin.WebhookHandler(rm, sqlDB, em))
+	app.Get("/admin/webhook/stats", admin.GetWebhookStats())
 	app.Post("/admin/reset-all", admin.ResetAllData(sqlDB, em))
 	app.Post("/admin/reset-lifetime", admin.ResetLifetimeWatch(sqlDB))
 	app.Post("/admin/users/force-sync", admin.ForceUserSync(sqlDB, em))
@@ -216,12 +221,26 @@ func main() {
 		return c.Next()
 	})
 
+	// Start sync scheduler
+	log.Printf("--> Step 7: Starting smart sync scheduler...")
+	scheduler := sync.NewScheduler(sqlDB, em, rm)
+	scheduler.Start()
+
+	// Add scheduler stats endpoint
+	app.Get("/admin/scheduler/stats", func(c fiber.Ctx) error {
+		stats, err := sync.GetSchedulerStats(sqlDB)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(stats)
+	})
+
 	// Start Server
 	addr := ":8080"
 	if p := os.Getenv("PORT"); p != "" {
 		addr = ":" + p
 	}
-	log.Printf("--> Step 7: Starting HTTP server on %s", addr)
+	log.Printf("--> Step 8: Starting HTTP server on %s", addr)
 	if err := app.Listen(addr); err != nil {
 		log.Fatalf("--> FATAL: Failed to start server: %v", err)
 	}

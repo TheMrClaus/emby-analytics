@@ -24,6 +24,7 @@ type EmbyWS struct {
 	cancel              context.CancelFunc
 	Handler             func(evt EmbyEvent)
 	StoppedSessionCheck func(activeSessionKeys map[string]bool) // NEW: callback for stopped session detection
+	LibraryChangeHandler func(eventType string) // NEW: callback for library changes
 }
 
 type EmbyEvent struct {
@@ -191,8 +192,13 @@ func (w *EmbyWS) Start(ctx context.Context) {
 					log.Printf("[emby-ws] ✅ SESSIONS EVENT - Converting to playback events")
 					// Convert Sessions event to Playback events
 					w.handleSessionsEvent(evt)
+				} else if w.isLibraryEvent(evt.MessageType) {
+					log.Printf("[emby-ws] 📚 LIBRARY EVENT - %s", evt.MessageType)
+					if w.LibraryChangeHandler != nil {
+						w.LibraryChangeHandler(evt.MessageType)
+					}
 				} else {
-					log.Printf("[emby-ws] ℹ️  Non-playback event (ignored): %s", evt.MessageType)
+					log.Printf("[emby-ws] ℹ️  Other event (ignored): %s", evt.MessageType)
 				}
 			}
 			// Reconnect on break
@@ -314,4 +320,24 @@ func (w *EmbyWS) Stop() {
 	if w.cancel != nil {
 		w.cancel()
 	}
+}
+
+// isLibraryEvent determines if an event type indicates library changes
+func (w *EmbyWS) isLibraryEvent(messageType string) bool {
+	libraryEvents := []string{
+		"LibraryChanged",
+		"ItemAdded",
+		"ItemUpdated", 
+		"ItemRemoved",
+		"RefreshProgress",
+		"RefreshComplete",
+	}
+	
+	for _, event := range libraryEvents {
+		if messageType == event {
+			return true
+		}
+	}
+	
+	return false
 }

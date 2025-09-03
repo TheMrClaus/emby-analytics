@@ -254,6 +254,77 @@ func (c *Client) TotalItems() (int, error) {
 	return out.Total, nil
 }
 
+// GetItemsIncremental fetches items modified since a given timestamp for incremental sync
+func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]LibraryItem, int, error) {
+	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("Fields", "MediaSources,MediaStreams")
+	q.Set("Recursive", "true")
+	q.Set("Limit", fmt.Sprintf("%d", limit))
+	q.Set("IncludeItemTypes", "Movie,Episode") // Only get video items
+	
+	// Add incremental sync parameter
+	if minDateLastSaved != nil {
+		q.Set("MinDateLastSaved", minDateLastSaved.Format(time.RFC3339))
+	}
+
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	req.Header.Set("X-Emby-Token", c.APIKey)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var out struct {
+		Items []DetailedLibraryItem `json:"Items"`
+		TotalRecordCount int `json:"TotalRecordCount"`
+	}
+	if err := readJSON(resp, &out); err != nil {
+		return nil, 0, err
+	}
+
+	// Convert to LibraryItem format, creating ONE entry per media item
+	var result []LibraryItem
+
+	for _, item := range out.Items {
+		var firstVideoCodec string
+		var firstVideoHeight *int
+		var firstVideoWidth *int
+
+		// Find the FIRST video stream only (matches C# plugin logic)
+		for _, source := range item.MediaSources {
+			for _, stream := range source.MediaStreams {
+				if stream.Type == "Video" && stream.Codec != "" {
+					firstVideoCodec = stream.Codec
+					firstVideoHeight = stream.Height
+					firstVideoWidth = stream.Width
+					goto found // Break out of both loops
+				}
+			}
+		}
+
+	found:
+		// Set codec to "Unknown" if no video stream found
+		if firstVideoCodec == "" {
+			firstVideoCodec = "Unknown"
+		}
+
+		// Create ONE LibraryItem entry per media item
+		result = append(result, LibraryItem{
+			Id:     item.Id, // Use original ID without suffix
+			Name:   item.Name,
+			Type:   item.Type,
+			Height: firstVideoHeight,
+			Width:  firstVideoWidth,
+			Codec:  firstVideoCodec,
+		})
+	}
+
+	return result, out.TotalRecordCount, nil
+}
+
 // GetItemsChunk extracts codec data from MediaStreams - one entry per media item
 func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
