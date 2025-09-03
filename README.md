@@ -161,6 +161,15 @@ When `ADMIN_TOKEN` is not provided, the server will:
 
 You can also explicitly set `ADMIN_AUTO_COOKIE=true` with your own `ADMIN_TOKEN` if desired. Only enable this in private/trusted deployments or behind an auth proxy.
 
+## API Explorer (UI)
+
+There is a built‑in API Explorer page that lists every backend endpoint with a description, suggested usage, parameter inputs, and a Run button that executes the call and shows the response.
+
+- Path: `/api-explorer`
+- Admin routes automatically include the token from localStorage or `NEXT_PUBLIC_ADMIN_TOKEN`.
+- Binary endpoints (images) open in a new tab. The Now WebSocket route is documented but not runnable here.
+- If the page returns Not Found after pulling changes, rebuild the UI (Next.js static export) or rebuild the Docker image so the new page is included under `/app/web`.
+
 ## API Endpoints
 
 ### Statistics
@@ -201,6 +210,17 @@ You can also explicitly set `ADMIN_AUTO_COOKIE=true` with your own `ADMIN_TOKEN`
 ### Configuration
 - `GET /config` - Get application configuration
 
+Admin and debug endpoints (protected):
+
+- `POST /admin/refresh/incremental` - Start incremental refresh
+- `GET /admin/scheduler/stats` - Scheduler stats
+- `POST /admin/cleanup/intervals/dedupe` and `GET /admin/cleanup/intervals/dedupe` - Interval dedupe
+- `POST /admin/cleanup/backfill-playmethods` - Backfill per‑stream methods for historical sessions
+- `GET /admin/webhook/stats` - Webhook endpoint info
+- `GET /admin/debug/sessions` - Inspect recent `play_sessions` with filters
+- `GET /admin/debug/emby-sessions` - Current sessions direct from Emby
+- `POST /admin/debug/ingest-active` - Upsert rows for current active sessions
+
 ### Items & Images
 - `GET /items/by-ids` - Get items by IDs
 - `GET /img/primary/:id` - Get primary image
@@ -224,6 +244,19 @@ You can also explicitly set `ADMIN_AUTO_COOKIE=true` with your own `ADMIN_TOKEN`
 - Manual refresh controls
 - User data synchronization
 - Data cleanup utilities
+
+## Troubleshooting
+
+### Occasional “database is locked” (SQLITE_BUSY)
+
+SQLite allows multiple readers but only one writer at a time. Under bursts (e.g., session processor, minute‑ingest safeguard, and maintenance jobs writing together) a writer may find the DB busy for a moment.
+
+This project mitigates contention by:
+- Using Write‑Ahead Logging (WAL) to allow readers during writes.
+- Setting `PRAGMA busy_timeout=5000` so writers retry briefly instead of failing immediately.
+- Serializing DB connections with `SetMaxOpenConns(1)` to avoid multiple writer connections from this process.
+
+These settings greatly reduce lock errors. If you still see sporadic logs, they’re usually transient and retried on the next tick. For heavier write loads, consider moving maintenance jobs off peak times, increasing `busy_timeout`, or placing the DB on fast local storage.
 
 ## Contributing
 
