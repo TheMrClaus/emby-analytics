@@ -1,12 +1,13 @@
 package tasks
 
 import (
-	"database/sql"
-	"log"
-	"sync"
-	"time"
+    "database/sql"
+    "log"
+    "sync"
+    "time"
 
-	"emby-analytics/internal/emby"
+    "emby-analytics/internal/emby"
+    "strings"
 )
 
 // SessionProcessor implements the hybrid state-polling approach used by playback_reporting plugin
@@ -178,21 +179,37 @@ func (sp *SessionProcessor) createPlaySession(session emby.EmbySession, startTim
     var existingID int64
     err := sp.DB.QueryRow(`SELECT id FROM play_sessions WHERE session_id=? AND item_id=?`, session.SessionID, session.ItemID).Scan(&existingID)
     if err == nil {
-        // Reactivate existing row to avoid UNIQUE constraint issues
-        _, _ = sp.DB.Exec(`UPDATE play_sessions SET is_active = true, ended_at = NULL WHERE id = ?`, existingID)
+        // Reactivate existing row and refresh transcode details (best effort)
+        transcodeReasons := strings.Join(session.TransReasons, ",")
+        _, _ = sp.DB.Exec(`
+            UPDATE play_sessions 
+            SET is_active = true, ended_at = NULL,
+                play_method = ?,
+                transcode_reasons = COALESCE(NULLIF(?, ''), transcode_reasons),
+                video_method = COALESCE(NULLIF(?, ''), video_method),
+                audio_method = COALESCE(NULLIF(?, ''), audio_method),
+                video_codec_from = COALESCE(NULLIF(?, ''), video_codec_from),
+                video_codec_to   = COALESCE(NULLIF(?, ''), video_codec_to),
+                audio_codec_from = COALESCE(NULLIF(?, ''), audio_codec_from),
+                audio_codec_to   = COALESCE(NULLIF(?, ''), audio_codec_to)
+            WHERE id = ?
+        `, session.PlayMethod, transcodeReasons, session.VideoMethod, session.AudioMethod,
+           session.TransVideoFrom, session.TransVideoTo, session.TransAudioFrom, session.TransAudioTo, existingID)
         return existingID, nil
     }
 
+    transcodeReasons := strings.Join(session.TransReasons, ",")
     res, ierr := sp.DB.Exec(`
         INSERT INTO play_sessions
         (user_id, session_id, device_id, client_name, item_id, item_name, item_type, 
          play_method, started_at, is_active, transcode_reasons, remote_address,
          video_method, audio_method, video_codec_from, video_codec_to, 
          audio_codec_from, audio_codec_to)
-        VALUES(?,?,?,?,?,?,?,?,?,true,'','','','','','','','')
+        VALUES(?,?,?,?,?,?,?,?,?,true,?,?,?, ?, ?, ?, ?)
     `, session.UserID, session.SessionID, session.Device, session.App, 
         session.ItemID, session.ItemName, session.ItemType, session.PlayMethod, 
-        startTime.Unix())
+        startTime.Unix(), transcodeReasons, session.RemoteAddress,
+        session.VideoMethod, session.AudioMethod, session.TransVideoFrom, session.TransVideoTo, session.TransAudioFrom, session.TransAudioTo)
         
     if ierr != nil {
         return 0, ierr
