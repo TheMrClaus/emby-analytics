@@ -31,6 +31,9 @@ type NowEntry struct {
 	Subs        string  `json:"subs"`
 	Bitrate     int64   `json:"bitrate"`
 	ProgressPct float64 `json:"progress_pct"`
+	// New: explicit time fields for nicer UI formatting
+	PositionSec int64   `json:"position_sec,omitempty"`
+	DurationSec int64   `json:"duration_sec,omitempty"`
 	Poster      string  `json:"poster"`
 	SessionID   string  `json:"session_id"`
 
@@ -318,7 +321,7 @@ func Snapshot(c fiber.Ctx) error {
 		if s.ItemID != "" {
 			poster = "/img/primary/" + s.ItemID
 		}
-		out = append(out, NowEntry{
+    out = append(out, NowEntry{
 			Timestamp:   nowMs,
 			Title:       s.ItemName,
 			User:        s.UserName,
@@ -330,6 +333,8 @@ func Snapshot(c fiber.Ctx) error {
 			Subs:        subsText,
 			Bitrate:     s.Bitrate,
 			ProgressPct: progressPct,
+			PositionSec: func() int64 { if s.PosTicks>0 { return s.PosTicks / 10_000_000 }; return 0 }(),
+			DurationSec: func() int64 { if s.DurationTicks>0 { return s.DurationTicks / 10_000_000 }; return 0 }(),
 			Poster:      poster,
 			SessionID:   s.SessionID,
 			ItemID:      s.ItemID,
@@ -488,6 +493,8 @@ func Stream(c fiber.Ctx) error {
 				Subs:        subsText,
 				Bitrate:     s.Bitrate,
 				ProgressPct: progressPct,
+				PositionSec: func() int64 { if s.PosTicks>0 { return s.PosTicks / 10_000_000 }; return 0 }(),
+				DurationSec: func() int64 { if s.DurationTicks>0 { return s.DurationTicks / 10_000_000 }; return 0 }(),
 				Poster:      poster,
 				SessionID:   s.SessionID,
 				ItemID:      s.ItemID,

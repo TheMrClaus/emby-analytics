@@ -102,6 +102,16 @@ export default function NowPlaying() {
   const pct = (n: number) =>
     Math.min(100, Math.max(0, Math.floor(Number.isFinite(n) ? n : 0)));
 
+  const fmtHMS = (sec?: number) => {
+    if (!Number.isFinite(sec as number) || (sec as number) <= 0) return "00:00";
+    const s = Math.max(0, Math.floor(sec as number));
+    const hh = Math.floor(s / 3600);
+    const mm = Math.floor((s % 3600) / 60);
+    const ss = s % 60;
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return hh > 0 ? `${pad(hh)}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`;
+  };
+
   const topBadge = (s: NowEntry): { label: string; tone: "ok" | "warn" } => {
     const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
     const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
@@ -178,6 +188,7 @@ export default function NowPlaying() {
               const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
               const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
               const progress = pct(s.progress_pct);
+              const hasTime = (s.duration_sec ?? 0) > 0;
               const top = topBadge(s);
               const v = videoStatus(s);
               const a = audioStatus(s);
@@ -228,7 +239,11 @@ export default function NowPlaying() {
                       <div className="mt-auto">
                         <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
                           <span>Progress</span>
-                          <span>{progress}%</span>
+                          <span>
+                            {hasTime
+                              ? `${fmtHMS(s.position_sec)} / ${fmtHMS(s.duration_sec)}`
+                              : `${progress}%`}
+                          </span>
                         </div>
                         <div className="h-2 bg-neutral-700 rounded-full overflow-hidden">
                           <div

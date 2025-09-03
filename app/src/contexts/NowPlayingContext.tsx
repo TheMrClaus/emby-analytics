@@ -13,6 +13,8 @@ export type NowEntry = {
   subs: string;
   bitrate: number;
   progress_pct: number;
+  position_sec?: number;
+  duration_sec?: number;
   poster: string;
   session_id: string;
   item_id: string;
