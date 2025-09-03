@@ -216,7 +216,7 @@ func (sp *SessionProcessor) createPlaySession(session emby.EmbySession, startTim
          play_method, started_at, is_active, transcode_reasons, remote_address,
          video_method, audio_method, video_codec_from, video_codec_to, 
          audio_codec_from, audio_codec_to)
-        VALUES(?,?,?,?,?,?,?,?,?,true,?,?,?, ?, ?, ?, ?)
+        VALUES(?,?,?,?,?,?,?,?,?,true,?,?,?,?, ?, ?, ?, ?)
     `, session.UserID, session.SessionID, session.Device, session.App, 
         session.ItemID, session.ItemName, session.ItemType, session.PlayMethod, 
         startTime.Unix(), transcodeReasons, session.RemoteAddress,
