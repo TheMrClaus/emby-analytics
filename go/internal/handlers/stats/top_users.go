@@ -3,6 +3,7 @@ package stats
 import (
 	"database/sql"
 	"emby-analytics/internal/queries"
+	"emby-analytics/internal/handlers/settings"
 	"emby-analytics/internal/tasks"
 	"sort"
 	"time"
@@ -48,19 +49,26 @@ func TopUsers(db *sql.DB) fiber.Handler {
 			limit = 10
 		}
 
-		// --- "All-Time" Logic (from your original code, preserved) ---
+		// --- "All-Time" Logic with dynamic Trakt calculation ---
 		if timeframe == "all-time" {
+			// Get the setting for whether to include Trakt items
+			includeTrakt := settings.GetSettingBool(db, "include_trakt_items", false)
+			
 			rows, err := db.Query(`
 				SELECT
 					u.id,
 					u.name,
-					COALESCE(lw.total_ms / 3600000.0, 0) AS hours
+					CASE WHEN ? = 1 THEN 
+						COALESCE((lw.emby_ms + lw.trakt_ms) / 3600000.0, 0)
+					ELSE 
+						COALESCE(lw.emby_ms / 3600000.0, 0) 
+					END AS hours
 				FROM emby_user u
 				LEFT JOIN lifetime_watch lw ON lw.user_id = u.id
-				WHERE lw.total_ms > 0
+				WHERE lw.emby_ms > 0 OR lw.trakt_ms > 0
 				ORDER BY hours DESC
 				LIMIT ?;
-			`, limit)
+			`, includeTrakt, limit)
 			if err != nil {
 				return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 			}

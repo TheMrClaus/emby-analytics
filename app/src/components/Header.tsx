@@ -70,7 +70,9 @@ export default function Header() {
       <div className="flex items-center justify-between">
         {/* Title + Clock */}
         <div className="flex items-center gap-8">
-          <h1 className="text-2xl font-bold text-white">Emby Analytics</h1>
+          <a href="/" className="text-2xl font-bold text-white hover:text-amber-300 transition-colors cursor-pointer">
+            Emby Analytics
+          </a>
         </div>
 
         {/* Stats + Refresh */}
@@ -152,6 +154,8 @@ export default function Header() {
 
           {/* Admin token quick actions + API Explorer */}
           <div className="flex items-center gap-3 text-sm">
+            <a href="/settings" className="text-blue-300 hover:text-white underline decoration-dotted">Settings</a>
+            <span className="text-gray-500">|</span>
             <a href="/api-explorer" className="text-blue-300 hover:text-white underline decoration-dotted">API Explorer</a>
             <span className="text-gray-500">|</span>
             <button
