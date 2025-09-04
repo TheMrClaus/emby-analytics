@@ -13,7 +13,7 @@ import (
 // SeriesData holds aggregated stats across TV series/episodes.
 type SeriesData struct {
     TotalSeries   int `json:"total_series"`
-    TotalEpisodes int `json:"total_episodes"}`
+    TotalEpisodes int `json:"total_episodes"`
 
     LargestSeriesName string  `json:"largest_series_name"`
     LargestSeriesGB   float64 `json:"largest_series_total_gb"`
