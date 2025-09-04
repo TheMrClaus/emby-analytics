@@ -36,44 +36,44 @@ export default function SeriesStatsCard() {
       {hasData && (
         <Card title="Series Statistics">
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Consistent ordering with Movie card */}
             <StatItem label="Total Series" value={fmtInt(data.total_series)} />
             <StatItem label="Total Episodes" value={fmtInt(data.total_episodes)} />
 
+            {/* Most Watched Series: Name - Hh Mm */}
             <StatItem
-              label="Largest Series (Total)"
+              label="Most Watched Series"
+              value={`${data.most_watched_series.name} - ${fmtHoursHM(data.most_watched_series.hours)}`}
+            />
+
+            {/* Largest totals */}
+            <StatItem
+              label="Largest Series (Total Size)"
               value={`${data.largest_series_total_gb.toFixed(1)} GB`}
               subtitle={data.largest_series_name}
             />
-
             <StatItem
               label="Largest Episode"
               value={`${data.largest_episode_gb.toFixed(1)} GB`}
               subtitle={data.largest_episode_name}
             />
 
+            {/* Runtimes */}
             <StatItem
               label="Longest Series"
               value={`${Math.floor(data.longest_series_runtime_minutes / 60)}h ${data.longest_series_runtime_minutes % 60}m`}
               subtitle={data.longest_series_name}
             />
-
-            <StatItem
-              label="Most Watched Series"
-              value={fmtHours(data.most_watched_series.hours)}
-              subtitle={data.most_watched_series.name}
-            />
-
             <StatItem
               label="Time to Watch All TV"
-              value={fmtHours(data.total_episode_runtime_hours)}
+              value={fmtHoursHM(data.total_episode_runtime_hours)}
             />
 
+            {/* Recency */}
             <StatItem
-              label="Newest Added Series"
-              value={new Date(data.newest_series.date).toLocaleDateString()}
-              subtitle={data.newest_series.name}
+              label="Newest Added Episode"
+              value={`${data.newest_series.name} ${new Date(data.newest_series.date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}`}
             />
-
             <StatItem
               label="Episodes Added This Month"
               value={fmtInt(data.episodes_added_this_month)}
@@ -83,6 +83,15 @@ export default function SeriesStatsCard() {
       )}
     </DataState>
   );
+}
+
+function fmtHoursHM(hours: number) {
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h <= 0) return `${m}m`;
+  if (m <= 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 function StatItem({ 
@@ -117,4 +126,3 @@ function StatItem({
     </div>
   );
 }
-

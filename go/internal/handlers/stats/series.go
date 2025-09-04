@@ -161,9 +161,9 @@ func Series(db *sql.DB) fiber.Handler {
             log.Printf("[series] Error calculating total episode runtime: %v", err)
         }
 
-        // Newest added episode -> return its series name and date
+        // Newest added episode -> return the episode display name and date
         err = db.QueryRow(`
-            SELECT `+seriesNameExpr+` AS series, created_at
+            SELECT name, created_at
             FROM library_item
             WHERE media_type = 'Episode' AND `+excludeLiveTvFilter()+`
             ORDER BY created_at DESC
@@ -196,4 +196,3 @@ func Series(db *sql.DB) fiber.Handler {
         return c.JSON(data)
     }
 }
-

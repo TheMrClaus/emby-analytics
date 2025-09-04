@@ -36,58 +36,52 @@ export default function MovieStatsCard() {
       {hasData && (
         <Card title="Movie Statistics">
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Total Movies */}
+            {/* Align ordering with Series card */}
             <StatItem
               label="Total Movies"
               value={fmtInt(data.total_movies)}
               isStale={data.total_movies === 0}
             />
 
-            {/* Movies Added This Month */}
+            {/* Most Watched Movie: Name - Hh Mm */}
             <StatItem
-              label="Added This Month"
-              value={fmtInt(data.movies_added_this_month)}
+              label="Most Watched Movie"
+              value={`${data.most_watched_movie.name} - ${fmtHoursHM(data.most_watched_movie.hours)}`}
             />
 
-            {/* Total Runtime */}
+            {/* Totals */}
             <StatItem
               label="Total Runtime"
-              value={fmtHours(data.total_runtime_hours)}
+              value={fmtHoursHM(data.total_runtime_hours)}
             />
 
-            {/* Largest Movie */}
+            {/* Sizes */}
             <StatItem
               label="Largest Movie"
               value={`${data.largest_movie_gb.toFixed(1)} GB`}
               subtitle={data.largest_movie_name}
             />
 
-            {/* Longest Movie */}
+            {/* Runtimes */}
             <StatItem
               label="Longest Movie"
               value={`${Math.floor(data.longest_runtime_minutes / 60)}h ${data.longest_runtime_minutes % 60}m`}
               subtitle={data.longest_movie_name}
             />
-
-            {/* Shortest Movie */}
             <StatItem
               label="Shortest Movie"
               value={`${Math.floor(data.shortest_runtime_minutes / 60)}h ${data.shortest_runtime_minutes % 60}m`}
               subtitle={data.shortest_movie_name}
             />
 
-            {/* Newest Movie */}
+            {/* Recency */}
             <StatItem
-              label="Newest Added"
-              value={new Date(data.newest_movie.date).toLocaleDateString()}
-              subtitle={data.newest_movie.name}
+              label="Newest Added Movie"
+              value={`${data.newest_movie.name} ${new Date(data.newest_movie.date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}`}
             />
-
-            {/* Most Watched */}
             <StatItem
-              label="Most Watched"
-              value={fmtHours(data.most_watched_movie.hours)}
-              subtitle={data.most_watched_movie.name}
+              label="Movies Added This Month"
+              value={fmtInt(data.movies_added_this_month)}
             />
           </div>
 
@@ -112,6 +106,15 @@ export default function MovieStatsCard() {
       )}
     </DataState>
   );
+}
+
+function fmtHoursHM(hours: number) {
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h <= 0) return `${m}m`;
+  if (m <= 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 function StatItem({ 
