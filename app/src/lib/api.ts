@@ -96,19 +96,49 @@ type SessionDetail = {
   item_type: string;
   item_id: string;
   device_id: string;
+  device_name: string;
   client_name: string;
   video_method: string;
   audio_method: string;
+  subtitle_transcode: boolean;
+  user_id: string;
+  user_name: string;
+  started_at: number;
+  ended_at?: number | null;
+  session_id: string;
+  play_method: string;
 };
 
-export const fetchPlayMethods = (days = 30) =>
-  j<{ 
+export const fetchPlayMethods = (days = 30, options?: {
+  limit?: number;
+  offset?: number;
+  show_all?: boolean;
+  user_id?: string;
+  media_type?: string;
+}) => {
+  const params = new URLSearchParams({
+    days: days.toString(),
+  });
+  
+  if (options?.limit) params.append('limit', options.limit.toString());
+  if (options?.offset) params.append('offset', options.offset.toString());
+  if (options?.show_all) params.append('show_all', options.show_all.toString());
+  if (options?.user_id) params.append('user_id', options.user_id);
+  if (options?.media_type) params.append('media_type', options.media_type);
+  
+  return j<{ 
     methods: Record<string, number>;
     detailed: Record<string, number>;
     transcodeDetails: Record<string, number>;
     sessionDetails: SessionDetail[];
     days: number;
-  }>(`/stats/play-methods?days=${days}`);
+    pagination: {
+      limit: number;
+      offset: number;
+      count: number;
+    };
+  }>(`/stats/play-methods?${params}`);
+};
 
 // Admin refresh
 export const startRefresh = () =>

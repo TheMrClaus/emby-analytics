@@ -38,23 +38,49 @@ func normalize(method string) string {
 
 // PlayMethods returns a breakdown of playback methods over the last N days (default 30).
 type SessionDetail struct {
-	ItemName    string `json:"item_name"`
-	ItemType    string `json:"item_type"`
-	ItemID      string `json:"item_id"`
-	DeviceID    string `json:"device_id"`
-	ClientName  string `json:"client_name"`
-	VideoMethod string `json:"video_method"`
-	AudioMethod string `json:"audio_method"`
+	ItemName          string `json:"item_name"`
+	ItemType          string `json:"item_type"`
+	ItemID            string `json:"item_id"`
+	DeviceID          string `json:"device_id"`
+	DeviceName        string `json:"device_name"`
+	ClientName        string `json:"client_name"`
+	VideoMethod       string `json:"video_method"`
+	AudioMethod       string `json:"audio_method"`
+	SubtitleTranscode bool   `json:"subtitle_transcode"`
+	UserID            string `json:"user_id"`
+	UserName          string `json:"user_name"`
+	StartedAt         int64  `json:"started_at"`
+	EndedAt           *int64 `json:"ended_at"`
+	SessionID         string `json:"session_id"`
+	PlayMethod        string `json:"play_method"`
 }
 
 func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Fiber v3: parse query param manually
+		// Fiber v3: parse query params manually
 		daysStr := c.Query("days", "30")
 		days, err := strconv.Atoi(daysStr)
 		if err != nil || days <= 0 {
 			days = 30
 		}
+
+		// Parse pagination parameters
+		limitStr := c.Query("limit", "50")
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil || limit <= 0 || limit > 1000 {
+			limit = 50
+		}
+
+		offsetStr := c.Query("offset", "0")
+		offset, err := strconv.Atoi(offsetStr)
+		if err != nil || offset < 0 {
+			offset = 0
+		}
+
+		// Parse filter parameters
+		showAll := c.Query("show_all", "false") == "true"
+		userFilter := c.Query("user_id", "")
+		mediaTypeFilter := c.Query("media_type", "")
 
 		// Check if enhanced columns exist by checking table structure
 		var hasVideoMethod bool
@@ -70,7 +96,7 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 
 		if !hasVideoMethod {
 			log.Printf("[PlayMethods] Enhanced columns not found, using legacy mode")
-			return legacyPlayMethods(c, db, days)
+			return legacyPlayMethods(c, db, days, limit, offset)
 		}
 
 		// Enhanced query with new columns - handle empty strings and NULLs properly
@@ -110,46 +136,108 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
             GROUP BY 1, 2, 3
         `
 
-		// Query for detailed sessions (only transcoding sessions)
-		// Select recent sessions where either stream actually transcodes (derived),
-		// regardless of the raw top-level play_method value.
-		sessionQuery := `
-            SELECT item_name, item_type, device_id, client_name, item_id, video_method, audio_method
-            FROM (
-                SELECT 
-                    item_name, item_type, device_id, client_name, item_id, started_at, play_method,
-                    -- Derive consistent methods for session details
-                    CASE 
-                        WHEN lower(COALESCE(video_method,'')) = 'transcode' THEN 'Transcode'
-                        WHEN COALESCE(video_codec_from,'') <> '' AND COALESCE(video_codec_to,'') <> '' 
-                            AND lower(video_codec_from) <> lower(video_codec_to) THEN 'Transcode'
-                        WHEN (
-                            instr(lower(COALESCE(transcode_reasons,'')), 'subtitle') > 0 OR 
-                            instr(lower(COALESCE(transcode_reasons,'')), 'burn') > 0 OR 
-                            instr(lower(COALESCE(transcode_reasons,'')), 'video') > 0
-                        ) THEN 'Transcode'
-                        ELSE 'DirectPlay'
-                    END AS video_method,
-                    CASE 
-                        WHEN lower(COALESCE(audio_method,'')) = 'transcode' THEN 'Transcode'
-                        WHEN COALESCE(audio_codec_from,'') <> '' AND COALESCE(audio_codec_to,'') <> '' 
-                            AND lower(audio_codec_from) <> lower(audio_codec_to) THEN 'Transcode'
-                        WHEN instr(lower(COALESCE(transcode_reasons,'')), 'audio') > 0 THEN 'Transcode'
-                        ELSE 'DirectPlay'
-                    END AS audio_method
-                FROM play_sessions 
-                WHERE started_at >= (strftime('%s','now') - (? * 86400))
-                    AND started_at IS NOT NULL
-            )
-            WHERE video_method = 'Transcode' OR audio_method = 'Transcode' OR play_method = 'Transcode'
-            ORDER BY started_at DESC
-            LIMIT 50
+		// Build session query with filters
+		sessionQueryBase := `
+            SELECT 
+                ps.item_name, 
+                ps.item_type, 
+                ps.device_id,
+                COALESCE(ps.device_id, 'Unknown Device') as device_name,
+                ps.client_name, 
+                ps.item_id, 
+                ps.user_id,
+                COALESCE(eu.name, ps.user_id) as user_name,
+                ps.started_at,
+                ps.ended_at,
+                ps.session_id,
+                ps.play_method,
+                -- Derive consistent methods for session details
+                CASE 
+                    WHEN lower(COALESCE(ps.video_method,'')) = 'transcode' THEN 'Transcode'
+                    WHEN COALESCE(ps.video_codec_from,'') <> '' AND COALESCE(ps.video_codec_to,'') <> '' 
+                        AND lower(ps.video_codec_from) <> lower(ps.video_codec_to) THEN 'Transcode'
+                    WHEN (
+                        instr(lower(COALESCE(ps.transcode_reasons,'')), 'subtitle') > 0 OR 
+                        instr(lower(COALESCE(ps.transcode_reasons,'')), 'burn') > 0 OR 
+                        instr(lower(COALESCE(ps.transcode_reasons,'')), 'video') > 0
+                    ) THEN 'Transcode'
+                    ELSE 'DirectPlay'
+                END AS video_method,
+                CASE 
+                    WHEN lower(COALESCE(ps.audio_method,'')) = 'transcode' THEN 'Transcode'
+                    WHEN COALESCE(ps.audio_codec_from,'') <> '' AND COALESCE(ps.audio_codec_to,'') <> '' 
+                        AND lower(ps.audio_codec_from) <> lower(ps.audio_codec_to) THEN 'Transcode'
+                    WHEN instr(lower(COALESCE(ps.transcode_reasons,'')), 'audio') > 0 THEN 'Transcode'
+                    ELSE 'DirectPlay'
+                END AS audio_method,
+                -- Per-session subtitle transcoding detection
+                CASE 
+                    WHEN instr(lower(COALESCE(ps.transcode_reasons,'')), 'subtitle') > 0 OR 
+                         instr(lower(COALESCE(ps.transcode_reasons,'')), 'burn') > 0 THEN 1
+                    ELSE 0
+                END AS subtitle_transcode
+            FROM play_sessions ps
+            LEFT JOIN emby_user eu ON ps.user_id = eu.id
+            WHERE ps.started_at >= (strftime('%s','now') - (? * 86400))
+                AND ps.started_at IS NOT NULL`
+
+		// Add filters
+		var queryParams []interface{}
+		queryParams = append(queryParams, days)
+
+		if !showAll {
+			// Only show transcoding sessions when show_all is false (backward compatibility)
+			sessionQueryBase += ` AND (
+                ps.play_method = 'Transcode' OR
+                lower(COALESCE(ps.video_method,'')) = 'transcode' OR
+                lower(COALESCE(ps.audio_method,'')) = 'transcode' OR
+                (COALESCE(ps.video_codec_from,'') <> '' AND COALESCE(ps.video_codec_to,'') <> '' 
+                 AND lower(ps.video_codec_from) <> lower(ps.video_codec_to)) OR
+                (COALESCE(ps.audio_codec_from,'') <> '' AND COALESCE(ps.audio_codec_to,'') <> '' 
+                 AND lower(ps.audio_codec_from) <> lower(ps.audio_codec_to)) OR
+                (
+                    instr(lower(COALESCE(ps.transcode_reasons,'')), 'subtitle') > 0 OR 
+                    instr(lower(COALESCE(ps.transcode_reasons,'')), 'burn') > 0 OR 
+                    instr(lower(COALESCE(ps.transcode_reasons,'')), 'video') > 0 OR
+                    instr(lower(COALESCE(ps.transcode_reasons,'')), 'audio') > 0
+                )
+            ) AND (
+                -- Exclude sessions where ALL streams are direct (truly direct sessions)
+                NOT (
+                    lower(COALESCE(ps.video_method,'')) <> 'transcode' AND
+                    lower(COALESCE(ps.audio_method,'')) <> 'transcode' AND
+                    NOT (instr(lower(COALESCE(ps.transcode_reasons,'')), 'subtitle') > 0 OR 
+                         instr(lower(COALESCE(ps.transcode_reasons,'')), 'burn') > 0) AND
+                    NOT (
+                        (COALESCE(ps.video_codec_from,'') <> '' AND COALESCE(ps.video_codec_to,'') <> '' 
+                         AND lower(ps.video_codec_from) <> lower(ps.video_codec_to)) OR
+                        (COALESCE(ps.audio_codec_from,'') <> '' AND COALESCE(ps.audio_codec_to,'') <> '' 
+                         AND lower(ps.audio_codec_from) <> lower(ps.audio_codec_to))
+                    )
+                )
+            )`
+		}
+
+		if userFilter != "" {
+			sessionQueryBase += " AND ps.user_id = ?"
+			queryParams = append(queryParams, userFilter)
+		}
+
+		if mediaTypeFilter != "" {
+			sessionQueryBase += " AND ps.item_type = ?"
+			queryParams = append(queryParams, mediaTypeFilter)
+		}
+
+		sessionQuery := sessionQueryBase + `
+            ORDER BY ps.started_at DESC
+            LIMIT ? OFFSET ?
         `
+		queryParams = append(queryParams, limit, offset)
 
 		rows, err := db.Query(query, days)
 		if err != nil {
 			logging.Debug("Enhanced query failed: %v", err)
-			return legacyPlayMethods(c, db, days)
+			return legacyPlayMethods(c, db, days, limit, offset)
 		}
 		defer rows.Close()
 
@@ -209,29 +297,73 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 			if audioMethod == "Transcode" {
 				transcodeDetails["TranscodeAudio"] += cnt
 			}
-			// TODO: Add subtitle transcoding detection when available
+			// Subtitle transcoding detection using transcode_reasons field
+			// This is handled in the SQL query, but we could add additional logic here if needed
 		}
 
 		if err := rows.Err(); err != nil {
 			logging.Debug("Rows error: %v", err)
-			return legacyPlayMethods(c, db, days)
+			return legacyPlayMethods(c, db, days, limit, offset)
 		}
 
-		// Fetch detailed session information for transcoding sessions
-		sessionRows, sessionErr := db.Query(sessionQuery, days)
+		// Fetch detailed session information
+		sessionRows, sessionErr := db.Query(sessionQuery, queryParams...)
 		if sessionErr != nil {
 			logging.Debug("Session query failed: %v", sessionErr)
 		} else {
 			defer sessionRows.Close()
 			for sessionRows.Next() {
 				var session SessionDetail
-				if err := sessionRows.Scan(&session.ItemName, &session.ItemType, &session.DeviceID,
-					&session.ClientName, &session.ItemID, &session.VideoMethod, &session.AudioMethod); err != nil {
+				var subtitleTranscodeInt int
+				if err := sessionRows.Scan(
+					&session.ItemName, &session.ItemType, &session.DeviceID, &session.DeviceName,
+					&session.ClientName, &session.ItemID, &session.UserID, &session.UserName,
+					&session.StartedAt, &session.EndedAt, &session.SessionID, &session.PlayMethod,
+					&session.VideoMethod, &session.AudioMethod, &subtitleTranscodeInt); err != nil {
 					logging.Debug("Session scan error: %v", err)
 					continue
 				}
+				session.SubtitleTranscode = subtitleTranscodeInt == 1
 				sessionDetails = append(sessionDetails, session)
 			}
+		}
+
+		// Count subtitle transcoding from transcode_reasons field
+		subtitleQuery := `
+            SELECT COUNT(*) FROM play_sessions
+            WHERE started_at >= (strftime('%s','now') - (? * 86400))
+                AND started_at IS NOT NULL
+                AND (
+                    instr(lower(COALESCE(transcode_reasons,'')), 'subtitle') > 0 OR 
+                    instr(lower(COALESCE(transcode_reasons,'')), 'burn') > 0
+                )
+        `
+		var subtitleCount int
+		if err := db.QueryRow(subtitleQuery, days).Scan(&subtitleCount); err == nil {
+			transcodeDetails["TranscodeSubtitle"] = subtitleCount
+		}
+
+		// Calculate truly direct sessions (all streams direct)
+		directQuery := `
+            SELECT COUNT(*) FROM play_sessions ps
+            WHERE ps.started_at >= (strftime('%s','now') - (? * 86400))
+                AND ps.started_at IS NOT NULL
+                AND (
+                    lower(COALESCE(ps.video_method,'')) <> 'transcode' AND
+                    lower(COALESCE(ps.audio_method,'')) <> 'transcode' AND
+                    NOT (instr(lower(COALESCE(ps.transcode_reasons,'')), 'subtitle') > 0 OR 
+                         instr(lower(COALESCE(ps.transcode_reasons,'')), 'burn') > 0)
+                )
+                AND NOT (
+                    (COALESCE(ps.video_codec_from,'') <> '' AND COALESCE(ps.video_codec_to,'') <> '' 
+                     AND lower(ps.video_codec_from) <> lower(ps.video_codec_to)) OR
+                    (COALESCE(ps.audio_codec_from,'') <> '' AND COALESCE(ps.audio_codec_to,'') <> '' 
+                     AND lower(ps.audio_codec_from) <> lower(ps.audio_codec_to))
+                )
+        `
+		var directCount int
+		if err := db.QueryRow(directQuery, days).Scan(&directCount); err == nil {
+			transcodeDetails["Direct"] = directCount
 		}
 
 		// Enrich item names for episodes: "Series - Episode (SxxExx)"
@@ -240,7 +372,7 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 		// Ensure we have the basic methods even if not in data
 		if summary["DirectPlay"] == 0 && summary["Transcode"] == 0 {
 			// If no data, try legacy mode as fallback
-			return legacyPlayMethods(c, db, days)
+			return legacyPlayMethods(c, db, days, limit, offset)
 		}
 
 		return c.JSON(fiber.Map{
@@ -249,12 +381,17 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 			"transcodeDetails": transcodeDetails,
 			"sessionDetails":   sessionDetails,
 			"days":             days,
+			"pagination": fiber.Map{
+				"limit":  limit,
+				"offset": offset,
+				"count":  len(sessionDetails),
+			},
 		})
 	}
 }
 
 // legacyPlayMethods provides the original functionality when new columns don't exist
-func legacyPlayMethods(c fiber.Ctx, db *sql.DB, days int) error {
+func legacyPlayMethods(c fiber.Ctx, db *sql.DB, days int, limit int, offset int) error {
 	query := `
 		SELECT
 			COALESCE(play_method, '') AS raw_method,
@@ -278,6 +415,11 @@ func legacyPlayMethods(c fiber.Ctx, db *sql.DB, days int) error {
 			},
 			"detailed": make(map[string]int),
 			"days":     days,
+			"pagination": fiber.Map{
+				"limit":  limit,
+				"offset": offset,
+				"count":  0,
+			},
 		})
 	}
 	defer rows.Close()
@@ -323,10 +465,15 @@ func legacyPlayMethods(c fiber.Ctx, db *sql.DB, days int) error {
 		"transcodeDetails": transcodeDetails,
 		"sessionDetails":   []interface{}{}, // empty for legacy mode
 		"days":             days,
+		"pagination": fiber.Map{
+			"limit":  limit,
+			"offset": offset,
+			"count":  0, // no sessions in legacy mode
+		},
 	})
 }
 
-// enrichSessionDetails updates ItemName for episodes to "Series - Episode (SxxExx)"
+// enrichSessionDetails updates ItemName for episodes to "Series - Episode (SxxExx)" and movies to "Movie (year)"
 func enrichSessionDetails(details []SessionDetail, em *emby.Client) []SessionDetail {
 	if em == nil || len(details) == 0 {
 		return details
@@ -366,7 +513,7 @@ func enrichSessionDetails(details []SessionDetail, em *emby.Client) []SessionDet
 			d.ItemType = it.Type
 		}
 		if strings.EqualFold(it.Type, "Episode") {
-			// Use canonical episode name
+			// Use canonical episode name: "Series - Episode (SxxExx)"
 			epTitle := it.Name
 			series := it.SeriesName
 			epcode := ""
@@ -382,6 +529,19 @@ func enrichSessionDetails(details []SessionDetail, em *emby.Client) []SessionDet
 			}
 			if d.ItemType == "" {
 				d.ItemType = "Episode"
+			}
+		} else if strings.EqualFold(it.Type, "Movie") {
+			// Format movies as "Movie (year)"
+			movieTitle := it.Name
+			if movieTitle != "" {
+				if it.ProductionYear != nil && *it.ProductionYear > 0 {
+					d.ItemName = fmt.Sprintf("%s (%d)", movieTitle, *it.ProductionYear)
+				} else {
+					d.ItemName = movieTitle
+				}
+			}
+			if d.ItemType == "" {
+				d.ItemType = "Movie"
 			}
 		} else if it.Name != "" {
 			d.ItemName = it.Name
