@@ -206,6 +206,7 @@ func main() {
 	app.Get("/stats/play-methods", stats.PlayMethods(sqlDB, em))
 	app.Get("/stats/items/by-codec/:codec", stats.ItemsByCodec(sqlDB))
 	app.Get("/stats/items/by-quality/:quality", stats.ItemsByQuality(sqlDB))
+	app.Get("/stats/movies", stats.Movies(sqlDB))
 
 	// Backward compatibility routes (hyphenated versions)
 	app.Get("/stats/top-users", stats.TopUsers(sqlDB))
