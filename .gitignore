@@ -15,6 +15,11 @@ data/
 # Go build artifacts
 go/web/
 go/emby-analytics
+go/.gocache/
+go/test-emby-analytics
 
 # Secrets
 .env
+
+# TypeScript incremental build info
+app/tsconfig.tsbuildinfo
