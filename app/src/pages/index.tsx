@@ -13,6 +13,7 @@ import { ErrorBoundary } from "../components/ErrorBoundary";
 
 import PlaybackMethodsCard from "../components/PlaybackMethodsCard";
 import MovieStatsCard from "../components/MovieStatsCard";
+import SeriesStatsCard from "../components/SeriesStatsCard";
 
 export default function Dashboard() {
   return (
@@ -41,6 +42,10 @@ export default function Dashboard() {
 
             <ErrorBoundary>
               <MovieStatsCard />
+            </ErrorBoundary>
+
+            <ErrorBoundary>
+              <SeriesStatsCard />
             </ErrorBoundary>
 
             <ErrorBoundary>

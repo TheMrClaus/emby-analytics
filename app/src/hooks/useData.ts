@@ -9,6 +9,7 @@ import {
   fetchCodecs,
   fetchActiveUsersLifetime,
   fetchMovieStats,
+  fetchSeriesStats,
   fetchNowSnapshot,
   fetchRefreshStatus,
 } from '../lib/api';
@@ -21,6 +22,7 @@ import type {
   CodecBuckets,
   ActiveUserLifetime,
   MovieStats,
+  SeriesStats,
   NowEntry,
   RefreshState,
 } from '../types';
@@ -89,6 +91,11 @@ export function useActiveUsersLifetime(limit = 10) {
 // Movie stats hook
 export function useMovieStats() {
   return useSWR<MovieStats>('movieStats', () => fetchMovieStats(), config);
+}
+
+// Series stats hook
+export function useSeriesStats() {
+  return useSWR<SeriesStats>('seriesStats', () => fetchSeriesStats(), config);
 }
 
 // Now playing snapshot with frequent refresh

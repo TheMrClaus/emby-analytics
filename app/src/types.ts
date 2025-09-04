@@ -101,3 +101,18 @@ export type MovieStats = {
   popular_genres: GenreStats[];
   movies_added_this_month: number;
 };
+
+export type SeriesStats = {
+  total_series: number;
+  total_episodes: number;
+  largest_series_name: string;
+  largest_series_total_gb: number;
+  largest_episode_name: string;
+  largest_episode_gb: number;
+  longest_series_name: string;
+  longest_series_runtime_minutes: number;
+  most_watched_series: { name: string; hours: number };
+  total_episode_runtime_hours: number;
+  newest_series: { name: string; date: string };
+  episodes_added_this_month: number;
+};

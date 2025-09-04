@@ -4,6 +4,7 @@ import {
   CodecBuckets,
   ItemRow,
   MovieStats,
+  SeriesStats,
   NowEntry,
   OverviewData,
   QualityBuckets,
@@ -86,6 +87,7 @@ export const fetchCodecs = () => j<CodecBuckets>("/stats/codecs");
 export const fetchActiveUsersLifetime = (limit = 10) =>
   j<ActiveUserLifetime[]>(`/stats/active-users?limit=${limit}`);
 export const fetchMovieStats = () => j<MovieStats>("/stats/movies");
+export const fetchSeriesStats = () => j<SeriesStats>("/stats/series");
 export const fetchTotalUsers = () => j<number>("/stats/users/total");
 export const fetchItemsByIds = (ids: string[]) =>
   j<ItemRow[]>(`/items/by-ids?ids=${encodeURIComponent(ids.join(","))}`);
