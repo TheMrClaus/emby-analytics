@@ -1,9 +1,9 @@
 package admin
 
 import (
+	"emby-analytics/internal/logging"
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -23,7 +23,7 @@ func ResetLifetimeWatch(db *sql.DB) fiber.Handler {
 		_ = db.QueryRow(`SELECT COUNT(*) FROM play_intervals`).Scan(&totalEvents)
 		_ = db.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM play_intervals WHERE duration_seconds > 30`).Scan(&totalUsers)
 
-		log.Printf("DEBUG: Found %d total play intervals, %d users with >30s duration", totalEvents, totalUsers)
+		logging.Debug("DEBUG: Found %d total play intervals, %d users with >30s duration", totalEvents, totalUsers)
 
 		if totalEvents == 0 {
 			return c.JSON(fiber.Map{
@@ -62,7 +62,7 @@ func ResetLifetimeWatch(db *sql.DB) fiber.Handler {
 			var avgItemWatchMs float64
 
 			if err := rows.Scan(&userID, &totalWatchMs, &itemsWatched, &avgItemWatchMs); err != nil {
-				log.Printf("Error scanning user data: %v", err)
+				logging.Debug("Error scanning user data: %v", err)
 				continue
 			}
 
@@ -70,14 +70,14 @@ func ResetLifetimeWatch(db *sql.DB) fiber.Handler {
 			_, err = db.Exec(`INSERT INTO lifetime_watch (user_id, total_ms) VALUES (?, ?)`,
 				userID, totalWatchMs)
 			if err != nil {
-				log.Printf("Error inserting lifetime data for user %s: %v", userID, err)
+				logging.Debug("Error inserting lifetime data for user %s: %v", userID, err)
 				continue
 			}
 
 			updated++
 			totalWatchHours += float64(totalWatchMs) / (1000.0 * 60.0 * 60.0)
 
-			log.Printf("User %s: %d items watched, %.1f hours total (avg %.1f min/item)",
+			logging.Debug("User %s: %d items watched, %.1f hours total (avg %.1f min/item)",
 				userID, itemsWatched, float64(totalWatchMs)/(1000.0*60.0*60.0), avgItemWatchMs/(1000.0*60.0))
 		}
 

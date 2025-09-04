@@ -1,10 +1,10 @@
 package admin
 
 import (
+	"emby-analytics/internal/logging"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -92,12 +92,12 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 		// Process the incremental items
 		if len(libraryEntries) > 0 {
 			dbEntriesInserted := rm.processLibraryEntries(db, em, libraryEntries)
-			log.Printf("[incremental-sync] Processed %d items, inserted/updated %d entries", len(libraryEntries), dbEntriesInserted)
+			logging.Debug("Processed %d items, inserted/updated %d entries", len(libraryEntries), dbEntriesInserted)
 		}
 
 		// Update sync timestamp
 		if err := syncpkg.UpdateSyncTime(db, syncpkg.SyncTypeLibraryIncremental, actualItemsProcessed); err != nil {
-			log.Printf("[incremental-sync] Failed to update sync timestamp: %v", err)
+			logging.Debug("Failed to update sync timestamp: %v", err)
 		}
 
 		rm.set(Progress{
@@ -154,7 +154,7 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 
 		// Update full sync timestamp
 		if err := syncpkg.UpdateSyncTime(db, syncpkg.SyncTypeLibraryFull, actualItemsProcessed); err != nil {
-			log.Printf("[full-sync] Failed to update sync timestamp: %v", err)
+			logging.Debug("Failed to update sync timestamp: %v", err)
 		}
 	}
 
@@ -186,7 +186,7 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 			// Get unlimited history for this user (0 = all history)
 			history, err := em.GetUserPlayHistory(user.Id, 0)
 			if err != nil {
-				log.Printf("[refresh] Failed to get history for user %s: %v", user.Name, err)
+				logging.Debug("Failed to get history for user %s: %v", user.Name, err)
 				continue // Skip user but don't fail entire refresh
 			}
 
@@ -223,7 +223,7 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 			}
 
 			if userEvents > 0 {
-				log.Printf("[refresh] User %s: collected %d historical events", user.Name, userEvents)
+				logging.Debug("User %s: collected %d historical events", user.Name, userEvents)
 			}
 		}
 
@@ -308,8 +308,8 @@ func StartHandler(rm *RefreshManager, db *sql.DB, em *emby.Client, chunkSize int
 // StreamHandler sends progress events over SSE until Done=true.
 func StreamHandler(rm *RefreshManager) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		log.Println("[admin/refresh] SSE subscriber connected")
-		defer log.Println("[admin/refresh] SSE subscriber disconnected")
+		logging.Debug("SSE subscriber connected")
+		defer logging.Debug("SSE subscriber disconnected")
 		c.Set("Content-Type", "text/event-stream")
 		c.Set("Cache-Control", "no-cache")
 		c.Set("Connection", "keep-alive")

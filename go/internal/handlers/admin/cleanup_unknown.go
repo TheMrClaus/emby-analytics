@@ -1,8 +1,8 @@
 package admin
 
 import (
+	"emby-analytics/internal/logging"
 	"database/sql"
-	"log"
 	"regexp"
 	"time"
 
@@ -20,7 +20,7 @@ type CleanupResult struct {
 // CleanupUnknownItems removes or fixes items with missing metadata
 func CleanupUnknownItems(db *sql.DB, em *emby.Client) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		log.Println("[cleanup] Starting unknown items cleanup...")
+		logging.Debug("Starting unknown items cleanup...")
 
 		// Get all unknown/problematic items
 		rows, err := db.Query(`
@@ -55,7 +55,7 @@ func CleanupUnknownItems(db *sql.DB, em *emby.Client) fiber.Handler {
 			return c.JSON(CleanupResult{})
 		}
 
-		log.Printf("[cleanup] Found %d unknown items to process", len(unknownIDs))
+		logging.Debug("Found %d unknown items to process", len(unknownIDs))
 
 		result := CleanupResult{}
 
@@ -71,7 +71,7 @@ func CleanupUnknownItems(db *sql.DB, em *emby.Client) fiber.Handler {
 				validGUIDs = append(validGUIDs, id)
 			} else {
 				invalidIDs = append(invalidIDs, id)
-				log.Printf("[cleanup] Invalid GUID format: %s", id)
+				logging.Debug("Invalid GUID format: %s", id)
 			}
 		}
 
@@ -88,11 +88,11 @@ func CleanupUnknownItems(db *sql.DB, em *emby.Client) fiber.Handler {
 				_, err := db.Exec(`DELETE FROM library_item WHERE id = ?`, id)
 				if err == nil {
 					result.DeletedItems++
-					log.Printf("[cleanup] Deleted invalid ID item %s", id)
+					logging.Debug("Deleted invalid ID item %s", id)
 				}
 			} else {
 				result.UnreachableItems++
-				log.Printf("[cleanup] Keeping invalid ID item %s (has recent activity)", id)
+				logging.Debug("Keeping invalid ID item %s (has recent activity)", id)
 			}
 		}
 
@@ -114,7 +114,7 @@ func CleanupUnknownItems(db *sql.DB, em *emby.Client) fiber.Handler {
 						`, embyItem.Name, embyItem.Type, id)
 						if err == nil {
 							result.FixedItems++
-							log.Printf("[cleanup] Fixed item %s: %s (%s)", id, embyItem.Name, embyItem.Type)
+							logging.Debug("Fixed item %s: %s (%s)", id, embyItem.Name, embyItem.Type)
 						}
 					} else {
 						// Item not found in Emby (probably deleted)
@@ -129,30 +129,30 @@ func CleanupUnknownItems(db *sql.DB, em *emby.Client) fiber.Handler {
 							_, err := db.Exec(`DELETE FROM library_item WHERE id = ?`, id)
 							if err == nil {
 								result.DeletedItems++
-								log.Printf("[cleanup] Deleted unused GUID item %s", id)
+								logging.Debug("Deleted unused GUID item %s", id)
 							}
 						} else {
 							result.UnreachableItems++
-							log.Printf("[cleanup] Keeping GUID item %s (has recent activity)", id)
+							logging.Debug("Keeping GUID item %s (has recent activity)", id)
 						}
 					}
 				}
 			} else {
-				log.Printf("[cleanup] Emby API failed for valid GUIDs: %v", err)
+				logging.Debug("Emby API failed for valid GUIDs: %v", err)
 				for range validGUIDs {
 					result.UnreachableItems++
 				}
 			}
 		} else {
 			if len(validGUIDs) > 0 {
-				log.Printf("[cleanup] No Emby client available")
+				logging.Debug("[cleanup] No Emby client available")
 				for range validGUIDs {
 					result.UnreachableItems++
 				}
 			}
 		}
 
-		log.Printf("[cleanup] Completed: %d fixed, %d deleted, %d unreachable",
+		logging.Debug("[cleanup] Completed: %d fixed, %d deleted, %d unreachable",
 			result.FixedItems, result.DeletedItems, result.UnreachableItems)
 
 		return c.JSON(result)

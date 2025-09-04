@@ -1,15 +1,16 @@
 package stats
 
 import (
-    "database/sql"
-    "fmt"
-    "log"
-    "strconv"
-    "strings"
+	"database/sql"
+	"emby-analytics/internal/logging"
+	"fmt"
+	"log"
+	"strconv"
+	"strings"
 
-    emby "emby-analytics/internal/emby"
+	emby "emby-analytics/internal/emby"
 
-    "github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3"
 )
 
 // normalize maps various casings/variants into our 4 buckets.
@@ -37,13 +38,13 @@ func normalize(method string) string {
 
 // PlayMethods returns a breakdown of playback methods over the last N days (default 30).
 type SessionDetail struct {
-    ItemName    string `json:"item_name"`
-    ItemType    string `json:"item_type"`
-    ItemID      string `json:"item_id"`
-    DeviceID    string `json:"device_id"`
-    ClientName  string `json:"client_name"`
-    VideoMethod string `json:"video_method"`
-    AudioMethod string `json:"audio_method"`
+	ItemName    string `json:"item_name"`
+	ItemType    string `json:"item_type"`
+	ItemID      string `json:"item_id"`
+	DeviceID    string `json:"device_id"`
+	ClientName  string `json:"client_name"`
+	VideoMethod string `json:"video_method"`
+	AudioMethod string `json:"audio_method"`
 }
 
 func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
@@ -73,7 +74,7 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 		}
 
 		// Enhanced query with new columns - handle empty strings and NULLs properly
-        query := `
+		query := `
             WITH derived AS (
                 SELECT 
                     -- Per-stream derivation (no blanket fallback)
@@ -110,9 +111,9 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
         `
 
 		// Query for detailed sessions (only transcoding sessions)
-        // Select recent sessions where either stream actually transcodes (derived),
-        // regardless of the raw top-level play_method value.
-        sessionQuery := `
+		// Select recent sessions where either stream actually transcodes (derived),
+		// regardless of the raw top-level play_method value.
+		sessionQuery := `
             SELECT item_name, item_type, device_id, client_name, item_id, video_method, audio_method
             FROM (
                 SELECT 
@@ -147,7 +148,7 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 
 		rows, err := db.Query(query, days)
 		if err != nil {
-			log.Printf("[PlayMethods] Enhanced query failed: %v", err)
+			logging.Debug("Enhanced query failed: %v", err)
 			return legacyPlayMethods(c, db, days)
 		}
 		defer rows.Close()
@@ -168,18 +169,18 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 			"TranscodeSubtitle": 0,
 		}
 
-        // Store session details for frontend
-        var sessionDetails []SessionDetail
+		// Store session details for frontend
+		var sessionDetails []SessionDetail
 
 		// Process results with proper variable declarations
-        for rows.Next() {
-            var videoMethod, audioMethod, overallMethod string
-            var cnt int
+		for rows.Next() {
+			var videoMethod, audioMethod, overallMethod string
+			var cnt int
 
-            if err := rows.Scan(&videoMethod, &audioMethod, &overallMethod, &cnt); err != nil {
-                log.Printf("[PlayMethods] Scan error: %v", err)
-                continue
-            }
+			if err := rows.Scan(&videoMethod, &audioMethod, &overallMethod, &cnt); err != nil {
+				logging.Debug("Scan error: %v", err)
+				continue
+			}
 
 			// Normalize the methods to handle variations
 			normalizedVideo := normalize(videoMethod)
@@ -189,52 +190,52 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 			key := fmt.Sprintf("%s|%s", normalizedVideo, normalizedAudio)
 			methodBreakdown[key] = cnt
 
-            // Update variables for categorization logic
-            videoMethod = normalizedVideo
-            audioMethod = normalizedAudio
+			// Update variables for categorization logic
+			videoMethod = normalizedVideo
+			audioMethod = normalizedAudio
 
-            // We now use overallMethod returned from SQL to decide summary buckets
-            // but still count per-stream details for the bubbles.
-            if strings.EqualFold(overallMethod, "Transcode") {
-                summary["Transcode"] += cnt
-            } else {
-                summary["DirectPlay"] += cnt
-            }
+			// We now use overallMethod returned from SQL to decide summary buckets
+			// but still count per-stream details for the bubbles.
+			if strings.EqualFold(overallMethod, "Transcode") {
+				summary["Transcode"] += cnt
+			} else {
+				summary["DirectPlay"] += cnt
+			}
 
-            // Track detailed transcode reasons (per-stream)
-            if videoMethod == "Transcode" {
-                transcodeDetails["TranscodeVideo"] += cnt
-            }
-            if audioMethod == "Transcode" {
-                transcodeDetails["TranscodeAudio"] += cnt
-            }
-            // TODO: Add subtitle transcoding detection when available
+			// Track detailed transcode reasons (per-stream)
+			if videoMethod == "Transcode" {
+				transcodeDetails["TranscodeVideo"] += cnt
+			}
+			if audioMethod == "Transcode" {
+				transcodeDetails["TranscodeAudio"] += cnt
+			}
+			// TODO: Add subtitle transcoding detection when available
 		}
 
 		if err := rows.Err(); err != nil {
-			log.Printf("[PlayMethods] Rows error: %v", err)
+			logging.Debug("Rows error: %v", err)
 			return legacyPlayMethods(c, db, days)
 		}
 
 		// Fetch detailed session information for transcoding sessions
 		sessionRows, sessionErr := db.Query(sessionQuery, days)
 		if sessionErr != nil {
-			log.Printf("[PlayMethods] Session query failed: %v", sessionErr)
+			logging.Debug("Session query failed: %v", sessionErr)
 		} else {
 			defer sessionRows.Close()
 			for sessionRows.Next() {
 				var session SessionDetail
 				if err := sessionRows.Scan(&session.ItemName, &session.ItemType, &session.DeviceID,
 					&session.ClientName, &session.ItemID, &session.VideoMethod, &session.AudioMethod); err != nil {
-					log.Printf("[PlayMethods] Session scan error: %v", err)
+					logging.Debug("Session scan error: %v", err)
 					continue
 				}
 				sessionDetails = append(sessionDetails, session)
 			}
 		}
 
-        // Enrich item names for episodes: "Series - Episode (SxxExx)"
-        sessionDetails = enrichSessionDetails(sessionDetails, em)
+		// Enrich item names for episodes: "Series - Episode (SxxExx)"
+		sessionDetails = enrichSessionDetails(sessionDetails, em)
 
 		// Ensure we have the basic methods even if not in data
 		if summary["DirectPlay"] == 0 && summary["Transcode"] == 0 {
@@ -266,7 +267,7 @@ func legacyPlayMethods(c fiber.Ctx, db *sql.DB, days int) error {
 
 	rows, err := db.Query(query, days)
 	if err != nil {
-		log.Printf("[PlayMethods] Legacy query failed: %v", err)
+		logging.Debug("Legacy query failed: %v", err)
 		// Return empty data instead of error
 		return c.JSON(fiber.Map{
 			"methods": map[string]int{
@@ -297,7 +298,7 @@ func legacyPlayMethods(c fiber.Ctx, db *sql.DB, days int) error {
 		var raw string
 		var cnt int
 		if err := rows.Scan(&raw, &cnt); err != nil {
-			log.Printf("[PlayMethods] Legacy scan error: %v", err)
+			logging.Debug("Legacy scan error: %v", err)
 			continue
 		}
 		normalized := normalize(raw)
@@ -312,7 +313,7 @@ func legacyPlayMethods(c fiber.Ctx, db *sql.DB, days int) error {
 	}
 
 	if err := rows.Err(); err != nil {
-		log.Printf("[PlayMethods] Legacy rows error: %v", err)
+		logging.Debug("Legacy rows error: %v", err)
 	}
 
 	// Return in the format expected by frontend
@@ -327,67 +328,67 @@ func legacyPlayMethods(c fiber.Ctx, db *sql.DB, days int) error {
 
 // enrichSessionDetails updates ItemName for episodes to "Series - Episode (SxxExx)"
 func enrichSessionDetails(details []SessionDetail, em *emby.Client) []SessionDetail {
-    if em == nil || len(details) == 0 {
-        return details
-    }
-    // Collect unique item IDs
-    idSet := make(map[string]struct{})
-    for _, d := range details {
-        if d.ItemID != "" {
-            idSet[d.ItemID] = struct{}{}
-        }
-    }
-    if len(idSet) == 0 {
-        return details
-    }
-    ids := make([]string, 0, len(idSet))
-    for id := range idSet {
-        ids = append(ids, id)
-    }
-    items, err := em.ItemsByIDs(ids)
-    if err != nil {
-        // Best effort; return unmodified on error
-        return details
-    }
-    byID := make(map[string]*emby.EmbyItem, len(items))
-    for i := range items {
-        it := items[i]
-        byID[it.Id] = &it
-    }
-    for i := range details {
-        d := &details[i]
-        it, ok := byID[d.ItemID]
-        if !ok || it == nil {
-            continue
-        }
-        // Normalize type if missing
-        if d.ItemType == "" && it.Type != "" {
-            d.ItemType = it.Type
-        }
-        if strings.EqualFold(it.Type, "Episode") {
-            // Use canonical episode name
-            epTitle := it.Name
-            series := it.SeriesName
-            epcode := ""
-            if it.ParentIndexNumber != nil && it.IndexNumber != nil {
-                epcode = fmt.Sprintf("S%02dE%02d", *it.ParentIndexNumber, *it.IndexNumber)
-            }
-            if series != "" && epTitle != "" && epcode != "" {
-                d.ItemName = fmt.Sprintf("%s - %s (%s)", series, epTitle, epcode)
-            } else if series != "" && epTitle != "" {
-                d.ItemName = fmt.Sprintf("%s - %s", series, epTitle)
-            } else if epTitle != "" {
-                d.ItemName = epTitle
-            }
-            if d.ItemType == "" {
-                d.ItemType = "Episode"
-            }
-        } else if it.Name != "" {
-            d.ItemName = it.Name
-            if d.ItemType == "" && it.Type != "" {
-                d.ItemType = it.Type
-            }
-        }
-    }
-    return details
+	if em == nil || len(details) == 0 {
+		return details
+	}
+	// Collect unique item IDs
+	idSet := make(map[string]struct{})
+	for _, d := range details {
+		if d.ItemID != "" {
+			idSet[d.ItemID] = struct{}{}
+		}
+	}
+	if len(idSet) == 0 {
+		return details
+	}
+	ids := make([]string, 0, len(idSet))
+	for id := range idSet {
+		ids = append(ids, id)
+	}
+	items, err := em.ItemsByIDs(ids)
+	if err != nil {
+		// Best effort; return unmodified on error
+		return details
+	}
+	byID := make(map[string]*emby.EmbyItem, len(items))
+	for i := range items {
+		it := items[i]
+		byID[it.Id] = &it
+	}
+	for i := range details {
+		d := &details[i]
+		it, ok := byID[d.ItemID]
+		if !ok || it == nil {
+			continue
+		}
+		// Normalize type if missing
+		if d.ItemType == "" && it.Type != "" {
+			d.ItemType = it.Type
+		}
+		if strings.EqualFold(it.Type, "Episode") {
+			// Use canonical episode name
+			epTitle := it.Name
+			series := it.SeriesName
+			epcode := ""
+			if it.ParentIndexNumber != nil && it.IndexNumber != nil {
+				epcode = fmt.Sprintf("S%02dE%02d", *it.ParentIndexNumber, *it.IndexNumber)
+			}
+			if series != "" && epTitle != "" && epcode != "" {
+				d.ItemName = fmt.Sprintf("%s - %s (%s)", series, epTitle, epcode)
+			} else if series != "" && epTitle != "" {
+				d.ItemName = fmt.Sprintf("%s - %s", series, epTitle)
+			} else if epTitle != "" {
+				d.ItemName = epTitle
+			}
+			if d.ItemType == "" {
+				d.ItemType = "Episode"
+			}
+		} else if it.Name != "" {
+			d.ItemName = it.Name
+			if d.ItemType == "" && it.Type != "" {
+				d.ItemType = it.Type
+			}
+		}
+	}
+	return details
 }

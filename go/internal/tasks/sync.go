@@ -1,9 +1,9 @@
 package tasks
 
 import (
+	"emby-analytics/internal/logging"
 	"database/sql"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -12,7 +12,7 @@ import (
 )
 
 func StartSyncLoop(db *sql.DB, em *emby.Client, cfg config.Config) {
-	log.Printf("[sync] starting play sync loop with interval %d seconds", cfg.SyncIntervalSec)
+	logging.Debug("starting play sync loop with interval %d seconds", cfg.SyncIntervalSec)
 
 	ticker := time.NewTicker(time.Duration(cfg.SyncIntervalSec) * time.Second)
 	defer ticker.Stop()
@@ -37,14 +37,14 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 
 	if isFirstSync {
 		historyDays = 0 // 0 = unlimited history collection
-		log.Printf("[sync] First sync detected (%d existing events) - collecting ALL history", existingEvents)
+		logging.Debug("First sync detected (%d existing events) - collecting ALL history", existingEvents)
 	}
 
 	// Step 2: active sessions
 	sessions, err := em.GetActiveSessions()
 	apiCalls++ // Count the GetActiveSessions API call
 	if err != nil {
-		log.Println("sync error:", err)
+		logging.Debug("sync error:", err)
 	} else {
 		for _, s := range sessions {
 			// upsert user and current item
@@ -74,7 +74,7 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 	// Step 3: backfill from user history (use unlimited history on first sync)
 	rows, err := db.Query(`SELECT id, name FROM emby_user`)
 	if err != nil {
-		log.Println("sync user list error:", err)
+		logging.Debug("sync user list error:", err)
 		return
 	}
 	defer rows.Close()
@@ -93,13 +93,13 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 		userCount++
 
 		if isFirstSync {
-			log.Printf("[sync] Collecting ALL history for user: %s", uname.String)
+			logging.Debug("Collecting ALL history for user: %s", uname.String)
 		}
 
 		history, err := em.GetUserPlayHistory(uid.String, historyDays)
 		apiCalls++ // Count each GetUserPlayHistory API call
 		if err != nil {
-			log.Printf("history error for %s: %v\n", uid.String, err)
+			logging.Debug("history error for %s: %v\n", uid.String, err)
 			continue
 		}
 
@@ -138,7 +138,7 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 		}
 
 		if isFirstSync && userEvents > 0 {
-			log.Printf("[sync] User %s: collected %d historical events", uname.String, userEvents)
+			logging.Debug("User %s: collected %d historical events", uname.String, userEvents)
 		}
 	}
 
@@ -149,7 +149,7 @@ func runSync(db *sql.DB, em *emby.Client, cfg config.Config) {
 		if isFirstSync {
 			logMsg += " (FULL HISTORY COLLECTION)"
 		}
-		log.Println(logMsg)
+		logging.Debug(logMsg)
 	}
 }
 

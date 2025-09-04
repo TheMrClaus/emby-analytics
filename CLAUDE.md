@@ -145,3 +145,6 @@ The SQLite database includes tables for:
 - Frontend development server proxies API calls to the Go backend on port 8080
 - Use the `/health` endpoints to verify Emby connectivity during development
 - Admin endpoints provide manual control over data sync and refresh operations
+## Sessions System Behaviors
+
+@CLAUDE.sessions.md

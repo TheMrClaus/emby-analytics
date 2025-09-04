@@ -1,12 +1,12 @@
 package now
 
 import (
+	"emby-analytics/internal/logging"
 	"bufio"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html"
-	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -413,7 +413,7 @@ func Snapshot(c fiber.Ctx) error {
 
 // Stream pushes snapshots periodically via SSE (default message events).
 func Stream(c fiber.Ctx) error {
-	log.Printf("[now] SSE client connected from %s", c.IP())
+	logging.Debug("SSE client connected from %s", c.IP())
 
 	// SSE/CORS headers
 	c.Set("Content-Type", "text/event-stream")
@@ -443,7 +443,7 @@ func Stream(c fiber.Ctx) error {
 	defer func() {
 		dataTicker.Stop()
 		keepaliveTicker.Stop()
-		log.Printf("[now] SSE client disconnected from %s", c.IP())
+		logging.Debug("SSE client disconnected from %s", c.IP())
 	}()
 
 	// Send initial connection event
@@ -457,7 +457,7 @@ func Stream(c fiber.Ctx) error {
 	send := func() bool {
 		sessions, err := em.GetActiveSessions()
 		if err != nil {
-			log.Printf("[now] get sessions: %v", err)
+			logging.Debug("get sessions: %v", err)
 			// Send error event to client but continue
 			if _, err := w.WriteString("event: error\ndata: {\"error\":\"Failed to fetch sessions\"}\n\n"); err != nil {
 				return false
@@ -694,7 +694,7 @@ func MessageSession(c fiber.Ctx) error {
 	}
 
 	// Log the message attempt for security monitoring
-	log.Printf("[SECURITY] Message sent to session %s: header='%s' text='%s'",
+	logging.Debug("[SECURITY] Message sent to session %s: header='%s' text='%s'",
 		id, body.Header, body.Text)
 
 	if err := em.SendMessage(id, body.Header, body.Text, body.TimeoutMs); err != nil {
@@ -705,4 +705,4 @@ func MessageSession(c fiber.Ctx) error {
 
 // Dummy references so the compiler keeps these imports if unneeded here.
 var _ = sql.ErrNoRows
-var _ = log.Printf
+var _ = logging.Debug

@@ -2,23 +2,23 @@ package now
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
 
 	"emby-analytics/internal/emby"
+	"emby-analytics/internal/logging"
 
 	ws "github.com/saveblush/gofiber3-contrib/websocket"
 )
 
 // Broadcaster manages a single Emby API poller and broadcasts to multiple WebSocket clients
 type Broadcaster struct {
-	mu                  sync.RWMutex
-	clients             map[*ws.Conn]bool
-	embyClient          *emby.Client
-	interval            time.Duration
-	ctx                 context.Context
-	cancel              context.CancelFunc
+	mu               sync.RWMutex
+	clients          map[*ws.Conn]bool
+	embyClient       *emby.Client
+	interval         time.Duration
+	ctx              context.Context
+	cancel           context.CancelFunc
 	SessionProcessor func(activeSessions []emby.EmbySession) // NEW: callback for hybrid session processing
 }
 
@@ -99,7 +99,7 @@ func (b *Broadcaster) broadcast() {
 	// MODIFIED: Fetch entries first. If it fails, do not broadcast.
 	entries, err := b.fetchNowPlayingEntries()
 	if err != nil {
-		log.Printf("[broadcaster] failed to fetch now playing data, skipping broadcast: %v", err)
+		logging.Debug("failed to fetch now playing data, skipping broadcast: %v", err)
 		return // Do nothing on error
 	}
 
@@ -119,7 +119,7 @@ func (b *Broadcaster) broadcast() {
 func (b *Broadcaster) sendToClient(conn *ws.Conn) {
 	entries, err := b.fetchNowPlayingEntries()
 	if err != nil {
-		log.Printf("[broadcaster] failed to send initial snapshot to client: %v", err)
+		logging.Debug("failed to send initial snapshot to client: %v", err)
 		// Don't send anything if the initial fetch fails
 		return
 	}
@@ -142,7 +142,7 @@ func (b *Broadcaster) fetchNowPlayingEntries() ([]NowEntry, error) {
 
 	// NEW: Process sessions using hybrid state-polling approach (like playback_reporting plugin)
 	if b.SessionProcessor != nil {
-		log.Printf("[broadcaster] Found %d active sessions from Emby API", len(sessions))
+		logging.Debug("Found active sessions from Emby API", "count", len(sessions))
 		b.SessionProcessor(sessions) // Pass the full session list for processing
 	}
 
@@ -155,19 +155,29 @@ func (b *Broadcaster) fetchNowPlayingEntries() ([]NowEntry, error) {
 			pct = float64(s.PosTicks) / float64(s.DurationTicks) * 100
 		}
 		entries = append(entries, NowEntry{
-			Timestamp:      nowTime,
-			Title:          s.ItemName,
-			User:           s.UserName,
-			App:            s.App,
-			Device:         s.Device,
-			PlayMethod:     s.PlayMethod,
-			Video:          videoDetailFromSession(s),
-			Audio:          audioDetailFromSession(s),
-			Subs:           s.SubLang,
-			Bitrate:        s.Bitrate,
-			ProgressPct:    pct,
-			PositionSec:    func() int64 { if s.PosTicks>0 { return s.PosTicks / 10_000_000 }; return 0 }(),
-			DurationSec:    func() int64 { if s.DurationTicks>0 { return s.DurationTicks / 10_000_000 }; return 0 }(),
+			Timestamp:   nowTime,
+			Title:       s.ItemName,
+			User:        s.UserName,
+			App:         s.App,
+			Device:      s.Device,
+			PlayMethod:  s.PlayMethod,
+			Video:       videoDetailFromSession(s),
+			Audio:       audioDetailFromSession(s),
+			Subs:        s.SubLang,
+			Bitrate:     s.Bitrate,
+			ProgressPct: pct,
+			PositionSec: func() int64 {
+				if s.PosTicks > 0 {
+					return s.PosTicks / 10_000_000
+				}
+				return 0
+			}(),
+			DurationSec: func() int64 {
+				if s.DurationTicks > 0 {
+					return s.DurationTicks / 10_000_000
+				}
+				return 0
+			}(),
 			Poster:         "/img/primary/" + s.ItemID,
 			SessionID:      s.SessionID,
 			ItemID:         s.ItemID,

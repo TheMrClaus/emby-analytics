@@ -1,9 +1,9 @@
 package tasks
 
 import (
+	"emby-analytics/internal/logging"
 	"database/sql"
 	"encoding/json"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -68,21 +68,21 @@ func GetLiveItemWatchTimes() map[string]float64 {
 func sessionKey(sessionID, itemID string) string { return sessionID + "|" + itemID }
 
 func (iz *Intervalizer) Handle(evt emby.EmbyEvent) {
-	log.Printf("[intervalizer] Received event: %s", evt.MessageType)
+	logging.Debug("Received event: %s", evt.MessageType)
 
 	LiveMutex.Lock()
 	defer LiveMutex.Unlock()
 	var data emby.PlaybackProgressData
 	if err := json.Unmarshal(evt.Data, &data); err != nil {
-		log.Printf("[intervalizer] JSON unmarshal error: %v", err)
+		logging.Debug("JSON unmarshal error: %v", err)
 		return
 	}
 	if data.NowPlaying.ID == "" {
-		log.Printf("[intervalizer] Empty NowPlaying.ID, skipping event")
+		logging.Debug("[intervalizer] Empty NowPlaying.ID, skipping event")
 		return
 	}
 
-	log.Printf("[intervalizer] Processing %s for user %s, item %s", evt.MessageType, data.UserID, data.NowPlaying.Name)
+	logging.Debug("Processing %s for user %s, item %s", evt.MessageType, data.UserID, data.NowPlaying.Name)
 
 	switch evt.MessageType {
 	case "PlaybackStart":
@@ -92,21 +92,21 @@ func (iz *Intervalizer) Handle(evt emby.EmbyEvent) {
 	case "PlaybackStopped":
 		iz.onStop(data)
 	default:
-		log.Printf("[intervalizer] Unhandled event type: %s", evt.MessageType)
+		logging.Debug("Unhandled event type: %s", evt.MessageType)
 	}
 }
 
 func (iz *Intervalizer) onStart(d emby.PlaybackProgressData) {
-	log.Printf("[intervalizer] onStart called for user %s, item %s, session %s", d.UserID, d.NowPlaying.Name, d.SessionID)
+	logging.Debug("onStart called for user %s, item %s, session %s", d.UserID, d.NowPlaying.Name, d.SessionID)
 
 	k := sessionKey(d.SessionID, d.NowPlaying.ID)
 	now := time.Now().UTC()
 	sessionFK, err := upsertSession(iz.DB, d)
 	if err != nil {
-		log.Printf("[intervalizer] onStart upsertSession failed: %v", err)
+		logging.Debug("onStart upsertSession failed: %v", err)
 		return
 	}
-	log.Printf("[intervalizer] onStart created session FK: %d", sessionFK)
+	logging.Debug("onStart created session FK: %d", sessionFK)
 
 	insertEvent(iz.DB, sessionFK, "start", d.PlayState.IsPaused, d.PlayState.PositionTicks)
 	s := &liveState{
@@ -121,7 +121,7 @@ func (iz *Intervalizer) onStart(d emby.PlaybackProgressData) {
 		IsIntervalOpen: false,
 	}
 	LiveSessions[k] = s
-	log.Printf("[intervalizer] onStart complete, added to LiveSessions: %s", k)
+	logging.Debug("onStart complete, added to LiveSessions: %s", k)
 }
 
 func (iz *Intervalizer) onProgress(d emby.PlaybackProgressData) {
@@ -191,7 +191,7 @@ func (iz *Intervalizer) DetectStoppedSessions(activeSessionKeys map[string]bool)
 	LiveMutex.Lock()
 	defer LiveMutex.Unlock()
 	
-	log.Printf("[intervalizer] DetectStoppedSessions called with %d active sessions, %d live sessions", len(activeSessionKeys), len(LiveSessions))
+	logging.Debug("DetectStoppedSessions called with %d active sessions, %d live sessions", len(activeSessionKeys), len(LiveSessions))
 	
 	for liveSessionKey, liveSession := range LiveSessions {
 		// Check if this session is still active by SessionID only
@@ -206,7 +206,7 @@ func (iz *Intervalizer) DetectStoppedSessions(activeSessionKeys map[string]bool)
 		
 		// If this live session is not in the current active sessions, it has stopped
 		if !sessionFound {
-			log.Printf("[intervalizer] Detected stopped session: %s (user: %s)", liveSessionKey, liveSession.UserID)
+			logging.Debug("Detected stopped session: %s (user: %s)", liveSessionKey, liveSession.UserID)
 			
 			// Create synthetic PlaybackStopped event data
 			stoppedData := emby.PlaybackProgressData{
@@ -239,12 +239,12 @@ func (iz *Intervalizer) DetectStoppedSessions(activeSessionKeys map[string]bool)
 			
 			data, err := json.Marshal(stoppedData)
 			if err != nil {
-				log.Printf("[intervalizer] Failed to marshal stopped data: %v", err)
+				logging.Debug("Failed to marshal stopped data: %v", err)
 				continue
 			}
 			syntheticStopEvent.Data = json.RawMessage(data)
 			
-			log.Printf("[intervalizer] Created synthetic PlaybackStopped for session %s", liveSessionKey)
+			logging.Debug("Created synthetic PlaybackStopped for session %s", liveSessionKey)
 			iz.Handle(syntheticStopEvent)
 		}
 	}
@@ -256,7 +256,7 @@ func (iz *Intervalizer) TickTimeoutSweep() {
 	now := time.Now().UTC()
 	for k, s := range LiveSessions {
 		if now.Sub(s.LastEventTS) >= iz.NoProgressTimeout {
-			log.Printf("[intervalizer] timing out session %s", k)
+			logging.Debug("timing out session %s", k)
 			if s.IsIntervalOpen {
 				iz.closeInterval(s, s.IntervalStartTS, s.LastEventTS, s.IntervalStartPos, s.LastPosTicks, false)
 			}
@@ -279,7 +279,7 @@ func (iz *Intervalizer) closeInterval(s *liveState, start time.Time, end time.Ti
 		WHERE id = ?
 	`, start.Unix(), end.Unix(), startPos, endPos, dur, boolToInt(seeked), s.SessionFK)
 	if err != nil {
-		log.Printf("[intervalizer] failed to insert interval: %v", err)
+		logging.Debug("failed to insert interval: %v", err)
 	}
 	s.IsIntervalOpen = false
 }
@@ -341,7 +341,7 @@ func upsertSession(db *sql.DB, d emby.PlaybackProgressData) (int64, error) {
 func insertEvent(db *sql.DB, fk int64, kind string, paused bool, pos int64) {
 	_, err := db.Exec(`INSERT INTO play_events(session_fk, kind, is_paused, position_ticks, created_at) VALUES(?,?,?,?,?)`, fk, kind, boolToInt(paused), pos, time.Now().UTC().Unix())
 	if err != nil {
-		log.Printf("[intervalizer] failed to insert event: %v", err)
+		logging.Debug("failed to insert event: %v", err)
 	}
 }
 func boolToInt(b bool) int {

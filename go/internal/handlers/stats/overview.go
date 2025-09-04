@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"emby-analytics/internal/handlers/admin"
+
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -58,7 +59,7 @@ func Overview(db *sql.DB) fiber.Handler {
 		// Track metrics
 		admin.IncrementQueryMetrics(duration, isSlowQuery)
 
-		log.Printf("[overview] Successfully fetched data in %v: users=%d, items=%d, plays=%d, unique=%d", 
+		log.Printf("[overview] Successfully fetched data in %v: users=%d, items=%d, plays=%d, unique=%d",
 			duration, data.TotalUsers, data.TotalItems, data.TotalPlays, data.UniquePlays)
 
 		return c.JSON(data)

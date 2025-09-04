@@ -1,8 +1,8 @@
 package health
 
 import (
+	"emby-analytics/internal/logging"
 	"database/sql"
-	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -58,7 +58,7 @@ func Health(db *sql.DB) fiber.Handler {
 			status.OK = false
 			status.Database.OK = false
 			status.Database.Error = err.Error()
-			log.Printf("[health] Database ping failed: %v", err)
+			logging.Debug("Database ping failed: %v", err)
 		} else {
 			status.Database.OK = true
 			
@@ -131,7 +131,7 @@ func Health(db *sql.DB) fiber.Handler {
 			status.OK = false
 		}
 
-		log.Printf("[health] Health check completed in %v, status=%t", queryDuration, status.OK)
+		logging.Debug("Health check completed in %v, status=%t", queryDuration, status.OK)
 
 		// Return appropriate HTTP status
 		if !status.OK {

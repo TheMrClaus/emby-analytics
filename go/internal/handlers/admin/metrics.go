@@ -1,8 +1,8 @@
 package admin
 
 import (
+	"emby-analytics/internal/logging"
 	"database/sql"
-	"log"
 	"runtime"
 	"time"
 
@@ -126,7 +126,7 @@ func SystemMetricsHandler(db *sql.DB) fiber.Handler {
 		}
 
 		// Log metrics periodically
-		log.Printf("[metrics] DB connections: open=%d, in_use=%d, idle=%d, wait_count=%d",
+		logging.Debug("[metrics] DB connections: open=%d, in_use=%d, idle=%d, wait_count=%d",
 			metrics.Database.OpenConnections,
 			metrics.Database.InUse, 
 			metrics.Database.Idle,
