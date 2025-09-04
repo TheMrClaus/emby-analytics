@@ -16,7 +16,6 @@ data/
 go/web/
 go/emby-analytics
 go/.gocache/
-go/test-emby-analytics
 
 # Secrets
 .env
