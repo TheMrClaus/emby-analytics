@@ -146,6 +146,7 @@ type EmbyItem struct {
 	SeriesName        string `json:"SeriesName"`
 	ParentIndexNumber *int   `json:"ParentIndexNumber"` // season
 	IndexNumber       *int   `json:"IndexNumber"`       // episode
+	ProductionYear    *int   `json:"ProductionYear"`    // year for movies
 }
 
 type embyItemsResp struct {
