@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -17,10 +18,12 @@ func Open(path string) (*sql.DB, error) {
     // - WAL enables readers during writes
     // - busy_timeout retries briefly on lock contention instead of failing immediately
     // - synchronous=NORMAL is a good balance for WAL
-    _, _ = db.Exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA synchronous=NORMAL;`)
-    // Limit concurrent connections to avoid SQLITE_BUSY under write load
-    db.SetMaxOpenConns(1)
-    db.SetMaxIdleConns(1)
+    _, _ = db.Exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=10000; PRAGMA synchronous=NORMAL;`)
+    // Increase connection pool for better concurrent access
+    // SQLite in WAL mode supports multiple concurrent readers
+    db.SetMaxOpenConns(10)
+    db.SetMaxIdleConns(5)
+    db.SetConnMaxLifetime(time.Hour)
     DB = db
     return db, nil
 }

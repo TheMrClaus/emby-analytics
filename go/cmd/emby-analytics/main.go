@@ -174,6 +174,7 @@ func main() {
 	// Health Routes
 	app.Get("/health", health.Health(sqlDB))
 	app.Get("/health/emby", health.Emby(em))
+	app.Get("/health/frontend", health.FrontendHealth(sqlDB))
 	// Stats API Routes
 	app.Get("/stats/overview", stats.Overview(sqlDB))
 	app.Get("/stats/usage", stats.Usage(sqlDB))
@@ -287,6 +288,9 @@ func main() {
 		}
 		return c.JSON(stats)
 	})
+
+	// System metrics endpoint (protected)
+	app.Get("/admin/metrics", adminAuth, admin.SystemMetricsHandler(sqlDB))
 
 	// Start Server
 	addr := ":8080"

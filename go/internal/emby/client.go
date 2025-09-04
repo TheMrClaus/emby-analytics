@@ -65,6 +65,43 @@ func readJSON(resp *http.Response, dst any) error {
 	return nil
 }
 
+// doWithRetry performs HTTP request with exponential backoff retry
+func (c *Client) doWithRetry(req *http.Request, maxRetries int) (*http.Response, error) {
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// Clone the request for retry attempts
+		var reqClone *http.Request
+		if attempt > 0 {
+			reqClone = req.Clone(req.Context())
+		} else {
+			reqClone = req
+		}
+
+		resp, err := c.http.Do(reqClone)
+		if err == nil && resp.StatusCode < 500 {
+			// Success or client error (don't retry client errors)
+			return resp, nil
+		}
+		
+		if resp != nil {
+			resp.Body.Close()
+		}
+		
+		lastErr = err
+		if err == nil {
+			lastErr = fmt.Errorf("server error: %d", resp.StatusCode)
+		}
+		
+		if attempt < maxRetries {
+			// Exponential backoff: 1s, 2s, 4s, 8s
+			backoff := time.Duration(1<<uint(attempt)) * time.Second
+			time.Sleep(backoff)
+		}
+	}
+	
+	return nil, fmt.Errorf("request failed after %d attempts: %w", maxRetries+1, lastErr)
+}
+
 //
 // ---------- Client ----------
 //
@@ -83,7 +120,12 @@ func New(baseURL, apiKey string) *Client {
 		APIKey:   apiKey,
 		cacheTTL: time.Hour, // 1 hour TTL
 		http: &http.Client{
-			Timeout: 15 * time.Second,
+			Timeout: 30 * time.Second, // Increased from 15s to 30s
+			Transport: &http.Transport{
+				MaxIdleConns:        10,
+				IdleConnTimeout:     30 * time.Second,
+				DisableCompression:  false,
+			},
 		},
 	}
 }
@@ -185,7 +227,7 @@ func (c *Client) ItemsByIDs(ids []string) ([]EmbyItem, error) {
 	req, _ := http.NewRequest("GET", endpoint+"?"+q.Encode(), nil)
 	req.Header.Set("X-Emby-Token", c.APIKey)
 
-	resp, err := c.http.Do(req)
+	resp, err := c.doWithRetry(req, 2) // Retry up to 2 times
 	if err != nil {
 		return nil, err
 	}
@@ -743,7 +785,7 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 	// Some setups prefer header token; keep header for compatibility.
 	req.Header.Set("X-Emby-Token", c.APIKey)
 
-	resp, err := c.http.Do(req)
+	resp, err := c.doWithRetry(req, 2) // Retry up to 2 times
 	if err != nil {
 		return nil, err
 	}

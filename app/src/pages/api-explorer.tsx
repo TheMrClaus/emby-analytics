@@ -36,6 +36,7 @@ const endpoints: Endpoint[] = [
   // Health
   { id: 'health', category: 'Health', method: 'GET', path: '/health', description: 'Backend health and DB status.', usage: 'Quick sanity check the app is running.' },
   { id: 'health-emby', category: 'Health', method: 'GET', path: '/health/emby', description: 'Connectivity to Emby and API key validity.', usage: 'Verify Emby base URL/API key work.' },
+  { id: 'health-frontend', category: 'Health', method: 'GET', path: '/health/frontend', description: 'Frontend data pipeline health check.', usage: 'Test complete data flow from DB to UI.' },
 
   // Config
   { id: 'config', category: 'Config', method: 'GET', path: '/config', description: 'Returns UI config like Emby external URL and Server ID.', usage: 'Used by UI deep-links to Emby.' },
@@ -50,7 +51,10 @@ const endpoints: Endpoint[] = [
   { id: 'stats-active-users', category: 'Stats', method: 'GET', path: '/stats/active-users', description: 'Most active users (lifetime).', usage: 'All-time user totals.' },
   { id: 'stats-users-total', category: 'Stats', method: 'GET', path: '/stats/users/total', description: 'Total number of users known.', usage: 'Count users in DB.' },
   { id: 'stats-user-id', category: 'Stats', method: 'GET', path: '/stats/user/:id', description: 'Details for one user.', usage: 'Per-user drilldown.', params: [{ key: 'id', kind: 'path', required: true, placeholder: 'emby-user-id' }] },
+  { id: 'stats-user-watch-time', category: 'Stats', method: 'GET', path: '/stats/user/:id/watch-time', description: 'Watch time breakdown for specific user.', usage: 'Per-user time analysis.', params: [{ key: 'id', kind: 'path', required: true, placeholder: 'emby-user-id' }] },
+  { id: 'stats-users-watch-time', category: 'Stats', method: 'GET', path: '/stats/users/watch-time', description: 'Watch time breakdown for all users.', usage: 'All users time analysis.' },
   { id: 'stats-play-methods', category: 'Stats', method: 'GET', path: '/stats/play-methods', description: 'Playback methods summary and recent transcodes.', usage: 'DirectPlay vs Transcode, with per-stream breakdown.', params: [{ key: 'days', kind: 'query', placeholder: '30' }] },
+  { id: 'stats-playback-methods', category: 'Stats', method: 'GET', path: '/stats/playback-methods', description: 'Playback methods (backward compatibility alias).', usage: 'Same as play-methods endpoint.', params: [{ key: 'days', kind: 'query', placeholder: '30' }] },
   { id: 'stats-items-by-codec', category: 'Stats', method: 'GET', path: '/stats/items/by-codec/:codec', description: 'List items by codec.', usage: 'Inventory by codec.', params: [{ key: 'codec', kind: 'path', required: true, placeholder: 'H264' }, { key: 'page', kind: 'query', placeholder: '1' }, { key: 'page_size', kind: 'query', placeholder: '50' }, { key: 'media_type', kind: 'query', placeholder: 'Movie|Episode' }] },
   { id: 'stats-items-by-quality', category: 'Stats', method: 'GET', path: '/stats/items/by-quality/:quality', description: 'List items by quality bucket.', usage: 'Inventory by resolution.', params: [{ key: 'quality', kind: 'path', required: true, placeholder: '4K|1080p|720p' }, { key: 'page', kind: 'query', placeholder: '1' }, { key: 'page_size', kind: 'query', placeholder: '50' }, { key: 'media_type', kind: 'query', placeholder: 'Movie|Episode' }] },
 
@@ -58,6 +62,9 @@ const endpoints: Endpoint[] = [
   { id: 'items-by-ids', category: 'Items', method: 'GET', path: '/items/by-ids', description: 'Batch item fetch by Emby IDs.', usage: 'Resolve names and types for item IDs.', params: [{ key: 'ids', kind: 'query', required: true, placeholder: 'id1,id2,id3' }] },
   { id: 'img-primary', category: 'Images', method: 'GET', path: '/img/primary/:id', description: 'Primary poster image.', usage: 'Direct image link for posters.', params: [{ key: 'id', kind: 'path', required: true, placeholder: 'item-id' }], binary: true },
   { id: 'img-backdrop', category: 'Images', method: 'GET', path: '/img/backdrop/:id', description: 'Backdrop (fanart) image.', usage: 'Direct image link for backdrops.', params: [{ key: 'id', kind: 'path', required: true, placeholder: 'item-id' }], binary: true },
+
+  // Settings (API)
+  { id: 'api-settings', category: 'Settings', method: 'GET', path: '/api/settings', description: 'Get application settings.', usage: 'Retrieve current settings configuration.' },
 
   // Now Playing
   { id: 'now-snapshot', category: 'Now', method: 'GET', path: '/now/snapshot', description: 'Current active sessions snapshot.', usage: 'Populate Now Playing card.' },
@@ -95,8 +102,11 @@ const endpoints: Endpoint[] = [
 
   // Admin - Debug (added)
   { id: 'admin-debug-sessions', category: 'Admin', method: 'GET', path: '/admin/debug/sessions', description: 'List recent play_sessions with flexible filters.', usage: 'Troubleshoot session storage.', params: [{ key: 'q', kind: 'query', placeholder: 'title substring' }, { key: 'session_id', kind: 'query', placeholder: 'session id' }, { key: 'item_id', kind: 'query', placeholder: 'item id' }, { key: 'days', kind: 'query', placeholder: '1' }, { key: 'activeOnly', kind: 'query', placeholder: 'true|false' }, { key: 'limit', kind: 'query', placeholder: '100' }] },
-  { id: 'admin-debug-emby-sessions', category: 'Admin', method: 'GET', path: '/admin/debug/emby-sessions', description: 'Current sessions direct from Emby.', usage: 'Compare Emby vs DB.', },
+  { id: 'admin-debug-emby-sessions', category: 'Admin', method: 'GET', path: '/admin/debug/emby-sessions', description: 'Current sessions direct from Emby.', usage: 'Compare Emby vs DB.' },
   { id: 'admin-debug-ingest-active', category: 'Admin', method: 'POST', path: '/admin/debug/ingest-active', description: 'Upsert rows for current active sessions.', usage: 'Backfill when an item switch was missed.', dangerous: false },
+
+  // Admin - System monitoring (newly added)
+  { id: 'admin-metrics', category: 'Admin', method: 'GET', path: '/admin/metrics', description: 'System performance metrics and database connection pool stats.', usage: 'Monitor system health and performance. Protected.' },
 ];
 
 function substitutePath(path: string, values: Record<string, string>) {
