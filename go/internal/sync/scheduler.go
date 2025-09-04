@@ -3,10 +3,10 @@ package sync
 import (
     "context"
     "database/sql"
-    "log"
     "time"
 
     "emby-analytics/internal/emby"
+    "emby-analytics/internal/logging"
 )
 
 // Scheduler manages automatic sync operations
@@ -32,7 +32,7 @@ func NewScheduler(db *sql.DB, em *emby.Client, rm RefreshManager) *Scheduler {
 
 // Start begins the automatic sync scheduling
 func (s *Scheduler) Start() {
-    log.Println("[scheduler] 🕐 Starting smart sync scheduler")
+    logging.Info("Starting smart sync scheduler")
     
     // Start incremental sync ticker (every 5 minutes)
     incrementalTicker := time.NewTicker(5 * time.Minute)
@@ -54,20 +54,20 @@ func (s *Scheduler) Start() {
 		for {
 			select {
 			case <-s.ctx.Done():
-				log.Println("[scheduler] 🛑 Sync scheduler stopped")
+				logging.Info("Sync scheduler stopped")
 				return
 				
 			case <-initialTimer.C:
-				log.Println("[scheduler] 🔄 Running initial incremental sync")
+				logging.Info("Running initial incremental sync")
 				s.runIncrementalSync()
 				
             case <-incrementalTicker.C:
-                log.Println("[scheduler] 🔄 Running scheduled incremental sync")
+                logging.Info("Running scheduled incremental sync")
                 s.runIncrementalSync()
                 
             case <-dailyTicker.C:
                 if s.shouldRunDailySync() {
-                    log.Println("[scheduler] 🌙 Running nightly full sync")
+                    logging.Info("Running nightly full sync")
                     s.runFullSync()
                 }
 
@@ -90,18 +90,18 @@ func (s *Scheduler) runIncrementalSync() {
 	// Check if refresh manager is already running
 	status := s.rm.Get()
 	if status.Running {
-		log.Println("[scheduler] ⏸️  Skipping incremental sync - refresh already running")
+		logging.Debug("Skipping incremental sync - refresh already running")
 		return
 	}
 	
 	// Check if last incremental sync was recent (avoid too frequent syncs)
 	lastSync, err := GetLastSyncTime(s.db, SyncTypeLibraryIncremental)
 	if err == nil && time.Since(*lastSync) < 2*time.Minute {
-		log.Println("[scheduler] ⏸️  Skipping incremental sync - too recent")
+		logging.Debug("Skipping incremental sync - too recent")
 		return
 	}
 	
-	log.Println("[scheduler] ⚡ Starting incremental sync")
+	logging.Info("Starting incremental sync")
 	s.rm.StartIncremental(s.db, s.em)
 }
 
@@ -110,11 +110,11 @@ func (s *Scheduler) runFullSync() {
 	// Check if refresh manager is already running
 	status := s.rm.Get()
 	if status.Running {
-		log.Println("[scheduler] ⏸️  Skipping full sync - refresh already running")
+		logging.Debug("Skipping full sync - refresh already running")
 		return
 	}
 	
-	log.Println("[scheduler] 🌟 Starting nightly full sync")
+	logging.Info("Starting nightly full sync")
 	s.rm.Start(s.db, s.em, 200) // Use smaller chunk size for nightly sync
 }
 
@@ -122,7 +122,7 @@ func (s *Scheduler) runFullSync() {
 func (s *Scheduler) runActiveSessionIngest() {
     sessions, err := s.em.GetActiveSessions()
     if err != nil {
-        log.Printf("[scheduler] ⚠️  Active ingest: failed to fetch sessions: %v", err)
+        logging.Warn("Active ingest failed to fetch sessions", "error", err)
         return
     }
     if len(sessions) == 0 {
@@ -158,7 +158,7 @@ func (s *Scheduler) runActiveSessionIngest() {
         inserted++
     }
     if inserted+updated > 0 {
-        log.Printf("[scheduler] ✅ Active ingest: upserted %d (inserted %d, updated %d)", inserted+updated, inserted, updated)
+        logging.Debug("Active ingest completed", "upserted", inserted+updated, "inserted", inserted, "updated", updated)
     }
 }
 
