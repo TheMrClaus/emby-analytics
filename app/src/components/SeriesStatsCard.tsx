@@ -1,6 +1,6 @@
 import { useSeriesStats } from "../hooks/useData";
 import { DataState, useDataState } from "./DataState";
-import { fmtInt, fmtHours } from "../lib/format";
+import { fmtInt, fmtHours, fmtLongSpanFromMinutes } from "../lib/format";
 import Card from "./ui/Card";
 
 export default function SeriesStatsCard() {
@@ -61,7 +61,7 @@ export default function SeriesStatsCard() {
             {/* Runtimes */}
             <StatItem
               label="Longest Series"
-              value={`${Math.floor(data.longest_series_runtime_minutes / 60)}h ${data.longest_series_runtime_minutes % 60}m`}
+              value={fmtLongSpanFromMinutes(data.longest_series_runtime_minutes)}
               subtitle={data.longest_series_name}
             />
             <StatItem

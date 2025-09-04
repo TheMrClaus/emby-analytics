@@ -33,3 +33,50 @@ export const fmtHours = (hours: number) => {
   if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
   return `${m}m`;
 };
+
+// minutes (integer) -> human long span choosing largest sensible unit
+// Examples:
+//  - 90m -> "1h 30m"
+//  - 72h -> "3.0 days"
+//  - very long -> "9.8 years", "2.3 centuries", "1.1 millennia"
+export const fmtLongSpanFromMinutes = (minutes: number) => {
+  if (!isFinite(minutes) || minutes <= 0) return '0m';
+  const hours = minutes / 60;
+  // For short spans, keep detailed h/m format
+  if (hours < 48) {
+    const h = Math.floor(hours);
+    const m = Math.round((hours - h) * 60);
+    if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+    return `${m}m`;
+  }
+
+  // Use progressively larger units for very long spans
+  const H_PER_DAY = 24;
+  const H_PER_WEEK = H_PER_DAY * 7;
+  const H_PER_MONTH = H_PER_DAY * 30.4375; // average month
+  const H_PER_YEAR = H_PER_DAY * 365.2425; // tropical year average
+  const H_PER_CENTURY = H_PER_YEAR * 100;
+  const H_PER_MILLENNIUM = H_PER_YEAR * 1000;
+
+  const units: { label: string; hours: number }[] = [
+    { label: 'millennium', hours: H_PER_MILLENNIUM },
+    { label: 'century', hours: H_PER_CENTURY },
+    { label: 'year', hours: H_PER_YEAR },
+    { label: 'month', hours: H_PER_MONTH },
+    { label: 'week', hours: H_PER_WEEK },
+    { label: 'day', hours: H_PER_DAY },
+  ];
+
+  for (const u of units) {
+    const v = hours / u.hours;
+    if (v >= 1) {
+      const n = v >= 10 ? Math.round(v) : Math.round(v * 10) / 10; // keep one decimal for <10
+      const label = n === 1 ? u.label : (u.label === 'millennium' ? 'millennia' : `${u.label}s`);
+      return `${n} ${label}`;
+    }
+  }
+
+  // Fallback (should not reach): days with one decimal
+  const days = hours / H_PER_DAY;
+  return `${Math.round(days * 10) / 10} days`;
+};
