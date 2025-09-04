@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"emby-analytics/internal/logging"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -19,12 +21,12 @@ type WSConfig struct {
 }
 
 type EmbyWS struct {
-	Cfg                 WSConfig
-	conn                *websocket.Conn
-	cancel              context.CancelFunc
-	Handler             func(evt EmbyEvent)
-	StoppedSessionCheck func(activeSessionKeys map[string]bool) // NEW: callback for stopped session detection
-	LibraryChangeHandler func(eventType string) // NEW: callback for library changes
+	Cfg                  WSConfig
+	conn                 *websocket.Conn
+	cancel               context.CancelFunc
+	Handler              func(evt EmbyEvent)
+	StoppedSessionCheck  func(activeSessionKeys map[string]bool) // NEW: callback for stopped session detection
+	LibraryChangeHandler func(eventType string)                  // NEW: callback for library changes
 }
 
 type EmbyEvent struct {
@@ -109,7 +111,7 @@ func (w *EmbyWS) dial() (*websocket.Conn, *http.Response, error) {
 		"Accept": []string{"application/json"},
 	}
 
-	log.Printf("[emby-ws] Dialing %s", u.String())
+	logging.Info("Dialing Emby WebSocket", "url", u.String())
 	return dialer.Dial(u.String(), header)
 }
 
@@ -129,13 +131,13 @@ func (w *EmbyWS) Start(ctx context.Context) {
 
 			conn, _, err := w.dial()
 			if err != nil {
-				log.Printf("[emby-ws] Dial failed: %v, retrying in %v", err, retry)
+				logging.Warn("Emby WebSocket dial failed, retrying", "error", err, "retry_in", retry)
 				time.Sleep(retry)
 				continue
 			}
 			w.conn = conn
 
-			log.Printf("[emby-ws] ✅ Connected")
+			logging.Info("Emby WebSocket connected")
 			messageCount := 0
 			conn.SetReadDeadline(time.Now().Add(90 * time.Second))
 			conn.SetPongHandler(func(appData string) error {
@@ -153,7 +155,7 @@ func (w *EmbyWS) Start(ctx context.Context) {
 						return
 					case <-ticker.C:
 						if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-							log.Printf("[emby-ws] Ping failed: %v", err)
+							logging.Warn("Emby WebSocket ping failed", "error", err)
 							return
 						}
 					}
@@ -170,7 +172,7 @@ func (w *EmbyWS) Start(ctx context.Context) {
 
 				var evt EmbyEvent
 				if err := conn.ReadJSON(&evt); err != nil {
-					log.Printf("[emby-ws] ReadJSON error: %v", err)
+					logging.Error("Emby WebSocket read error", "error", err)
 					break
 				}
 
@@ -180,7 +182,7 @@ func (w *EmbyWS) Start(ctx context.Context) {
 					continue
 				}
 
-				log.Printf("[emby-ws] 📨 %s (msg #%d)", evt.MessageType, messageCount)
+				logging.Debug("Emby WebSocket message received", "type", evt.MessageType, "count", messageCount)
 
 				// Handle playback events
 				if strings.HasPrefix(evt.MessageType, "Playback") {
@@ -226,11 +228,11 @@ func (w *EmbyWS) handleSessionsEvent(evt EmbyEvent) {
 
 	for _, session := range sessions {
 		sessionKey := session.SessionID + "|" + session.DeviceID // Use DeviceID as fallback identifier
-		
+
 		if session.NowPlayingItem != nil {
 			// Active session - create PlaybackProgress event
 			activeSessionKeys[sessionKey] = true
-			
+
 			// Convert to PlaybackProgressData format
 			progressData := PlaybackProgressData{
 				UserID:           session.UserID,
@@ -327,17 +329,17 @@ func (w *EmbyWS) isLibraryEvent(messageType string) bool {
 	libraryEvents := []string{
 		"LibraryChanged",
 		"ItemAdded",
-		"ItemUpdated", 
+		"ItemUpdated",
 		"ItemRemoved",
 		"RefreshProgress",
 		"RefreshComplete",
 	}
-	
+
 	for _, event := range libraryEvents {
 		if messageType == event {
 			return true
 		}
 	}
-	
+
 	return false
 }
