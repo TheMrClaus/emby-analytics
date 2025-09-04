@@ -1,9 +1,11 @@
 // go/internal/handlers/stats/common.go
 package stats
 
-// excludeLiveTvFilter returns the SQL WHERE clause to exclude Live TV content
+// excludeLiveTvFilter returns a SQL fragment to exclude Live TV content.
+// It deliberately avoids a table alias so it can be used in queries
+// with or without an alias for library_item.
 func excludeLiveTvFilter() string {
-	return "li.media_type NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')"
+	return "media_type NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')"
 }
 
 // withLiveTvFilter adds Live TV exclusion to an existing WHERE clause
