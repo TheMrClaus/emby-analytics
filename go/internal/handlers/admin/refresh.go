@@ -250,19 +250,22 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
 			width = &calculatedWidth
 		}
 
-		result, err := db.Exec(`
-			INSERT INTO library_item (id, server_id, item_id, name, media_type, height, width, video_codec, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-			ON CONFLICT(id) DO UPDATE SET
-				server_id = COALESCE(excluded.server_id, library_item.server_id),
-				item_id = COALESCE(excluded.item_id, library_item.item_id),
-				name = COALESCE(excluded.name, library_item.name),
-				media_type = COALESCE(excluded.media_type, library_item.media_type),
-				height = COALESCE(excluded.height, library_item.height),
-				width = COALESCE(excluded.width, library_item.width),
-				video_codec = COALESCE(excluded.video_codec, library_item.video_codec),
-				updated_at = CURRENT_TIMESTAMP
-		`, entry.Id, entry.Id, entry.Id, entry.Name, entry.Type, entry.Height, width, entry.Codec)
+        // Include runtime ticks and container when available
+        result, err := db.Exec(`
+            INSERT INTO library_item (id, server_id, item_id, name, media_type, height, width, run_time_ticks, container, video_codec, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+                server_id = COALESCE(excluded.server_id, library_item.server_id),
+                item_id = COALESCE(excluded.item_id, library_item.item_id),
+                name = COALESCE(excluded.name, library_item.name),
+                media_type = COALESCE(excluded.media_type, library_item.media_type),
+                height = COALESCE(excluded.height, library_item.height),
+                width = COALESCE(excluded.width, library_item.width),
+                run_time_ticks = COALESCE(excluded.run_time_ticks, library_item.run_time_ticks),
+                container = COALESCE(excluded.container, library_item.container),
+                video_codec = COALESCE(excluded.video_codec, library_item.video_codec),
+                updated_at = CURRENT_TIMESTAMP
+        `, entry.Id, entry.Id, entry.Id, entry.Name, entry.Type, entry.Height, width, entry.RunTimeTicks, entry.Container, entry.Codec)
 
 		// For episodes, ensure we have proper series info
 		if entry.Type == "Episode" && em != nil {

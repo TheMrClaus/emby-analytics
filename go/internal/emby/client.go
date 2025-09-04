@@ -244,27 +244,31 @@ func (c *Client) ItemsByIDs(ids []string) ([]EmbyItem, error) {
 }
 
 type LibraryItem struct {
-	Id     string `json:"Id"`
-	Name   string `json:"Name"`
-	Type   string `json:"Type"`
-	Height *int   `json:"Height,omitempty"`
-	Width  *int   `json:"Width,omitempty"`
-	Codec  string `json:"VideoCodec,omitempty"`
+    Id           string `json:"Id"`
+    Name         string `json:"Name"`
+    Type         string `json:"Type"`
+    Height       *int   `json:"Height,omitempty"`
+    Width        *int   `json:"Width,omitempty"`
+    Codec        string `json:"VideoCodec,omitempty"`
+    Container    string `json:"Container,omitempty"`
+    RunTimeTicks *int64 `json:"RunTimeTicks,omitempty"`
 }
 
 // Detailed struct for fetching media info with codec data
 type DetailedLibraryItem struct {
-	Id           string `json:"Id"`
-	Name         string `json:"Name"`
-	Type         string `json:"Type"`
-	MediaSources []struct {
-		MediaStreams []struct {
-			Type   string `json:"Type"`
-			Codec  string `json:"Codec"`
-			Height *int   `json:"Height"`
-			Width  *int   `json:"Width"`
-		} `json:"MediaStreams"`
-	} `json:"MediaSources"`
+    Id           string `json:"Id"`
+    Name         string `json:"Name"`
+    Type         string `json:"Type"`
+    Container    string `json:"Container"`
+    RunTimeTicks int64  `json:"RunTimeTicks"`
+    MediaSources []struct {
+        MediaStreams []struct {
+            Type   string `json:"Type"`
+            Codec  string `json:"Codec"`
+            Height *int   `json:"Height"`
+            Width  *int   `json:"Width"`
+        } `json:"MediaStreams"`
+    } `json:"MediaSources"`
 }
 
 type itemsResp struct {
@@ -301,7 +305,7 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-	q.Set("Fields", "MediaSources,MediaStreams")
+    q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container")
 	q.Set("Recursive", "true")
 	q.Set("Limit", fmt.Sprintf("%d", limit))
 	q.Set("IncludeItemTypes", "Movie,Episode") // Only get video items
@@ -353,16 +357,19 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 			firstVideoCodec = "Unknown"
 		}
 
-		// Create ONE LibraryItem entry per media item
-		result = append(result, LibraryItem{
-			Id:     item.Id, // Use original ID without suffix
-			Name:   item.Name,
-			Type:   item.Type,
-			Height: firstVideoHeight,
-			Width:  firstVideoWidth,
-			Codec:  firstVideoCodec,
-		})
-	}
+        // Create ONE LibraryItem entry per media item
+        rt := item.RunTimeTicks
+        result = append(result, LibraryItem{
+            Id:           item.Id, // Use original ID without suffix
+            Name:         item.Name,
+            Type:         item.Type,
+            Height:       firstVideoHeight,
+            Width:        firstVideoWidth,
+            Codec:        firstVideoCodec,
+            Container:    item.Container,
+            RunTimeTicks: &rt,
+        })
+    }
 
 	return result, out.TotalRecordCount, nil
 }
@@ -372,7 +379,7 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-	q.Set("Fields", "MediaSources,MediaStreams")
+    q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container")
 	q.Set("Recursive", "true")
 	q.Set("StartIndex", fmt.Sprintf("%d", page*limit))
 	q.Set("Limit", fmt.Sprintf("%d", limit))
@@ -419,16 +426,19 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 			firstVideoCodec = "Unknown"
 		}
 
-		// Create ONE LibraryItem entry per media item
-		result = append(result, LibraryItem{
-			Id:     item.Id, // Use original ID without suffix
-			Name:   item.Name,
-			Type:   item.Type,
-			Height: firstVideoHeight,
-			Width:  firstVideoWidth,
-			Codec:  firstVideoCodec,
-		})
-	}
+        // Create ONE LibraryItem entry per media item
+        rt := item.RunTimeTicks
+        result = append(result, LibraryItem{
+            Id:           item.Id, // Use original ID without suffix
+            Name:         item.Name,
+            Type:         item.Type,
+            Height:       firstVideoHeight,
+            Width:        firstVideoWidth,
+            Codec:        firstVideoCodec,
+            Container:    item.Container,
+            RunTimeTicks: &rt,
+        })
+    }
 
 	return result, nil
 }
