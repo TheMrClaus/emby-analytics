@@ -1,6 +1,6 @@
 import { useSeriesStats } from "../hooks/useData";
 import { DataState, useDataState } from "./DataState";
-import { fmtInt, fmtHours, fmtLongSpanFromMinutes } from "../lib/format";
+import { fmtInt, fmtHours, fmtLongSpanFromMinutes, fmtLongSpanFromHours } from "../lib/format";
 import Card from "./ui/Card";
 
 export default function SeriesStatsCard() {
@@ -66,7 +66,7 @@ export default function SeriesStatsCard() {
             />
             <StatItem
               label="Time to Watch All TV"
-              value={fmtHoursHM(data.total_episode_runtime_hours)}
+              value={fmtLongSpanFromHours(data.total_episode_runtime_hours)}
             />
 
             {/* Recency */}

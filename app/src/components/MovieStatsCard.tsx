@@ -1,6 +1,7 @@
 import { useMovieStats } from "../hooks/useData";
 import { DataState, useDataState } from "./DataState";
 import { fmtInt, fmtHours } from "../lib/format";
+import { fmtLongSpanFromMinutes, fmtLongSpanFromHours } from "../lib/format";
 import Card from "./ui/Card";
 
 export default function MovieStatsCard() {
@@ -52,7 +53,7 @@ export default function MovieStatsCard() {
             {/* Totals */}
             <StatItem
               label="Total Runtime"
-              value={fmtHoursHM(data.total_runtime_hours)}
+              value={fmtLongSpanFromHours(data.total_runtime_hours)}
             />
 
             {/* Sizes */}
@@ -65,7 +66,7 @@ export default function MovieStatsCard() {
             {/* Runtimes */}
             <StatItem
               label="Longest Movie"
-              value={`${Math.floor(data.longest_runtime_minutes / 60)}h ${data.longest_runtime_minutes % 60}m`}
+              value={fmtLongSpanFromMinutes(data.longest_runtime_minutes)}
               subtitle={data.longest_movie_name}
             />
             <StatItem

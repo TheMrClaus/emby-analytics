@@ -80,3 +80,9 @@ export const fmtLongSpanFromMinutes = (minutes: number) => {
   const days = hours / H_PER_DAY;
   return `${Math.round(days * 10) / 10} days`;
 };
+
+// hours (float) -> human long span via minutes
+export const fmtLongSpanFromHours = (hours: number) => {
+  if (!isFinite(hours) || hours <= 0) return '0m';
+  return fmtLongSpanFromMinutes(Math.round(hours * 60));
+};
