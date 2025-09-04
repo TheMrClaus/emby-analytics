@@ -41,6 +41,11 @@ type Config struct {
 	WebhookSecret string // Secret for webhook signature validation
 	AdminAutoCookie bool // If true, server sets HttpOnly cookie to auto-auth UI
 
+	// Logging
+	LogLevel  string // DEBUG, INFO, WARN, ERROR
+	LogFormat string // json, text, dev
+	LogOutput string // stdout, stderr, file path
+
 	// Debug / trace
 	NowSseDebug     bool // LOG: /now/stream events
 	RefreshSseDebug bool // LOG: /admin/refresh/* SSE
@@ -74,6 +79,9 @@ func Load() Config {
 		AdminToken:          env("ADMIN_TOKEN", ""),
 		WebhookSecret:       env("WEBHOOK_SECRET", ""),
 		AdminAutoCookie:     envBool("ADMIN_AUTO_COOKIE", false),
+		LogLevel:            env("LOG_LEVEL", "INFO"),
+		LogFormat:           env("LOG_FORMAT", "text"),
+		LogOutput:           env("LOG_OUTPUT", "stdout"),
 		NowSseDebug:         envBool("NOW_SSE_DEBUG", false),
 		RefreshSseDebug:     envBool("REFRESH_SSE_DEBUG", false),
         UserSyncIntervalSec: envInt("USERSYNC_INTERVAL", 43200), // Changed from 3600 to 43200 (12 hours)

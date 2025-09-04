@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +20,7 @@ import (
 	now "emby-analytics/internal/handlers/now"
 	settings "emby-analytics/internal/handlers/settings"
 	stats "emby-analytics/internal/handlers/stats"
+	"emby-analytics/internal/logging"
 	"emby-analytics/internal/middleware"
 	"emby-analytics/internal/sync"
 	tasks "emby-analytics/internal/tasks"
@@ -54,66 +55,99 @@ func colorStatus(code int) string {
 }
 
 func main() {
-	log.Println("=====================================================")
-	log.Println("        Starting Emby Analytics Application")
-	log.Println("=====================================================")
-
-	log.SetFlags(0) // disable default date/time prefix; we print our own timestamp in the middleware
-
 	_ = godotenv.Load()
 	cfg := config.Load()
+
+	// Initialize structured logging
+	var logOutput io.Writer = os.Stdout
+	if cfg.LogOutput == "stderr" {
+		logOutput = os.Stderr
+	} else if cfg.LogOutput != "stdout" && cfg.LogOutput != "" {
+		if file, err := os.OpenFile(cfg.LogOutput, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666); err == nil {
+			logOutput = file
+			defer file.Close()
+		}
+	}
+
+	var logLevel logging.Level
+	switch strings.ToUpper(cfg.LogLevel) {
+	case "DEBUG":
+		logLevel = logging.LevelDebug
+	case "WARN":
+		logLevel = logging.LevelWarn
+	case "ERROR":
+		logLevel = logging.LevelError
+	default:
+		logLevel = logging.LevelInfo
+	}
+
+	logger := logging.NewLogger(&logging.Config{
+		Level:     logLevel,
+		Format:    cfg.LogFormat,
+		Output:    logOutput,
+		AddSource: logLevel == logging.LevelDebug,
+	})
+	logging.SetDefault(logger)
+
+	logger.Info("=====================================================")
+	logger.Info("        Starting Emby Analytics Application")
+	logger.Info("=====================================================")
 	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
 
 	// ---- Database Initialization & Migration ----
 	absPath, err := filepath.Abs(cfg.SQLitePath)
 	if err != nil {
-		log.Fatalf("--> FATAL: resolving SQLite path: %v", err)
+		logger.Error("Failed to resolve SQLite path", "error", err, "path", cfg.SQLitePath)
+		os.Exit(1)
 	}
 	dbURL := fmt.Sprintf("sqlite://file:%s?cache=shared&mode=rwc", filepath.ToSlash(absPath))
 
 	if err := db.MigrateUp(dbURL); err != nil {
-		log.Fatalf("--> FATAL: migrations failed: %v", err)
+		logger.Error("Database migrations failed", "error", err, "url", dbURL)
+		os.Exit(1)
 	}
-	log.Println("--> Step 1: Migrations applied (embedded).")
+	logger.Info("Database migrations completed", "path", absPath)
 
 	// Open database connection for verification
 	sqlDB, err := db.Open(cfg.SQLitePath)
 	if err != nil {
-		log.Fatalf("--> FATAL: Failed to open database at %s: %v", cfg.SQLitePath, err)
+		logger.Error("Failed to open database", "error", err, "path", cfg.SQLitePath)
+		os.Exit(1)
 	}
 
 	// Verify migrations were applied correctly
 	var migrationCheck int
 	err = sqlDB.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='play_sessions'`).Scan(&migrationCheck)
 	if err != nil || migrationCheck == 0 {
-		log.Fatalf("--> FATAL: play_sessions table not found. Migrations failed to apply.")
+		logger.Error("play_sessions table not found after migrations", "error", err)
+		os.Exit(1)
 	}
 
 	// Check for enhanced columns from migration 0005
 	var testCol string
 	err = sqlDB.QueryRow("SELECT video_method FROM play_sessions LIMIT 1").Scan(&testCol)
 	if err != nil {
-		log.Println("--> WARNING: Enhanced playback columns not found. Running migration 0005...")
-		// The migration should have been applied, but let's ensure it exists
+		logger.Warn("Enhanced playback columns not found, migration 0005 may be needed")
 	}
 
 	// Close and reopen connection
 	sqlDB.Close()
 	sqlDB, err = db.Open(cfg.SQLitePath)
 	if err != nil {
-		log.Fatalf("--> FATAL: Failed to open database at %s: %v", cfg.SQLitePath, err)
+		logger.Error("Failed to reopen database", "error", err, "path", cfg.SQLitePath)
+		os.Exit(1)
 	}
 	defer func(dbh *sql.DB) { _ = dbh.Close() }(sqlDB)
-	log.Println("--> Step 2: Database connection opened successfully.")
+	logger.Info("Database connection established")
 
 	// Initial user sync AFTER schema is ready.
-	log.Println("--> Step 3: Performing initial user and lifetime stats sync...")
+	logger.Info("Starting initial user and lifetime stats sync")
 	tasks.RunUserSyncOnce(sqlDB, em)
-	log.Println("--> Initial user sync complete.")
+	logger.Info("Initial user sync completed")
 
 	// ---- Session Processing (Hybrid State-Polling Approach) ----
 	sessionProcessor := tasks.NewSessionProcessor(sqlDB)
-	log.Println("--> Step 5: Session processor initialized (using playback_reporting approach).")
+	logger.Info("Session processor initialized")
 
 	pollInterval := time.Duration(cfg.NowPollSec) * time.Second
 	if pollInterval <= 0 {
@@ -123,7 +157,7 @@ func main() {
 	broadcaster.SessionProcessor = sessionProcessor.ProcessActiveSessions // Connect session processing
 	now.SetBroadcaster(broadcaster)
 	broadcaster.Start()
-	log.Printf("--> Step 6: REST API session polling started (every %v).", pollInterval)
+	logger.Info("REST API session polling started", "interval", pollInterval)
 	defer broadcaster.Stop()
 
 	// ---- Fiber App and Routes ----
@@ -133,27 +167,8 @@ func main() {
 	})
 	app.Use(recover.New())
 
-	// Colored single-line logger (status-based)
-	app.Use(func(c fiber.Ctx) error {
-		start := time.Now()
-		err := c.Next()
-
-		// After response
-		status := c.Response().StatusCode()
-		latency := time.Since(start)
-		ip := c.IP()
-		method := c.Method()
-		path := c.Path()
-		ts := time.Now().Format("15:04:05")
-
-		// Colorize just the status code by class (2xx green, 3xx yellow, 4xx/5xx red, 1xx cyan)
-		statusColor := colorStatus(status)
-
-		log.Printf("%s | %s%d%s | %v | %s | %s | %s",
-			ts, statusColor, status, colReset, latency, ip, method, path)
-
-		return err
-	})
+	// Add structured logging middleware
+	app.Use(logging.FiberMiddleware(logger))
 
 	// Health Routes
 	// Optional: auto-auth cookie for UI
@@ -276,7 +291,7 @@ func main() {
 	})
 
 	// Start sync scheduler
-	log.Printf("--> Step 7: Starting smart sync scheduler...")
+	logger.Info("Starting smart sync scheduler")
 	scheduler := sync.NewScheduler(sqlDB, em, rm)
 	scheduler.Start()
 
@@ -297,9 +312,10 @@ func main() {
 	if p := os.Getenv("PORT"); p != "" {
 		addr = ":" + p
 	}
-	log.Printf("--> Step 8: Starting HTTP server on %s", addr)
+	logger.Info("Starting HTTP server", "address", addr)
 	if err := app.Listen(addr); err != nil {
-		log.Fatalf("--> FATAL: Failed to start server: %v", err)
+		logger.Error("Failed to start HTTP server", "error", err, "address", addr)
+		os.Exit(1)
 	}
 }
 
