@@ -12,6 +12,7 @@ import Masonry from "../components/ui/Masonry";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 
 import PlaybackMethodsCard from "../components/PlaybackMethodsCard";
+import MovieStatsCard from "../components/MovieStatsCard";
 
 export default function Dashboard() {
   return (
@@ -36,6 +37,10 @@ export default function Dashboard() {
           <Masonry className="mt-4">
             <ErrorBoundary>
               <PlaybackMethodsCard />
+            </ErrorBoundary>
+
+            <ErrorBoundary>
+              <MovieStatsCard />
             </ErrorBoundary>
 
             <ErrorBoundary>

@@ -75,3 +75,29 @@ export type ActiveUserLifetime = {
   hours: number;
   minutes: number;
 };
+
+export type GenreStats = {
+  genre: string;
+  count: number;
+};
+
+export type MovieStats = {
+  total_movies: number;
+  largest_movie_gb: number;
+  largest_movie_name: string;
+  longest_runtime_minutes: number;
+  longest_movie_name: string;
+  shortest_runtime_minutes: number;
+  shortest_movie_name: string;
+  newest_movie: {
+    name: string;
+    date: string;
+  };
+  most_watched_movie: {
+    name: string;
+    hours: number;
+  };
+  total_runtime_hours: number;
+  popular_genres: GenreStats[];
+  movies_added_this_month: number;
+};
