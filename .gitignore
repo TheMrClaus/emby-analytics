@@ -1,5 +1,4 @@
 .venv/
-emby.db
 node_modules/
 .next/
 out/
@@ -22,3 +21,7 @@ go/.gocache/
 
 # TypeScript incremental build info
 app/tsconfig.tsbuildinfo
+
+go/emby.db
+go/emby.db-shm
+go/emby.db-wal
