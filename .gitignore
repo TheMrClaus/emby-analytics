@@ -1,5 +1,5 @@
 .venv/
-server/emby.db
+emby.db
 node_modules/
 .next/
 out/
