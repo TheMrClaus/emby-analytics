@@ -267,6 +267,10 @@ func main() {
 	// Debug: force-ingest current active Emby sessions into play_sessions
 	app.Post("/admin/debug/ingest-active", adminAuth, admin.IngestActiveSessions(sqlDB, em))
 
+	// Admin diagnostics for media metadata coverage
+	app.Get("/admin/diagnostics/media-field-coverage", adminAuth, admin.MediaFieldCoverage(sqlDB))
+	app.Get("/admin/diagnostics/items/missing", adminAuth, admin.MissingItems(sqlDB))
+
 	// Webhook endpoint with separate authentication
 	webhookAuth := middleware.WebhookAuth(cfg.WebhookSecret)
 	app.Post("/admin/webhook/emby", webhookAuth, admin.WebhookHandler(rm, sqlDB, em))

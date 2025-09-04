@@ -107,6 +107,14 @@ const endpoints: Endpoint[] = [
 
   // Admin - System monitoring (newly added)
   { id: 'admin-metrics', category: 'Admin', method: 'GET', path: '/admin/metrics', description: 'System performance metrics and database connection pool stats.', usage: 'Monitor system health and performance. Protected.' },
+
+  // Admin - Diagnostics (media metadata coverage)
+  { id: 'admin-diag-coverage', category: 'Admin/Diagnostics', method: 'GET', path: '/admin/diagnostics/media-field-coverage', description: 'Counts of items with runtime, size, bitrate, width/height, codec.', usage: 'Verify library metadata coverage. Protected.' },
+  { id: 'admin-diag-missing-runtime', category: 'Admin/Diagnostics', method: 'GET', path: '/admin/diagnostics/items/missing', description: 'List items missing a field.', usage: 'Audit missing metadata. Protected.', params: [
+    { key: 'field', kind: 'query', required: true, placeholder: 'run_time_ticks|file_size_bytes|bitrate_bps|width|height|video_codec' },
+    { key: 'media_type', kind: 'query', placeholder: 'Movie|Episode' },
+    { key: 'limit', kind: 'query', placeholder: '50' },
+  ] },
 ];
 
 function substitutePath(path: string, values: Record<string, string>) {
