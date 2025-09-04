@@ -51,21 +51,28 @@ func Movies(db *sql.DB) fiber.Handler {
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to count movies"})
 		}
 
-		// Get largest movie (estimated from bitrate * runtime)
-		err = db.QueryRow(`
-			SELECT COALESCE(name, 'Unknown'), 
-			       COALESCE(run_time_ticks, 0) / 36000000000.0 * 
-			       CASE 
-			         WHEN height >= 2160 THEN 25.0  -- 4K estimate
-			         WHEN height >= 1080 THEN 8.0   -- 1080p estimate
-			         WHEN height >= 720 THEN 4.0    -- 720p estimate
-			         ELSE 2.0                        -- SD estimate
-			       END AS estimated_gb
-			FROM library_item 
-			WHERE media_type = 'Movie' AND `+excludeLiveTvFilter()+` 
-			  AND run_time_ticks > 0
-			ORDER BY estimated_gb DESC 
-			LIMIT 1`).Scan(&data.LargestMovieName, &data.LargestMovieGB)
+        // Get largest movie: prefer actual size, then bitrate*runtime, else heuristic
+        err = db.QueryRow(`
+            SELECT COALESCE(name, 'Unknown'),
+                   COALESCE(
+                     CASE WHEN file_size_bytes IS NOT NULL AND file_size_bytes > 0
+                          THEN file_size_bytes / 1073741824.0
+                     END,
+                     CASE WHEN bitrate_bps > 0 AND run_time_ticks > 0
+                          THEN (bitrate_bps * (run_time_ticks / 10000000.0) / 8.0) / 1073741824.0
+                     END,
+                     (COALESCE(run_time_ticks, 0) / 36000000000.0) * 
+                     CASE 
+                       WHEN height >= 2160 THEN 25.0  -- 4K estimate
+                       WHEN height >= 1080 THEN 8.0   -- 1080p estimate
+                       WHEN height >= 720 THEN 4.0    -- 720p estimate
+                       ELSE 2.0                        -- SD estimate
+                     END
+                   ) AS estimated_gb
+            FROM library_item
+            WHERE media_type = 'Movie' AND `+excludeLiveTvFilter()+`
+            ORDER BY estimated_gb DESC
+            LIMIT 1`).Scan(&data.LargestMovieName, &data.LargestMovieGB)
 		if err != nil && err != sql.ErrNoRows {
 			log.Printf("[movies] Error finding largest movie: %v", err)
 		}

@@ -252,6 +252,8 @@ type LibraryItem struct {
     Codec        string `json:"VideoCodec,omitempty"`
     Container    string `json:"Container,omitempty"`
     RunTimeTicks *int64 `json:"RunTimeTicks,omitempty"`
+    BitrateBps   *int64 `json:"Bitrate,omitempty"`
+    FileSizeBytes *int64 `json:"Size,omitempty"`
 }
 
 // Detailed struct for fetching media info with codec data
@@ -262,6 +264,8 @@ type DetailedLibraryItem struct {
     Container    string `json:"Container"`
     RunTimeTicks int64  `json:"RunTimeTicks"`
     MediaSources []struct {
+        Bitrate int64 `json:"Bitrate"`
+        Size    int64 `json:"Size"`
         MediaStreams []struct {
             Type   string `json:"Type"`
             Codec  string `json:"Codec"`
@@ -331,25 +335,33 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 		return nil, 0, err
 	}
 
-	// Convert to LibraryItem format, creating ONE entry per media item
-	var result []LibraryItem
+    // Convert to LibraryItem format, creating ONE entry per media item
+    var result []LibraryItem
 
-	for _, item := range out.Items {
-		var firstVideoCodec string
-		var firstVideoHeight *int
-		var firstVideoWidth *int
+    for _, item := range out.Items {
+        var firstVideoCodec string
+        var firstVideoHeight *int
+        var firstVideoWidth *int
+        var firstBitrate int64
+        var firstSize int64
 
-		// Find the FIRST video stream only (matches C# plugin logic)
-		for _, source := range item.MediaSources {
-			for _, stream := range source.MediaStreams {
-				if stream.Type == "Video" && stream.Codec != "" {
-					firstVideoCodec = stream.Codec
-					firstVideoHeight = stream.Height
-					firstVideoWidth = stream.Width
-					goto found // Break out of both loops
-				}
-			}
-		}
+        // Find the FIRST video stream only (matches C# plugin logic)
+        for _, source := range item.MediaSources {
+            if firstBitrate == 0 && source.Bitrate > 0 {
+                firstBitrate = source.Bitrate
+            }
+            if firstSize == 0 && source.Size > 0 {
+                firstSize = source.Size
+            }
+            for _, stream := range source.MediaStreams {
+                if stream.Type == "Video" && stream.Codec != "" {
+                    firstVideoCodec = stream.Codec
+                    firstVideoHeight = stream.Height
+                    firstVideoWidth = stream.Width
+                    goto found // Break out of both loops
+                }
+            }
+        }
 
 	found:
 		// Set codec to "Unknown" if no video stream found
@@ -359,6 +371,10 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 
         // Create ONE LibraryItem entry per media item
         rt := item.RunTimeTicks
+        var brPtr *int64
+        var szPtr *int64
+        if firstBitrate > 0 { brPtr = &firstBitrate }
+        if firstSize > 0 { szPtr = &firstSize }
         result = append(result, LibraryItem{
             Id:           item.Id, // Use original ID without suffix
             Name:         item.Name,
@@ -368,6 +384,8 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
             Codec:        firstVideoCodec,
             Container:    item.Container,
             RunTimeTicks: &rt,
+            BitrateBps:   brPtr,
+            FileSizeBytes: szPtr,
         })
     }
 
@@ -400,25 +418,33 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 		return nil, err
 	}
 
-	// Convert to LibraryItem format, creating ONE entry per media item
-	var result []LibraryItem
+    // Convert to LibraryItem format, creating ONE entry per media item
+    var result []LibraryItem
 
-	for _, item := range out.Items {
-		var firstVideoCodec string
-		var firstVideoHeight *int
-		var firstVideoWidth *int
+    for _, item := range out.Items {
+        var firstVideoCodec string
+        var firstVideoHeight *int
+        var firstVideoWidth *int
+        var firstBitrate int64
+        var firstSize int64
 
-		// Find the FIRST video stream only (matches C# plugin logic)
-		for _, source := range item.MediaSources {
-			for _, stream := range source.MediaStreams {
-				if stream.Type == "Video" && stream.Codec != "" {
-					firstVideoCodec = stream.Codec
-					firstVideoHeight = stream.Height
-					firstVideoWidth = stream.Width
-					goto found // Break out of both loops
-				}
-			}
-		}
+        // Find the FIRST video stream only (matches C# plugin logic)
+        for _, source := range item.MediaSources {
+            if firstBitrate == 0 && source.Bitrate > 0 {
+                firstBitrate = source.Bitrate
+            }
+            if firstSize == 0 && source.Size > 0 {
+                firstSize = source.Size
+            }
+            for _, stream := range source.MediaStreams {
+                if stream.Type == "Video" && stream.Codec != "" {
+                    firstVideoCodec = stream.Codec
+                    firstVideoHeight = stream.Height
+                    firstVideoWidth = stream.Width
+                    goto found // Break out of both loops
+                }
+            }
+        }
 
 	found:
 		// Set codec to "Unknown" if no video stream found
@@ -428,6 +454,10 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 
         // Create ONE LibraryItem entry per media item
         rt := item.RunTimeTicks
+        var brPtr *int64
+        var szPtr *int64
+        if firstBitrate > 0 { brPtr = &firstBitrate }
+        if firstSize > 0 { szPtr = &firstSize }
         result = append(result, LibraryItem{
             Id:           item.Id, // Use original ID without suffix
             Name:         item.Name,
@@ -437,6 +467,8 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
             Codec:        firstVideoCodec,
             Container:    item.Container,
             RunTimeTicks: &rt,
+            BitrateBps:   brPtr,
+            FileSizeBytes: szPtr,
         })
     }
 

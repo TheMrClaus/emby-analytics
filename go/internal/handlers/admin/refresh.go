@@ -252,8 +252,8 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
 
         // Include runtime ticks and container when available
         result, err := db.Exec(`
-            INSERT INTO library_item (id, server_id, item_id, name, media_type, height, width, run_time_ticks, container, video_codec, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            INSERT INTO library_item (id, server_id, item_id, name, media_type, height, width, run_time_ticks, container, video_codec, file_size_bytes, bitrate_bps, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
                 server_id = COALESCE(excluded.server_id, library_item.server_id),
                 item_id = COALESCE(excluded.item_id, library_item.item_id),
@@ -264,8 +264,10 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
                 run_time_ticks = COALESCE(excluded.run_time_ticks, library_item.run_time_ticks),
                 container = COALESCE(excluded.container, library_item.container),
                 video_codec = COALESCE(excluded.video_codec, library_item.video_codec),
+                file_size_bytes = COALESCE(excluded.file_size_bytes, library_item.file_size_bytes),
+                bitrate_bps = COALESCE(excluded.bitrate_bps, library_item.bitrate_bps),
                 updated_at = CURRENT_TIMESTAMP
-        `, entry.Id, entry.Id, entry.Id, entry.Name, entry.Type, entry.Height, width, entry.RunTimeTicks, entry.Container, entry.Codec)
+        `, entry.Id, entry.Id, entry.Id, entry.Name, entry.Type, entry.Height, width, entry.RunTimeTicks, entry.Container, entry.Codec, entry.FileSizeBytes, entry.BitrateBps)
 
 		// For episodes, ensure we have proper series info
 		if entry.Type == "Episode" && em != nil {

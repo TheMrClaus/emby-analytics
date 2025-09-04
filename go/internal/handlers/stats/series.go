@@ -72,21 +72,28 @@ func Series(db *sql.DB) fiber.Handler {
             log.Printf("[series] Error counting episodes: %v", err)
         }
 
-        // Largest TV series by estimated total size across its episodes
+        // Largest TV series by total size across episodes (prefer file size, then bitrate*runtime, else heuristic)
         err = db.QueryRow(`
-            SELECT series, SUM(
-                COALESCE(run_time_ticks, 0) / 36000000000.0 *
-                CASE
-                    WHEN COALESCE(height,0) >= 2160 THEN 25.0
-                    WHEN COALESCE(height,0) >= 1080 THEN 8.0
-                    WHEN COALESCE(height,0) >= 720  THEN 4.0
-                    ELSE 2.0
-                END
-            ) AS total_gb
+            SELECT series, SUM(estimated_gb) AS total_gb
             FROM (
-                SELECT `+seriesNameExpr+` AS series, run_time_ticks, height
+                SELECT `+seriesNameExpr+` AS series,
+                       COALESCE(
+                         CASE WHEN file_size_bytes IS NOT NULL AND file_size_bytes > 0
+                              THEN file_size_bytes / 1073741824.0
+                         END,
+                         CASE WHEN bitrate_bps > 0 AND run_time_ticks > 0
+                              THEN (bitrate_bps * (run_time_ticks / 10000000.0) / 8.0) / 1073741824.0
+                         END,
+                         (COALESCE(run_time_ticks, 0) / 36000000000.0) * 
+                         CASE
+                            WHEN COALESCE(height,0) >= 2160 THEN 25.0
+                            WHEN COALESCE(height,0) >= 1080 THEN 8.0
+                            WHEN COALESCE(height,0) >= 720  THEN 4.0
+                            ELSE 2.0
+                         END
+                       ) AS estimated_gb
                 FROM library_item
-                WHERE media_type = 'Episode' AND `+excludeLiveTvFilter()+` AND run_time_ticks > 0
+                WHERE media_type = 'Episode' AND `+excludeLiveTvFilter()+`
             )
             WHERE series IS NOT NULL AND series != ''
             GROUP BY series
@@ -97,18 +104,26 @@ func Series(db *sql.DB) fiber.Handler {
             log.Printf("[series] Error finding largest series: %v", err)
         }
 
-        // Largest single episode by estimated size
+        // Largest single episode by size: prefer file size, then bitrate*runtime, else heuristic
         err = db.QueryRow(`
             SELECT name,
-                   COALESCE(run_time_ticks, 0) / 36000000000.0 *
-                   CASE
-                       WHEN COALESCE(height,0) >= 2160 THEN 25.0
-                       WHEN COALESCE(height,0) >= 1080 THEN 8.0
-                       WHEN COALESCE(height,0) >= 720  THEN 4.0
-                       ELSE 2.0
-                   END AS estimated_gb
+                   COALESCE(
+                     CASE WHEN file_size_bytes IS NOT NULL AND file_size_bytes > 0
+                          THEN file_size_bytes / 1073741824.0
+                     END,
+                     CASE WHEN bitrate_bps > 0 AND run_time_ticks > 0
+                          THEN (bitrate_bps * (run_time_ticks / 10000000.0) / 8.0) / 1073741824.0
+                     END,
+                     (COALESCE(run_time_ticks, 0) / 36000000000.0) *
+                     CASE
+                         WHEN COALESCE(height,0) >= 2160 THEN 25.0
+                         WHEN COALESCE(height,0) >= 1080 THEN 8.0
+                         WHEN COALESCE(height,0) >= 720  THEN 4.0
+                         ELSE 2.0
+                     END
+                   ) AS estimated_gb
             FROM library_item
-            WHERE media_type = 'Episode' AND `+excludeLiveTvFilter()+` AND run_time_ticks > 0
+            WHERE media_type = 'Episode' AND `+excludeLiveTvFilter()+`
             ORDER BY estimated_gb DESC
             LIMIT 1
         `).Scan(&data.LargestEpisodeName, &data.LargestEpisodeGB)
