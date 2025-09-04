@@ -1,8 +1,8 @@
 package tasks
 
 import (
+	"emby-analytics/internal/logging"
 	"database/sql"
-	"log"
 	"time"
 
 	"emby-analytics/internal/config"
@@ -13,12 +13,12 @@ import (
 // StartUserSyncLoop now ONLY handles the periodic background syncs.
 func StartUserSyncLoop(db *sql.DB, em *emby.Client, cfg config.Config) {
 	if cfg.UserSyncIntervalSec <= 0 {
-		log.Println("[usersync] Periodic sync disabled (interval <= 0).")
+		logging.Debug("Periodic sync disabled (interval <= 0).")
 		return
 	}
 
 	interval := time.Duration(cfg.UserSyncIntervalSec) * time.Second
-	log.Printf("[usersync] Starting periodic loop with interval %v.", interval)
+	logging.Debug("Starting periodic loop with interval %v.", interval)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -31,52 +31,52 @@ func StartUserSyncLoop(db *sql.DB, em *emby.Client, cfg config.Config) {
 
 // runUserSync is a private helper to perform the sync logic.
 func runUserSync(db *sql.DB, em *emby.Client) {
-	log.Println("[usersync] starting periodic user sync...")
+	logging.Debug("starting periodic user sync...")
 	startTime := time.Now()
 
 	// DEBUG: Test the API connection first
-	log.Printf("[usersync] Attempting to fetch users from Emby API...")
+	logging.Debug("Attempting to fetch users from Emby API...")
 
 	users, err := em.GetUsers()
 	if err != nil {
-		log.Printf("[usersync] ERROR fetching users from Emby API: %v", err)
+		logging.Debug("ERROR fetching users from Emby API: %v", err)
 		return
 	}
 
-	log.Printf("[usersync] Successfully fetched %d users from Emby API", len(users))
+	logging.Debug("Successfully fetched %d users from Emby API", len(users))
 
 	// DEBUG: Print details of each user
 	for i, user := range users {
-		log.Printf("[usersync] User %d: ID=%s, Name=%s", i+1, user.Id, user.Name)
+		logging.Debug("User %d: ID=%s, Name=%s", i+1, user.Id, user.Name)
 	}
 
 	upserted := 0
 	for _, user := range users {
-		log.Printf("[usersync] Processing user: %s (ID: %s)", user.Name, user.Id)
+		logging.Debug("Processing user: %s (ID: %s)", user.Name, user.Id)
 
 		res, err := db.Exec(`INSERT INTO emby_user (id, name) VALUES (?, ?)
 		                   ON CONFLICT(id) DO UPDATE SET name=excluded.name`,
 			user.Id, user.Name)
 		if err != nil {
-			log.Printf("[usersync] ERROR upserting user %s: %v", user.Name, err)
+			logging.Debug("ERROR upserting user %s: %v", user.Name, err)
 			continue
 		}
 		if rows, _ := res.RowsAffected(); rows > 0 {
 			upserted++
-			log.Printf("[usersync] Successfully upserted user: %s", user.Name)
+			logging.Debug("Successfully upserted user: %s", user.Name)
 		}
 		syncUserWatchData(db, em, user.Id, user.Name)
 	}
 
 	var totalInDB int
 	_ = db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&totalInDB)
-	log.Printf("[usersync] periodic sync completed in %v: upserted %d users, total in DB: %d", time.Since(startTime), upserted, totalInDB)
+	logging.Debug("periodic sync completed in %v: upserted %d users, total in DB: %d", time.Since(startTime), upserted, totalInDB)
 }
 
 func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) {
 	userDataItems, err := em.GetUserData(userID)
 	if err != nil {
-		log.Printf("[usersync] failed to get watch data for %s: %v", userName, err)
+		logging.Debug("failed to get watch data for %s: %v", userName, err)
 		return
 	}
 
@@ -119,7 +119,7 @@ func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) {
 	
 	// Log the breakdown for debugging
 	if traktItems > 0 || embyItems > 0 {
-		log.Printf("[usersync] %s: %d Emby items (%dms), %d Trakt items (%dms), includeTrakt=%v", 
+		logging.Debug("[usersync] %s: %d Emby items (%dms), %d Trakt items (%dms), includeTrakt=%v", 
 			userName, embyItems, embyWatchMs, traktItems, traktWatchMs, includeTrakt)
 	}
 	
@@ -132,7 +132,7 @@ func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) {
 	                      trakt_ms = excluded.trakt_ms`,
 		userID, totalWatchMs, embyWatchMs, traktWatchMs)
 	if err != nil {
-		log.Printf("[usersync] failed to update lifetime watch for %s: %v", userName, err)
+		logging.Debug("failed to update lifetime watch for %s: %v", userName, err)
 	}
 }
 

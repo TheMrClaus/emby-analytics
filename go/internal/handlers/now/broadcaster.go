@@ -2,7 +2,6 @@ package now
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
 
@@ -100,7 +99,7 @@ func (b *Broadcaster) broadcast() {
 	// MODIFIED: Fetch entries first. If it fails, do not broadcast.
 	entries, err := b.fetchNowPlayingEntries()
 	if err != nil {
-		log.Printf("[broadcaster] failed to fetch now playing data, skipping broadcast: %v", err)
+		logging.Debug("failed to fetch now playing data, skipping broadcast: %v", err)
 		return // Do nothing on error
 	}
 
@@ -120,7 +119,7 @@ func (b *Broadcaster) broadcast() {
 func (b *Broadcaster) sendToClient(conn *ws.Conn) {
 	entries, err := b.fetchNowPlayingEntries()
 	if err != nil {
-		log.Printf("[broadcaster] failed to send initial snapshot to client: %v", err)
+		logging.Debug("failed to send initial snapshot to client: %v", err)
 		// Don't send anything if the initial fetch fails
 		return
 	}

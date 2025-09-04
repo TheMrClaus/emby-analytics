@@ -1,8 +1,8 @@
 package admin
 
 import (
+	"emby-analytics/internal/logging"
 	"database/sql"
-	"log"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
@@ -42,21 +42,21 @@ func WebhookHandler(rm *RefreshManager, db *sql.DB, em *emby.Client) fiber.Handl
 		// Parse webhook payload
 		var payload EmbyWebhookPayload
 		if err := c.Bind().JSON(&payload); err != nil {
-			log.Printf("[webhook] Failed to parse webhook payload: %v", err)
+			logging.Debug("Failed to parse webhook payload: %v", err)
 			return c.Status(400).JSON(fiber.Map{"error": "Invalid payload"})
 		}
 
-		log.Printf("[webhook] 📨 Received event: %s for item: %s (%s)", payload.Event, payload.Item.Name, payload.Item.Type)
+		logging.Debug("📨 Received event: %s for item: %s (%s)", payload.Event, payload.Item.Name, payload.Item.Type)
 
 		// Handle library-related events
 		if isLibraryEvent(payload.Event) {
 			// Check if this is a media item we care about
 			if isMediaItem(payload.Item.Type) {
-				log.Printf("[webhook] 📚 Library change detected: %s - %s (%s)", payload.Event, payload.Item.Name, payload.Item.Type)
+				logging.Debug("📚 Library change detected: %s - %s (%s)", payload.Event, payload.Item.Name, payload.Item.Type)
 				
 				// Trigger incremental sync
 				go func() {
-					log.Printf("[webhook] 🔄 Triggering incremental sync due to library change")
+					logging.Debug("[webhook] 🔄 Triggering incremental sync due to library change")
 					rm.StartIncremental(db, em)
 				}()
 			}

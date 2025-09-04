@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"emby-analytics/internal/logging"
 
 	"emby-analytics/internal/config"
 	"emby-analytics/internal/emby"
@@ -25,7 +25,7 @@ func GetConfig(cfg config.Config) fiber.Handler {
 		// Try to get server ID from Emby
 		em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
 		if systemInfo, err := em.GetSystemInfo(); err != nil {
-			log.Printf("[config] Warning: Failed to fetch Emby server ID: %v", err)
+			logging.Debug("Warning: Failed to fetch Emby server ID: %v", err)
 		} else {
 			response.EmbyServerID = systemInfo.ID
 		}

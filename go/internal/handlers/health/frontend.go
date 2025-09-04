@@ -1,8 +1,8 @@
 package health
 
 import (
+	"emby-analytics/internal/logging"
 	"database/sql"
-	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -38,7 +38,7 @@ func FrontendHealth(db *sql.DB) fiber.Handler {
 		if err != nil {
 			status.OK = false
 			status.Error = "Failed to fetch overview data: " + err.Error()
-			log.Printf("[health-frontend] Overview data check failed: %v", err)
+			logging.Debug("Overview data check failed: %v", err)
 		} else {
 			status.Overview = true
 			if userCount == 0 && itemCount == 0 && sessionCount == 0 {
@@ -64,7 +64,7 @@ func FrontendHealth(db *sql.DB) fiber.Handler {
 		status.ResponseTime = time.Since(start).String()
 		
 		// Log results for monitoring
-		log.Printf("[health-frontend] Check completed in %v: users=%d, items=%d, sessions=%d, status=%t",
+		logging.Debug("[health-frontend] Check completed in %v: users=%d, items=%d, sessions=%d, status=%t",
 			time.Since(start), userCount, itemCount, sessionCount, status.OK)
 
 		if !status.OK {

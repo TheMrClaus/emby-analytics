@@ -1,8 +1,8 @@
 package settings
 
 import (
+	"emby-analytics/internal/logging"
 	"database/sql"
-	"log"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -23,7 +23,7 @@ func GetSettings(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		rows, err := db.Query("SELECT key, value, updated_at FROM app_settings ORDER BY key")
 		if err != nil {
-			log.Printf("[settings] Error querying settings: %v", err)
+			logging.Debug("Error querying settings: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to fetch settings"})
 		}
 		defer rows.Close()
@@ -32,7 +32,7 @@ func GetSettings(db *sql.DB) fiber.Handler {
 		for rows.Next() {
 			var s Setting
 			if err := rows.Scan(&s.Key, &s.Value, &s.UpdatedAt); err != nil {
-				log.Printf("[settings] Error scanning setting: %v", err)
+				logging.Debug("Error scanning setting: %v", err)
 				continue
 			}
 			settings = append(settings, s)
@@ -70,11 +70,11 @@ func UpdateSetting(db *sql.DB) fiber.Handler {
 		`, key, req.Value, time.Now().UTC())
 
 		if err != nil {
-			log.Printf("[settings] Error updating setting %s: %v", key, err)
+			logging.Debug("Error updating setting %s: %v", key, err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to update setting"})
 		}
 
-		log.Printf("[settings] Updated setting: %s = %s", key, req.Value)
+		logging.Debug("Updated setting: %s = %s", key, req.Value)
 		return c.JSON(fiber.Map{"success": true, "key": key, "value": req.Value})
 	}
 }
@@ -95,7 +95,7 @@ func GetSettingValue(db *sql.DB, key, defaultValue string) string {
 	err := db.QueryRow("SELECT value FROM app_settings WHERE key = ?", key).Scan(&value)
 	if err != nil {
 		if err != sql.ErrNoRows {
-			log.Printf("[settings] Error getting setting %s: %v", key, err)
+			logging.Debug("Error getting setting %s: %v", key, err)
 		}
 		return defaultValue
 	}
