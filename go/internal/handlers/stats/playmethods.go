@@ -38,20 +38,21 @@ func normalize(method string) string {
 
 // PlayMethods returns a breakdown of playback methods over the last N days (default 30).
 type SessionDetail struct {
-	ItemName     string `json:"item_name"`
-	ItemType     string `json:"item_type"`
-	ItemID       string `json:"item_id"`
-	DeviceID     string `json:"device_id"`
-	DeviceName   string `json:"device_name"`
-	ClientName   string `json:"client_name"`
-	VideoMethod  string `json:"video_method"`
-	AudioMethod  string `json:"audio_method"`
-	UserID       string `json:"user_id"`
-	UserName     string `json:"user_name"`
-	StartedAt    int64  `json:"started_at"`
-	EndedAt      *int64 `json:"ended_at"`
-	SessionID    string `json:"session_id"`
-	PlayMethod   string `json:"play_method"`
+	ItemName          string `json:"item_name"`
+	ItemType          string `json:"item_type"`
+	ItemID            string `json:"item_id"`
+	DeviceID          string `json:"device_id"`
+	DeviceName        string `json:"device_name"`
+	ClientName        string `json:"client_name"`
+	VideoMethod       string `json:"video_method"`
+	AudioMethod       string `json:"audio_method"`
+	SubtitleTranscode bool   `json:"subtitle_transcode"`
+	UserID            string `json:"user_id"`
+	UserName          string `json:"user_name"`
+	StartedAt         int64  `json:"started_at"`
+	EndedAt           *int64 `json:"ended_at"`
+	SessionID         string `json:"session_id"`
+	PlayMethod        string `json:"play_method"`
 }
 
 func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
@@ -168,7 +169,13 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
                         AND lower(ps.audio_codec_from) <> lower(ps.audio_codec_to) THEN 'Transcode'
                     WHEN instr(lower(COALESCE(ps.transcode_reasons,'')), 'audio') > 0 THEN 'Transcode'
                     ELSE 'DirectPlay'
-                END AS audio_method
+                END AS audio_method,
+                -- Per-session subtitle transcoding detection
+                CASE 
+                    WHEN instr(lower(COALESCE(ps.transcode_reasons,'')), 'subtitle') > 0 OR 
+                         instr(lower(COALESCE(ps.transcode_reasons,'')), 'burn') > 0 THEN 1
+                    ELSE 0
+                END AS subtitle_transcode
             FROM play_sessions ps
             LEFT JOIN emby_user eu ON ps.user_id = eu.id
             WHERE ps.started_at >= (strftime('%s','now') - (? * 86400))
@@ -193,6 +200,20 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
                     instr(lower(COALESCE(ps.transcode_reasons,'')), 'burn') > 0 OR 
                     instr(lower(COALESCE(ps.transcode_reasons,'')), 'video') > 0 OR
                     instr(lower(COALESCE(ps.transcode_reasons,'')), 'audio') > 0
+                )
+            ) AND (
+                -- Exclude sessions where ALL streams are direct (truly direct sessions)
+                NOT (
+                    lower(COALESCE(ps.video_method,'')) <> 'transcode' AND
+                    lower(COALESCE(ps.audio_method,'')) <> 'transcode' AND
+                    NOT (instr(lower(COALESCE(ps.transcode_reasons,'')), 'subtitle') > 0 OR 
+                         instr(lower(COALESCE(ps.transcode_reasons,'')), 'burn') > 0) AND
+                    NOT (
+                        (COALESCE(ps.video_codec_from,'') <> '' AND COALESCE(ps.video_codec_to,'') <> '' 
+                         AND lower(ps.video_codec_from) <> lower(ps.video_codec_to)) OR
+                        (COALESCE(ps.audio_codec_from,'') <> '' AND COALESCE(ps.audio_codec_to,'') <> '' 
+                         AND lower(ps.audio_codec_from) <> lower(ps.audio_codec_to))
+                    )
                 )
             )`
 		}
@@ -293,14 +314,16 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 			defer sessionRows.Close()
 			for sessionRows.Next() {
 				var session SessionDetail
+				var subtitleTranscodeInt int
 				if err := sessionRows.Scan(
 					&session.ItemName, &session.ItemType, &session.DeviceID, &session.DeviceName,
 					&session.ClientName, &session.ItemID, &session.UserID, &session.UserName,
 					&session.StartedAt, &session.EndedAt, &session.SessionID, &session.PlayMethod,
-					&session.VideoMethod, &session.AudioMethod); err != nil {
+					&session.VideoMethod, &session.AudioMethod, &subtitleTranscodeInt); err != nil {
 					logging.Debug("Session scan error: %v", err)
 					continue
 				}
+				session.SubtitleTranscode = subtitleTranscodeInt == 1
 				sessionDetails = append(sessionDetails, session)
 			}
 		}
@@ -318,6 +341,29 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 		var subtitleCount int
 		if err := db.QueryRow(subtitleQuery, days).Scan(&subtitleCount); err == nil {
 			transcodeDetails["TranscodeSubtitle"] = subtitleCount
+		}
+
+		// Calculate truly direct sessions (all streams direct)
+		directQuery := `
+            SELECT COUNT(*) FROM play_sessions ps
+            WHERE ps.started_at >= (strftime('%s','now') - (? * 86400))
+                AND ps.started_at IS NOT NULL
+                AND (
+                    lower(COALESCE(ps.video_method,'')) <> 'transcode' AND
+                    lower(COALESCE(ps.audio_method,'')) <> 'transcode' AND
+                    NOT (instr(lower(COALESCE(ps.transcode_reasons,'')), 'subtitle') > 0 OR 
+                         instr(lower(COALESCE(ps.transcode_reasons,'')), 'burn') > 0)
+                )
+                AND NOT (
+                    (COALESCE(ps.video_codec_from,'') <> '' AND COALESCE(ps.video_codec_to,'') <> '' 
+                     AND lower(ps.video_codec_from) <> lower(ps.video_codec_to)) OR
+                    (COALESCE(ps.audio_codec_from,'') <> '' AND COALESCE(ps.audio_codec_to,'') <> '' 
+                     AND lower(ps.audio_codec_from) <> lower(ps.audio_codec_to))
+                )
+        `
+		var directCount int
+		if err := db.QueryRow(directQuery, days).Scan(&directCount); err == nil {
+			transcodeDetails["Direct"] = directCount
 		}
 
 		// Enrich item names for episodes: "Series - Episode (SxxExx)"

@@ -100,6 +100,7 @@ type SessionDetail = {
   client_name: string;
   video_method: string;
   audio_method: string;
+  subtitle_transcode: boolean;
   user_id: string;
   user_name: string;
   started_at: number;

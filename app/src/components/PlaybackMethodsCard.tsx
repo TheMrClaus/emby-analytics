@@ -13,6 +13,7 @@ type SessionDetail = {
   client_name: string;
   video_method: string;
   audio_method: string;
+  subtitle_transcode: boolean;
   user_id: string;
   user_name: string;
   started_at: number;
@@ -59,9 +60,11 @@ export default function PlaybackMethodsCard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
   const [userFilter, setUserFilter] = useState('');
-  const [showAll, setShowAll] = useState(false);
+  const [showTranscodeOnly, setShowTranscodeOnly] = useState(false);
   const [allSessions, setAllSessions] = useState<SessionDetail[]>([]);
   const [totalSessions, setTotalSessions] = useState(0);
+  const [allUniqueUsers, setAllUniqueUsers] = useState<Array<{id: string, name: string}>>([]);
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
 
   const loadData = useCallback(async (resetPagination = false) => {
     setLoading(true);
@@ -75,37 +78,60 @@ export default function PlaybackMethodsCard() {
       const result = await fetchPlayMethods(days, {
         limit: SESSIONS_PER_PAGE,
         offset: offset,
-        show_all: showAll,
+        show_all: !showTranscodeOnly,
         user_id: userFilter || undefined,
       });
       
       setData(result);
       
+      // Defensive check for sessionDetails
+      const sessionDetails = Array.isArray(result.sessionDetails) ? result.sessionDetails : [];
+      
       if (resetPagination) {
         setCurrentPage(1);
-        setAllSessions(result.sessionDetails);
+        setAllSessions(sessionDetails);
       } else {
         // For pagination, we need to accumulate sessions
         if (page === 1) {
-          setAllSessions(result.sessionDetails);
+          setAllSessions(sessionDetails);
         } else {
-          setAllSessions(prev => [...prev, ...result.sessionDetails]);
+          setAllSessions(prev => [...prev, ...sessionDetails]);
         }
       }
       
+      // Track unique users from all sessions ever fetched - with null check
+      if (sessionDetails.length > 0) {
+        const newUsers = sessionDetails.reduce((acc, session) => {
+          if (session.user_name && !acc.find(u => u.id === session.user_id)) {
+            acc.push({ id: session.user_id, name: session.user_name });
+          }
+          return acc;
+        }, [] as Array<{id: string, name: string}>);
+        
+        setAllUniqueUsers(prev => {
+          const combined = [...prev];
+          newUsers.forEach(newUser => {
+            if (!combined.find(u => u.id === newUser.id)) {
+              combined.push(newUser);
+            }
+          });
+          return combined.sort((a, b) => a.name.localeCompare(b.name));
+        });
+      }
+      
       // Estimate total sessions (this is a rough estimate)
-      setTotalSessions(result.sessionDetails.length + offset);
+      setTotalSessions(sessionDetails.length + offset);
       
     } catch (e: any) {
       setError(e?.message || 'Failed to load playback methods');
     } finally {
       setLoading(false);
     }
-  }, [timeframe, currentPage, userFilter, showAll]);
+  }, [timeframe, currentPage, userFilter, showTranscodeOnly]);
   
   useEffect(() => {
     loadData(true);
-  }, [timeframe, userFilter, showAll]);
+  }, [timeframe, userFilter, showTranscodeOnly]);
   
   useEffect(() => {
     if (showDetailed && currentPage > 1) {
@@ -137,23 +163,52 @@ export default function PlaybackMethodsCard() {
     if (!data?.transcodeDetails) return [];
     const details = data.transcodeDetails;
     return [
+      { name: 'Direct', value: details.Direct || 0 },
       { name: 'Video Transcode', value: details.TranscodeVideo || 0 },
       { name: 'Audio Transcode', value: details.TranscodeAudio || 0 },
       { name: 'Subtitle Transcode', value: details.TranscodeSubtitle || 0 }
     ].filter(d => d.value > 0);
   }, [data]);
   
-  // Filtered sessions based on search term
+  // Filtered sessions based on search term and active rectangle filters
   const filteredSessions = useMemo(() => {
-    if (!searchTerm) return allSessions;
-    const term = searchTerm.toLowerCase();
-    return allSessions.filter(session => 
-      session.item_name?.toLowerCase().includes(term) ||
-      session.user_name?.toLowerCase().includes(term) ||
-      session.device_name?.toLowerCase().includes(term) ||
-      session.client_name?.toLowerCase().includes(term)
-    );
-  }, [allSessions, searchTerm]);
+    let sessions = allSessions;
+    
+    // Apply search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      sessions = sessions.filter(session => 
+        session.item_name?.toLowerCase().includes(term) ||
+        session.user_name?.toLowerCase().includes(term) ||
+        session.device_name?.toLowerCase().includes(term) ||
+        session.client_name?.toLowerCase().includes(term)
+      );
+    }
+    
+    // Apply rectangle filters
+    if (activeFilters.size > 0) {
+      sessions = sessions.filter(session => {
+        if (activeFilters.has('Direct') && 
+            session.video_method !== 'Transcode' && 
+            session.audio_method !== 'Transcode' && 
+            !session.subtitle_transcode) {
+          return true;
+        }
+        if (activeFilters.has('TranscodeVideo') && session.video_method === 'Transcode') {
+          return true;
+        }
+        if (activeFilters.has('TranscodeAudio') && session.audio_method === 'Transcode') {
+          return true;
+        }
+        if (activeFilters.has('TranscodeSubtitle') && session.subtitle_transcode) {
+          return true;
+        }
+        return false;
+      });
+    }
+    
+    return sessions;
+  }, [allSessions, searchTerm, activeFilters]);
   
   // Format date/time
   const formatDateTime = (timestamp: number) => {
@@ -165,16 +220,7 @@ export default function PlaybackMethodsCard() {
     });
   };
   
-  // Get unique users for filter dropdown
-  const uniqueUsers = useMemo(() => {
-    const users = allSessions.reduce((acc, session) => {
-      if (session.user_name && !acc.find(u => u.id === session.user_id)) {
-        acc.push({ id: session.user_id, name: session.user_name });
-      }
-      return acc;
-    }, [] as Array<{id: string, name: string}>);
-    return users.sort((a, b) => a.name.localeCompare(b.name));
-  }, [allSessions]);
+  // Get unique users for filter dropdown (removed - using allUniqueUsers state instead)
 
   const selectedOption = timeframeOptions.find((opt) => opt.value === timeframe);
   const total = summaryChartData.reduce((a, b) => a + b.value, 0);
@@ -191,16 +237,48 @@ export default function PlaybackMethodsCard() {
     setSearchTerm('');
     setUserFilter('');
     setCurrentPage(1);
+    setActiveFilters(new Set());
+  };
+  
+  const handleRectangleClick = (filterType: string) => {
+    setActiveFilters(prev => {
+      const newFilters = new Set(prev);
+      
+      // Handle Direct filter while transcode-only is checked
+      if (filterType === 'Direct' && showTranscodeOnly) {
+        setShowTranscodeOnly(false); // Silently uncheck
+        return new Set(['Direct']);
+      }
+      
+      // Toggle filter
+      if (newFilters.has(filterType)) {
+        newFilters.delete(filterType);
+      } else {
+        newFilters.add(filterType);
+      }
+      
+      return newFilters;
+    });
+  };
+  
+  const clearAllFilters = () => {
+    setActiveFilters(new Set());
+  };
+  
+  const getRectangleFilterKey = (name: string) => {
+    switch (name) {
+      case 'Direct': return 'Direct';
+      case 'Video Transcode': return 'TranscodeVideo';
+      case 'Audio Transcode': return 'TranscodeAudio';
+      case 'Subtitle Transcode': return 'TranscodeSubtitle';
+      default: return name;
+    }
   };
   
   const loadMoreSessions = () => {
-    setCurrentPage(prev => prev + 1);
-  };
-  
-  const hasSubtitleTranscode = (session: SessionDetail) => {
-    // Since we don't have direct access to transcode_reasons in frontend,
-    // we'll check if there's subtitle transcoding from the transcodeDetails
-    return (data?.transcodeDetails.TranscodeSubtitle || 0) > 0;
+    if (!loading) {
+      setCurrentPage(prev => prev + 1);
+    }
   };
   
   const getTranscodeBubbles = (session: SessionDetail) => {
@@ -222,8 +300,8 @@ export default function PlaybackMethodsCard() {
       );
     }
     
-    // Add subtitle bubble if we detect subtitle transcoding
-    if (hasSubtitleTranscode(session)) {
+    // Add subtitle bubble if this session has subtitle transcoding
+    if (session.subtitle_transcode) {
       bubbles.push(
         <span key="subtitle" className="px-2 py-1 bg-orange-500/20 text-orange-400 border border-orange-400/30 rounded text-xs">
           Subtitle
@@ -231,8 +309,8 @@ export default function PlaybackMethodsCard() {
       );
     }
     
-    // Add green Direct bubble if no transcoding
-    if (session.video_method !== 'Transcode' && session.audio_method !== 'Transcode' && !hasSubtitleTranscode(session)) {
+    // Add green Direct bubble if no transcoding at all
+    if (session.video_method !== 'Transcode' && session.audio_method !== 'Transcode' && !session.subtitle_transcode) {
       bubbles.push(
         <span key="direct" className="px-2 py-1 bg-green-500/20 text-green-400 border border-green-400/30 rounded text-xs">
           Direct
@@ -331,36 +409,58 @@ export default function PlaybackMethodsCard() {
               className="bg-neutral-700 text-white text-xs px-3 py-2 rounded border border-neutral-600 focus:border-blue-500 focus:outline-none"
             >
               <option value="">All Users</option>
-              {uniqueUsers.map(user => (
+              {allUniqueUsers.map(user => (
                 <option key={user.id} value={user.id}>{user.name}</option>
               ))}
             </select>
             <label className="flex items-center gap-2 text-xs text-gray-300">
               <input
                 type="checkbox"
-                checked={showAll}
-                onChange={(e) => setShowAll(e.target.checked)}
+                checked={showTranscodeOnly}
+                onChange={(e) => setShowTranscodeOnly(e.target.checked)}
                 className="rounded"
               />
-              Show All Sessions
+              Show Transcode Only
             </label>
           </div>
           
           {/* Summary Stats */}
-          <div className="grid grid-cols-3 gap-4 text-center text-sm">
-            {transcodeBreakdown.map((item, idx) => (
-              <div key={idx} className="bg-neutral-700/50 rounded p-3">
-                <div className="text-white font-bold text-lg">{item.value}</div>
-                <div className="text-gray-400">{item.name}</div>
-              </div>
-            ))}
+          <div className="grid grid-cols-4 gap-4 text-center text-sm">
+            {transcodeBreakdown.map((item, idx) => {
+              const filterKey = getRectangleFilterKey(item.name);
+              const isActive = activeFilters.has(filterKey);
+              return (
+                <div 
+                  key={idx} 
+                  onClick={() => handleRectangleClick(filterKey)}
+                  className={`bg-neutral-700/50 rounded p-3 cursor-pointer transition-all hover:bg-neutral-600/50 ${
+                    isActive ? 'ring-2 ring-blue-500 bg-blue-500/20' : ''
+                  }`}
+                >
+                  <div className="text-white font-bold text-lg">{item.value}</div>
+                  <div className="text-gray-400">{item.name}</div>
+                </div>
+              );
+            })}
           </div>
+          
+          {/* Clear Filters Button */}
+          {activeFilters.size > 0 && (
+            <div className="flex justify-center">
+              <button
+                onClick={clearAllFilters}
+                className="text-xs px-3 py-1 rounded bg-neutral-600 text-gray-300 hover:bg-neutral-500 transition-colors"
+              >
+                Clear Filters ({activeFilters.size})
+              </button>
+            </div>
+          )}
 
           {/* Session Details */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <div className="text-sm text-gray-300">
-                {showAll ? 'All Sessions' : 'Transcode Sessions'} ({filteredSessions.length})
+                {showTranscodeOnly ? 'Transcode Sessions' : 'All Sessions'} ({filteredSessions.length})
               </div>
               {loading && <div className="text-xs text-gray-400">Loading...</div>}
             </div>
@@ -409,13 +509,14 @@ export default function PlaybackMethodsCard() {
               {filteredSessions.length === 0 && !loading && (
                 <div className="text-gray-500 text-center py-6">
                   {searchTerm || userFilter ? 'No matching sessions found' : 
-                   showAll ? 'No sessions found' : 'No transcode sessions found'}
+                   showTranscodeOnly ? 'No transcode sessions found' : 'No sessions found'}
                 </div>
               )}
             </div>
             
             {/* Load More Button */}
-            {!searchTerm && !userFilter && allSessions.length >= SESSIONS_PER_PAGE && (
+            {!searchTerm && !userFilter && allSessions.length >= SESSIONS_PER_PAGE && 
+             data?.sessionDetails && Array.isArray(data.sessionDetails) && data.sessionDetails.length >= SESSIONS_PER_PAGE && (
               <div className="mt-4 text-center">
                 <button
                   onClick={loadMoreSessions}
