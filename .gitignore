@@ -27,3 +27,9 @@ app/tsconfig.tsbuildinfo
 go/emby.db
 go/emby.db-shm
 go/emby.db-wal
+
+# gemini-cli settings
+.gemini/
+
+# GitHub App credentials
+gha-creds-*.json

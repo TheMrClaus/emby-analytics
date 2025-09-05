@@ -1,8 +1,8 @@
 package health
 
 import (
-	"emby-analytics/internal/logging"
 	"database/sql"
+	"emby-analytics/internal/logging"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -34,7 +34,7 @@ func FrontendHealth(db *sql.DB) fiber.Handler {
 			(SELECT COUNT(*) FROM library_item WHERE media_type NOT IN ('TvChannel', 'LiveTv', 'Channel')),
 			(SELECT COUNT(*) FROM play_sessions WHERE started_at IS NOT NULL)
 		`).Scan(&userCount, &itemCount, &sessionCount)
-		
+
 		if err != nil {
 			status.OK = false
 			status.Error = "Failed to fetch overview data: " + err.Error()
@@ -54,7 +54,7 @@ func FrontendHealth(db *sql.DB) fiber.Handler {
 				status.SessionsData = recentSessions > 0
 			}
 
-			var activeUsers int 
+			var activeUsers int
 			err = db.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM play_sessions WHERE started_at > datetime('now', '-7 days')`).Scan(&activeUsers)
 			if err == nil {
 				status.UsersData = activeUsers > 0
@@ -62,7 +62,7 @@ func FrontendHealth(db *sql.DB) fiber.Handler {
 		}
 
 		status.ResponseTime = time.Since(start).String()
-		
+
 		// Log results for monitoring
 		logging.Debug("[health-frontend] Check completed in %v: users=%d, items=%d, sessions=%d, status=%t",
 			time.Since(start), userCount, itemCount, sessionCount, status.OK)

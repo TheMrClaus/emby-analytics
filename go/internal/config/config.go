@@ -1,13 +1,13 @@
 package config
 
 import (
-    "crypto/rand"
-    "encoding/hex"
-    "fmt"
-    "os"
-    "path/filepath"
-    "strconv"
-    "strings"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -37,9 +37,9 @@ type Config struct {
 	RefreshChunkSize int // e.g. 200
 
 	// Security
-	AdminToken    string // Authentication token for admin endpoints
-	WebhookSecret string // Secret for webhook signature validation
-	AdminAutoCookie bool // If true, server sets HttpOnly cookie to auto-auth UI
+	AdminToken      string // Authentication token for admin endpoints
+	WebhookSecret   string // Secret for webhook signature validation
+	AdminAutoCookie bool   // If true, server sets HttpOnly cookie to auto-auth UI
 
 	// Logging
 	LogLevel  string // DEBUG, INFO, WARN, ERROR
@@ -62,7 +62,7 @@ func Load() Config {
 	embyKey := env("EMBY_API_KEY", "")
 	embyExternal := env("EMBY_EXTERNAL_URL", embyBase)
 
-    cfg := Config{
+	cfg := Config{
 		EmbyBaseURL:         embyBase,
 		EmbyAPIKey:          embyKey,
 		EmbyExternalURL:     embyExternal,
@@ -84,40 +84,40 @@ func Load() Config {
 		LogOutput:           env("LOG_OUTPUT", "stdout"),
 		NowSseDebug:         envBool("NOW_SSE_DEBUG", false),
 		RefreshSseDebug:     envBool("REFRESH_SSE_DEBUG", false),
-        UserSyncIntervalSec: envInt("USERSYNC_INTERVAL", 43200), // Changed from 3600 to 43200 (12 hours)
-    }
+		UserSyncIntervalSec: envInt("USERSYNC_INTERVAL", 43200), // Changed from 3600 to 43200 (12 hours)
+	}
 
-    // Auto-generate and persist admin token if not provided
-    if cfg.AdminToken == "" {
-        tokenFile := filepath.Join(filepath.Dir(dbPath), "admin_token")
-        if data, err := os.ReadFile(tokenFile); err == nil {
-            t := strings.TrimSpace(string(data))
-            if t != "" {
-                cfg.AdminToken = t
-                fmt.Printf("[INFO] Loaded admin token from %s\n", tokenFile)
-            }
-        }
-        if cfg.AdminToken == "" {
-            buf := make([]byte, 32)
-            if _, err := rand.Read(buf); err == nil {
-                t := hex.EncodeToString(buf)
-                if err := os.WriteFile(tokenFile, []byte(t+"\n"), 0600); err == nil {
-                    cfg.AdminToken = t
-                    fmt.Printf("[INFO] Generated and saved admin token to %s\n", tokenFile)
-                } else {
-                    fmt.Printf("[WARN] Failed to persist admin token to %s: %v\n", tokenFile, err)
-                    cfg.AdminToken = t
-                }
-            } else {
-                fmt.Printf("[WARN] Failed to generate admin token: %v\n", err)
-            }
-        }
-        // If token was auto-generated/loaded and cookie opt-in not set, enable it for zero-config UX
-        if cfg.AdminToken != "" && !envBool("ADMIN_AUTO_COOKIE", false) {
-            cfg.AdminAutoCookie = true
-            fmt.Println("[INFO] ADMIN_AUTO_COOKIE enabled automatically (no ADMIN_TOKEN provided).")
-        }
-    }
+	// Auto-generate and persist admin token if not provided
+	if cfg.AdminToken == "" {
+		tokenFile := filepath.Join(filepath.Dir(dbPath), "admin_token")
+		if data, err := os.ReadFile(tokenFile); err == nil {
+			t := strings.TrimSpace(string(data))
+			if t != "" {
+				cfg.AdminToken = t
+				fmt.Printf("[INFO] Loaded admin token from %s\n", tokenFile)
+			}
+		}
+		if cfg.AdminToken == "" {
+			buf := make([]byte, 32)
+			if _, err := rand.Read(buf); err == nil {
+				t := hex.EncodeToString(buf)
+				if err := os.WriteFile(tokenFile, []byte(t+"\n"), 0600); err == nil {
+					cfg.AdminToken = t
+					fmt.Printf("[INFO] Generated and saved admin token to %s\n", tokenFile)
+				} else {
+					fmt.Printf("[WARN] Failed to persist admin token to %s: %v\n", tokenFile, err)
+					cfg.AdminToken = t
+				}
+			} else {
+				fmt.Printf("[WARN] Failed to generate admin token: %v\n", err)
+			}
+		}
+		// If token was auto-generated/loaded and cookie opt-in not set, enable it for zero-config UX
+		if cfg.AdminToken != "" && !envBool("ADMIN_AUTO_COOKIE", false) {
+			cfg.AdminAutoCookie = true
+			fmt.Println("[INFO] ADMIN_AUTO_COOKIE enabled automatically (no ADMIN_TOKEN provided).")
+		}
+	}
 
 	fmt.Printf("[INFO] Using SQLite DB at: %s\n", dbPath)
 	fmt.Printf("[INFO] Serving static UI from: %s\n", webPath)
@@ -125,9 +125,9 @@ func Load() Config {
 	if embyKey == "" {
 		fmt.Println("[WARN] EMBY_API_KEY is not set! API calls to Emby will fail.")
 	}
-    if cfg.AdminToken == "" {
-        fmt.Println("[WARN] ADMIN_TOKEN is not set and could not be generated. Admin endpoints will be unprotected.")
-    }
+	if cfg.AdminToken == "" {
+		fmt.Println("[WARN] ADMIN_TOKEN is not set and could not be generated. Admin endpoints will be unprotected.")
+	}
 	if cfg.AdminAutoCookie && cfg.AdminToken == "" {
 		fmt.Println("[WARN] ADMIN_AUTO_COOKIE is true but ADMIN_TOKEN is empty; no cookie will be set.")
 	}

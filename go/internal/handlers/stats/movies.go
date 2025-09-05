@@ -26,9 +26,9 @@ type MoviesData struct {
 		Name  string  `json:"name"`
 		Hours float64 `json:"hours"`
 	} `json:"most_watched_movie"`
-	TotalRuntimeHours   float64           `json:"total_runtime_hours"`
-	PopularGenres       []GenreStats      `json:"popular_genres"`
-	MoviesAddedThisMonth int              `json:"movies_added_this_month"`
+	TotalRuntimeHours    float64      `json:"total_runtime_hours"`
+	PopularGenres        []GenreStats `json:"popular_genres"`
+	MoviesAddedThisMonth int          `json:"movies_added_this_month"`
 }
 
 type GenreStats struct {
@@ -45,14 +45,14 @@ func Movies(db *sql.DB) fiber.Handler {
 		err := db.QueryRow(`
 			SELECT COUNT(*) 
 			FROM library_item 
-			WHERE media_type = 'Movie' AND `+excludeLiveTvFilter()).Scan(&data.TotalMovies)
+			WHERE media_type = 'Movie' AND ` + excludeLiveTvFilter()).Scan(&data.TotalMovies)
 		if err != nil {
 			log.Printf("[movies] Error counting movies: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to count movies"})
 		}
 
-        // Get largest movie: prefer actual size, then bitrate*runtime, else heuristic
-        err = db.QueryRow(`
+		// Get largest movie: prefer actual size, then bitrate*runtime, else heuristic
+		err = db.QueryRow(`
             SELECT COALESCE(name, 'Unknown'),
                    COALESCE(
                      CASE WHEN file_size_bytes IS NOT NULL AND file_size_bytes > 0
@@ -129,7 +129,7 @@ func Movies(db *sql.DB) fiber.Handler {
 		err = db.QueryRow(`
 			SELECT COALESCE(SUM(run_time_ticks), 0) / 36000000000.0 
 			FROM library_item 
-			WHERE media_type = 'Movie' AND `+excludeLiveTvFilter()+` 
+			WHERE media_type = 'Movie' AND ` + excludeLiveTvFilter() + ` 
 			  AND run_time_ticks > 0`).Scan(&data.TotalRuntimeHours)
 		if err != nil {
 			log.Printf("[movies] Error calculating total runtime: %v", err)
@@ -145,13 +145,13 @@ func Movies(db *sql.DB) fiber.Handler {
 				END as primary_genre,
 				COUNT(*) as count
 			FROM library_item 
-			WHERE media_type = 'Movie' AND `+excludeLiveTvFilter()+` 
+			WHERE media_type = 'Movie' AND ` + excludeLiveTvFilter() + ` 
 			  AND genres IS NOT NULL AND genres != ''
 			GROUP BY primary_genre
 			HAVING primary_genre != ''
 			ORDER BY count DESC
 			LIMIT 5`)
-		
+
 		if err == nil {
 			defer genreRows.Close()
 			for genreRows.Next() {
@@ -168,7 +168,7 @@ func Movies(db *sql.DB) fiber.Handler {
 		err = db.QueryRow(`
 			SELECT COUNT(*) 
 			FROM library_item 
-			WHERE media_type = 'Movie' AND `+excludeLiveTvFilter()+` 
+			WHERE media_type = 'Movie' AND ` + excludeLiveTvFilter() + ` 
 			  AND created_at >= date('now', 'start of month')`).Scan(&data.MoviesAddedThisMonth)
 		if err != nil {
 			log.Printf("[movies] Error counting movies added this month: %v", err)

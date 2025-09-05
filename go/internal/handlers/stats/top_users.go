@@ -2,8 +2,8 @@ package stats
 
 import (
 	"database/sql"
-	"emby-analytics/internal/queries"
 	"emby-analytics/internal/handlers/settings"
+	"emby-analytics/internal/queries"
 	"emby-analytics/internal/tasks"
 	"sort"
 	"time"
@@ -43,7 +43,7 @@ func TopUsers(db *sql.DB) fiber.Handler {
 		if timeframe == "" {
 			timeframe = "14d" // Final fallback
 		}
-		
+
 		limit := parseQueryInt(c, "limit", 10)
 		if limit <= 0 || limit > 100 {
 			limit = 10
@@ -53,7 +53,7 @@ func TopUsers(db *sql.DB) fiber.Handler {
 		if timeframe == "all-time" {
 			// Get the setting for whether to include Trakt items
 			includeTrakt := settings.GetSettingBool(db, "include_trakt_items", false)
-			
+
 			rows, err := db.Query(`
 				SELECT
 					u.id,

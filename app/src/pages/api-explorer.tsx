@@ -6,7 +6,7 @@ type Param = { key: string; label?: string; kind: 'path' | 'query' | 'body'; req
 type Endpoint = {
   id: string;
   category: string;
-  method: 'GET' | 'POST' | 'ALL';
+  method: 'GET' | 'POST' | 'PUT' | 'ALL';
   path: string; // may include :id path params
   description: string;
   usage: string;
@@ -19,7 +19,7 @@ type Endpoint = {
 // Read admin token similar to lib/api.ts
 const ADMIN_TOKEN_STORAGE_KEY = 'emby_admin_token';
 function adminAuthHeaderFor(path: string): Record<string, string> {
-  if (!path.startsWith('/admin')) return {};
+  if (!path.startsWith('/admin') && !path.startsWith('/api/settings')) return {};
   try {
     if (typeof window !== 'undefined') {
       const t = window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
@@ -50,13 +50,15 @@ const endpoints: Endpoint[] = [
   { id: 'stats-codecs', category: 'Stats', method: 'GET', path: '/stats/codecs', description: 'Media distribution by codec.', usage: 'Format/codecs breakdown.' },
   { id: 'stats-active-users', category: 'Stats', method: 'GET', path: '/stats/active-users', description: 'Most active users (lifetime).', usage: 'All-time user totals.' },
   { id: 'stats-users-total', category: 'Stats', method: 'GET', path: '/stats/users/total', description: 'Total number of users known.', usage: 'Count users in DB.' },
-  { id: 'stats-user-id', category: 'Stats', method: 'GET', path: '/stats/user/:id', description: 'Details for one user.', usage: 'Per-user drilldown.', params: [{ key: 'id', kind: 'path', required: true, placeholder: 'emby-user-id' }] },
-  { id: 'stats-user-watch-time', category: 'Stats', method: 'GET', path: '/stats/user/:id/watch-time', description: 'Watch time breakdown for specific user.', usage: 'Per-user time analysis.', params: [{ key: 'id', kind: 'path', required: true, placeholder: 'emby-user-id' }] },
+  { id: 'stats-user-id', category: 'Stats', method: 'GET', path: '/stats/users/:id', description: 'Details for one user.', usage: 'Per-user drilldown.', params: [{ key: 'id', kind: 'path', required: true, placeholder: 'emby-user-id' }] },
+  { id: 'stats-user-watch-time', category: 'Stats', method: 'GET', path: '/stats/users/:id/watch-time', description: 'Watch time breakdown for specific user.', usage: 'Per-user time analysis.', params: [{ key: 'id', kind: 'path', required: true, placeholder: 'emby-user-id' }] },
   { id: 'stats-users-watch-time', category: 'Stats', method: 'GET', path: '/stats/users/watch-time', description: 'Watch time breakdown for all users.', usage: 'All users time analysis.' },
   { id: 'stats-play-methods', category: 'Stats', method: 'GET', path: '/stats/play-methods', description: 'Playback methods summary and recent transcodes.', usage: 'DirectPlay vs Transcode, with per-stream breakdown.', params: [{ key: 'days', kind: 'query', placeholder: '30' }] },
   { id: 'stats-playback-methods', category: 'Stats', method: 'GET', path: '/stats/playback-methods', description: 'Playback methods (backward compatibility alias).', usage: 'Same as play-methods endpoint.', params: [{ key: 'days', kind: 'query', placeholder: '30' }] },
   { id: 'stats-items-by-codec', category: 'Stats', method: 'GET', path: '/stats/items/by-codec/:codec', description: 'List items by codec.', usage: 'Inventory by codec.', params: [{ key: 'codec', kind: 'path', required: true, placeholder: 'H264' }, { key: 'page', kind: 'query', placeholder: '1' }, { key: 'page_size', kind: 'query', placeholder: '50' }, { key: 'media_type', kind: 'query', placeholder: 'Movie|Episode' }] },
   { id: 'stats-items-by-quality', category: 'Stats', method: 'GET', path: '/stats/items/by-quality/:quality', description: 'List items by quality bucket.', usage: 'Inventory by resolution.', params: [{ key: 'quality', kind: 'path', required: true, placeholder: '4K|1080p|720p' }, { key: 'page', kind: 'query', placeholder: '1' }, { key: 'page_size', kind: 'query', placeholder: '50' }, { key: 'media_type', kind: 'query', placeholder: 'Movie|Episode' }] },
+  { id: 'stats-movies', category: 'Stats', method: 'GET', path: '/stats/movies', description: 'Movies library summary.', usage: 'Totals and breakdowns for movies.' },
+  { id: 'stats-series', category: 'Stats', method: 'GET', path: '/stats/series', description: 'Series library summary.', usage: 'Totals and breakdowns for series.' },
 
   // Items & images
   { id: 'items-by-ids', category: 'Items', method: 'GET', path: '/items/by-ids', description: 'Batch item fetch by Emby IDs.', usage: 'Resolve names and types for item IDs.', params: [{ key: 'ids', kind: 'query', required: true, placeholder: 'id1,id2,id3' }] },
@@ -65,6 +67,10 @@ const endpoints: Endpoint[] = [
 
   // Settings (API)
   { id: 'api-settings', category: 'Settings', method: 'GET', path: '/api/settings', description: 'Get application settings.', usage: 'Retrieve current settings configuration.' },
+  { id: 'api-settings-update', category: 'Settings', method: 'PUT', path: '/api/settings/:key', description: 'Update a setting value (admin).', usage: 'Change feature flags or options. Protected.', params: [
+    { key: 'key', kind: 'path', required: true, placeholder: 'include_trakt_items' },
+    { key: 'value', kind: 'body', required: true, placeholder: 'true|false|string' },
+  ] },
 
   // Now Playing
   { id: 'now-snapshot', category: 'Now', method: 'GET', path: '/now/snapshot', description: 'Current active sessions snapshot.', usage: 'Populate Now Playing card.' },
@@ -93,6 +99,8 @@ const endpoints: Endpoint[] = [
   { id: 'admin-recover-intervals', category: 'Admin', method: 'POST', path: '/admin/recover-intervals', description: 'Rebuild missing intervals from events.', usage: 'Repair after crashes. Protected.' },
   { id: 'admin-cleanup-intervals-dedupe', category: 'Admin', method: 'POST', path: '/admin/cleanup/intervals/dedupe', description: 'Deduplicate overlapping intervals.', usage: 'Cleanup duplicates. Protected.' },
   { id: 'admin-cleanup-intervals-dedupe-get', category: 'Admin', method: 'GET', path: '/admin/cleanup/intervals/dedupe', description: 'Dry-run dedupe info (if supported).', usage: 'Inspect dedupe before applying. Protected.' },
+  { id: 'admin-cleanup-intervals-superset', category: 'Admin', method: 'POST', path: '/admin/cleanup/intervals/superset', description: 'Remove session-spanning superset intervals.', usage: 'Cleanup legacy fallback intervals. Protected.', dangerous: true },
+  { id: 'admin-cleanup-intervals-superset-get', category: 'Admin', method: 'GET', path: '/admin/cleanup/intervals/superset', description: 'Run cleanup via GET (alias).', usage: 'Same as POST; convenience. Protected.', dangerous: true },
   { id: 'admin-backfill-playmethods', category: 'Admin', method: 'POST', path: '/admin/cleanup/backfill-playmethods', description: 'Backfill per-stream methods for historical sessions.', usage: 'Fix bubble accuracy on old rows. Protected.', params: [{ key: 'days', kind: 'query', placeholder: '90' }] },
 
   // Admin - Webhook & users
@@ -104,6 +112,10 @@ const endpoints: Endpoint[] = [
   { id: 'admin-debug-sessions', category: 'Admin', method: 'GET', path: '/admin/debug/sessions', description: 'List recent play_sessions with flexible filters.', usage: 'Troubleshoot session storage.', params: [{ key: 'q', kind: 'query', placeholder: 'title substring' }, { key: 'session_id', kind: 'query', placeholder: 'session id' }, { key: 'item_id', kind: 'query', placeholder: 'item id' }, { key: 'days', kind: 'query', placeholder: '1' }, { key: 'activeOnly', kind: 'query', placeholder: 'true|false' }, { key: 'limit', kind: 'query', placeholder: '100' }] },
   { id: 'admin-debug-emby-sessions', category: 'Admin', method: 'GET', path: '/admin/debug/emby-sessions', description: 'Current sessions direct from Emby.', usage: 'Compare Emby vs DB.' },
   { id: 'admin-debug-ingest-active', category: 'Admin', method: 'POST', path: '/admin/debug/ingest-active', description: 'Upsert rows for current active sessions.', usage: 'Backfill when an item switch was missed.', dangerous: false },
+  { id: 'admin-debug-item-intervals', category: 'Admin', method: 'GET', path: '/admin/debug/item-intervals/:id', description: 'Inspect raw intervals for an item with per-session coalescing.', usage: 'Troubleshoot inflated totals for a specific title.', params: [
+    { key: 'id', kind: 'path', required: true, placeholder: 'item-id' },
+    { key: 'days', kind: 'query', placeholder: '14' },
+  ] },
 
   // Admin - System monitoring (newly added)
   { id: 'admin-metrics', category: 'Admin', method: 'GET', path: '/admin/metrics', description: 'System performance metrics and database connection pool stats.', usage: 'Monitor system health and performance. Protected.' },
@@ -157,7 +169,7 @@ export default function APIExplorerPage() {
         .map(p => [p.key, inputs[p.key]])
         .filter(([_, v]) => v !== undefined && v !== '') as [string, string][]
     );
-    const hasBody = Object.keys(bodyParams).length > 0 && ep.method === 'POST';
+    const hasBody = Object.keys(bodyParams).length > 0 && (ep.method === 'POST' || ep.method === 'PUT');
 
     // Don’t try to fetch binary here
     if (ep.binary) {
@@ -239,7 +251,7 @@ export default function APIExplorerPage() {
             <div key={ep.id} className="bg-neutral-800 rounded-2xl p-4 border border-neutral-700">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs font-semibold px-2 py-1 rounded ${ep.method === 'GET' ? 'bg-green-600/20 text-green-400 border border-green-600/40' : ep.method === 'POST' ? 'bg-blue-600/20 text-blue-400 border border-blue-600/40' : 'bg-gray-600/20 text-gray-300 border border-gray-600/40'}`}>{ep.method}</span>
+                  <span className={`text-xs font-semibold px-2 py-1 rounded ${ep.method === 'GET' ? 'bg-green-600/20 text-green-400 border border-green-600/40' : (ep.method === 'POST' || ep.method === 'PUT') ? 'bg-blue-600/20 text-blue-400 border border-blue-600/40' : 'bg-gray-600/20 text-gray-300 border border-gray-600/40'}`}>{ep.method}</span>
                   <code className="text-sm text-white">{ep.path}</code>
                 </div>
                 <button

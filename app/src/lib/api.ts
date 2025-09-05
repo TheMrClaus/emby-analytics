@@ -12,6 +12,7 @@ import {
   TopItem,
   TopUser,
   UsageRow,
+  UserDetail,
 } from "../types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
@@ -89,6 +90,8 @@ export const fetchActiveUsersLifetime = (limit = 10) =>
 export const fetchMovieStats = () => j<MovieStats>("/stats/movies");
 export const fetchSeriesStats = () => j<SeriesStats>("/stats/series");
 export const fetchTotalUsers = () => j<number>("/stats/users/total");
+export const fetchUserDetail = (userId: string, days = 30, limit = 10) =>
+  j<UserDetail>(`/stats/users/${userId}?days=${days}&limit=${limit}`);
 export const fetchItemsByIds = (ids: string[]) =>
   j<ItemRow[]>(`/items/by-ids?ids=${encodeURIComponent(ids.join(","))}`);
 type SessionDetail = {

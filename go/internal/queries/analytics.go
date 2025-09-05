@@ -21,30 +21,22 @@ type TopItemRow struct {
 
 // TopUsersByWatchSeconds calculates top users based on interval overlap in a time window.
 func TopUsersByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd int64, limit int) ([]TopUserRow, error) {
-    // Use only the latest interval per session to avoid double-counting
-    query := `
-        WITH latest AS (
-            SELECT pi.*
-            FROM play_intervals pi
-            JOIN (
-                SELECT session_fk, MAX(id) AS latest_id
-                FROM play_intervals
-                GROUP BY session_fk
-            ) m ON m.latest_id = pi.id
-        )
+	// Sum overlapped duration across all intervals in the window
+	query := `
         SELECT
             l.user_id,
             u.name,
             SUM(MIN(l.end_ts, ?) - MAX(l.start_ts, ?)) / 3600.0 AS hours
-        FROM latest l
+        FROM play_intervals l
         JOIN emby_user u ON u.id = l.user_id
         WHERE
             l.start_ts <= ? AND l.end_ts >= ?
         GROUP BY l.user_id, u.name
+        HAVING hours > 0
         ORDER BY hours DESC
         LIMIT ?;
     `
-    rows, err := db.QueryContext(ctx, query, winEnd, winStart, winEnd, winStart, limit)
+	rows, err := db.QueryContext(ctx, query, winEnd, winStart, winEnd, winStart, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -63,31 +55,23 @@ func TopUsersByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd in
 
 // TopItemsByWatchSeconds calculates top items based on interval overlap.
 func TopItemsByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd int64, limit int) ([]TopItemRow, error) {
-    // Use only the latest interval per session to avoid double-counting
-    query := `
-        WITH latest AS (
-            SELECT pi.*
-            FROM play_intervals pi
-            JOIN (
-                SELECT session_fk, MAX(id) AS latest_id
-                FROM play_intervals
-                GROUP BY session_fk
-            ) m ON m.latest_id = pi.id
-        )
+	// Sum overlapped duration across all intervals in the window
+	query := `
         SELECT
             l.item_id,
             li.name,
             li.media_type,
             SUM(MIN(l.end_ts, ?) - MAX(l.start_ts, ?)) / 3600.0 AS hours
-        FROM latest l
+        FROM play_intervals l
         JOIN library_item li ON li.id = l.item_id
         WHERE
             l.start_ts <= ? AND l.end_ts >= ?
         GROUP BY l.item_id, li.name, li.media_type
+        HAVING hours > 0
         ORDER BY hours DESC
         LIMIT ?;
     `
-    rows, err := db.QueryContext(ctx, query, winEnd, winStart, winEnd, winStart, limit)
+	rows, err := db.QueryContext(ctx, query, winEnd, winStart, winEnd, winStart, limit)
 	if err != nil {
 		return nil, err
 	}

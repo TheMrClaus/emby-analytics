@@ -2,6 +2,36 @@
 export type UsageRow = { day: string; user: string; hours: number };
 
 export type TopUser = { user_id?: string; name: string; hours: number };
+
+export type UserDetail = {
+  user_id: string;
+  user_name: string;
+  total_hours: number;
+  plays: number;
+  total_movies: number;
+  total_series_finished: number;
+  total_episodes: number;
+  top_items: UserTopItem[];
+  recent_activity: UserActivity[];
+  last_seen_movies: UserTopItem[];
+  last_seen_episodes: UserTopItem[];
+  finished_series: UserTopItem[];
+};
+
+export type UserTopItem = {
+  item_id: string;
+  name: string;
+  type: string;
+  hours: number;
+};
+
+export type UserActivity = {
+  timestamp: number;
+  item_id: string;
+  item_name: string;
+  item_type: string;
+  pos_hours: number;
+};
 // Compatible with backend 'TopUser' and your previous UI 'TopUser' shape.
 
 export type TopItem = { item_id: string; name: string; type: string; hours: number; display?: string };

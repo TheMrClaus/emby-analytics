@@ -1,8 +1,8 @@
 package tasks
 
 import (
-	"emby-analytics/internal/logging"
 	"database/sql"
+	"emby-analytics/internal/logging"
 	"encoding/json"
 	"strings"
 	"sync"
@@ -19,8 +19,8 @@ type Intervalizer struct {
 
 type liveState struct {
 	SessionFK        int64
-	SessionID        string  // Session identifier from Emby
-	DeviceID         string  // Device identifier from Emby
+	SessionID        string // Session identifier from Emby
+	DeviceID         string // Device identifier from Emby
 	UserID           string
 	ItemID           string
 	LastPosTicks     int64
@@ -29,6 +29,8 @@ type liveState struct {
 	IsIntervalOpen   bool
 	IntervalStartTS  time.Time
 	IntervalStartPos int64
+	// Tracks whether we have recorded any interval for this session
+	HadAnyInterval bool
 }
 
 var (
@@ -177,8 +179,8 @@ func (iz *Intervalizer) onStop(d emby.PlaybackProgressData) {
 	if s.IsIntervalOpen {
 		// If an interval was open, close it normally.
 		iz.closeInterval(s, s.IntervalStartTS, now, s.IntervalStartPos, d.PlayState.PositionTicks, false)
-	} else if !s.SessionStartTS.IsZero() && s.LastPosTicks > 0 {
-		// FIX: Create interval for very short plays that never triggered a progress event
+	} else if !s.HadAnyInterval && !s.SessionStartTS.IsZero() && s.LastPosTicks > 0 {
+		// Create interval only for sessions that never produced any progress-based intervals
 		iz.closeInterval(s, s.SessionStartTS, now, 0, d.PlayState.PositionTicks, false)
 	}
 
@@ -190,9 +192,9 @@ func (iz *Intervalizer) onStop(d emby.PlaybackProgressData) {
 func (iz *Intervalizer) DetectStoppedSessions(activeSessionKeys map[string]bool) {
 	LiveMutex.Lock()
 	defer LiveMutex.Unlock()
-	
+
 	logging.Debug("DetectStoppedSessions called with %d active sessions, %d live sessions", len(activeSessionKeys), len(LiveSessions))
-	
+
 	for liveSessionKey, liveSession := range LiveSessions {
 		// Check if this session is still active by SessionID only
 		// This avoids the Device vs DeviceID mismatch between WebSocket and REST API
@@ -203,11 +205,11 @@ func (iz *Intervalizer) DetectStoppedSessions(activeSessionKeys map[string]bool)
 				break
 			}
 		}
-		
+
 		// If this live session is not in the current active sessions, it has stopped
 		if !sessionFound {
 			logging.Debug("Detected stopped session: %s (user: %s)", liveSessionKey, liveSession.UserID)
-			
+
 			// Create synthetic PlaybackStopped event data
 			stoppedData := emby.PlaybackProgressData{
 				UserID:    liveSession.UserID,
@@ -232,18 +234,18 @@ func (iz *Intervalizer) DetectStoppedSessions(activeSessionKeys map[string]bool)
 					PositionTicks: liveSession.LastPosTicks,
 				},
 			}
-			
+
 			syntheticStopEvent := emby.EmbyEvent{
 				MessageType: "PlaybackStopped",
 			}
-			
+
 			data, err := json.Marshal(stoppedData)
 			if err != nil {
 				logging.Debug("Failed to marshal stopped data: %v", err)
 				continue
 			}
 			syntheticStopEvent.Data = json.RawMessage(data)
-			
+
 			logging.Debug("Created synthetic PlaybackStopped for session %s", liveSessionKey)
 			iz.Handle(syntheticStopEvent)
 		}
@@ -273,15 +275,16 @@ func (iz *Intervalizer) closeInterval(s *liveState, start time.Time, end time.Ti
 	}
 	dur := int(end.Sub(start).Seconds())
 	_, err := iz.DB.Exec(`
-		INSERT INTO play_intervals (session_fk, item_id, user_id, start_ts, end_ts, start_pos_ticks, end_pos_ticks, duration_seconds, seeked)
-		SELECT id, item_id, user_id, ?, ?, ?, ?, ?, ?
-		FROM play_sessions
-		WHERE id = ?
-	`, start.Unix(), end.Unix(), startPos, endPos, dur, boolToInt(seeked), s.SessionFK)
+        INSERT INTO play_intervals (session_fk, item_id, user_id, start_ts, end_ts, start_pos_ticks, end_pos_ticks, duration_seconds, seeked)
+        SELECT id, item_id, user_id, ?, ?, ?, ?, ?, ?
+        FROM play_sessions
+        WHERE id = ?
+    `, start.Unix(), end.Unix(), startPos, endPos, dur, boolToInt(seeked), s.SessionFK)
 	if err != nil {
 		logging.Debug("failed to insert interval: %v", err)
 	}
 	s.IsIntervalOpen = false
+	s.HadAnyInterval = true
 }
 
 // ... (upsertSession, insertEvent, boolToInt are unchanged)

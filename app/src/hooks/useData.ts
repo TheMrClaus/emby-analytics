@@ -12,6 +12,7 @@ import {
   fetchSeriesStats,
   fetchNowSnapshot,
   fetchRefreshStatus,
+  fetchUserDetail,
 } from '../lib/api';
 import type {
   OverviewData,
@@ -25,6 +26,7 @@ import type {
   SeriesStats,
   NowEntry,
   RefreshState,
+  UserDetail,
 } from '../types';
 
 // SWR configuration
@@ -96,6 +98,15 @@ export function useMovieStats() {
 // Series stats hook
 export function useSeriesStats() {
   return useSWR<SeriesStats>('seriesStats', () => fetchSeriesStats(), config);
+}
+
+// User detail hook
+export function useUserDetail(userId: string | null, days = 30, limit = 10) {
+  return useSWR<UserDetail>(
+    userId ? ['userDetail', userId, days, limit] : null,
+    () => userId ? fetchUserDetail(userId, days, limit) : null,
+    config
+  );
 }
 
 // Now playing snapshot with frequent refresh

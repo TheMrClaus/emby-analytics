@@ -8,10 +8,10 @@ import (
 )
 
 type UserWatchTime struct {
-	UserID    string  `json:"user_id"`
-	Name      string  `json:"name"`
-	Hours     float64 `json:"hours"`
-	EmbyHours float64 `json:"emby_hours"`
+	UserID     string  `json:"user_id"`
+	Name       string  `json:"name"`
+	Hours      float64 `json:"hours"`
+	EmbyHours  float64 `json:"emby_hours"`
 	TraktHours float64 `json:"trakt_hours"`
 }
 

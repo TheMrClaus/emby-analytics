@@ -23,12 +23,18 @@ type UserActivity struct {
 }
 
 type UserDetail struct {
-	UserID         string         `json:"user_id"`
-	UserName       string         `json:"user_name"`
-	TotalHours     float64        `json:"total_hours"`
-	Plays          int            `json:"plays"`
-	TopItems       []UserTopItem  `json:"top_items"`
-	RecentActivity []UserActivity `json:"recent_activity"`
+	UserID              string         `json:"user_id"`
+	UserName            string         `json:"user_name"`
+	TotalHours          float64        `json:"total_hours"`
+	Plays               int            `json:"plays"`
+	TotalMovies         int            `json:"total_movies"`
+	TotalSeriesFinished int            `json:"total_series_finished"`
+	TotalEpisodes       int            `json:"total_episodes"`
+	TopItems            []UserTopItem  `json:"top_items"`
+	RecentActivity      []UserActivity `json:"recent_activity"`
+	LastSeenMovies      []UserTopItem  `json:"last_seen_movies"`
+	LastSeenEpisodes    []UserTopItem  `json:"last_seen_episodes"`
+	FinishedSeries      []UserTopItem  `json:"finished_series"`
 }
 
 // GET /stats/users/:id?days=30&limit=10
@@ -51,12 +57,18 @@ func UserDetailHandler(db *sql.DB) fiber.Handler {
 
 		// Base info: user name, total hours and plays in window
 		detail := UserDetail{
-			UserID:         userID,
-			UserName:       "",
-			TotalHours:     0,
-			Plays:          0,
-			TopItems:       []UserTopItem{},
-			RecentActivity: []UserActivity{},
+			UserID:              userID,
+			UserName:            "",
+			TotalHours:          0,
+			Plays:               0,
+			TotalMovies:         0,
+			TotalSeriesFinished: 0,
+			TotalEpisodes:       0,
+			TopItems:            []UserTopItem{},
+			RecentActivity:      []UserActivity{},
+			LastSeenMovies:      []UserTopItem{},
+			LastSeenEpisodes:    []UserTopItem{},
+			FinishedSeries:      []UserTopItem{},
 		}
 
 		// user name
@@ -68,36 +80,36 @@ func UserDetailHandler(db *sql.DB) fiber.Handler {
 				COALESCE(lw.total_ms / 3600000.0, 0) AS hours,
 				COALESCE(
 					(SELECT COUNT(DISTINCT item_id) 
-					 FROM play_event pe 
-					 WHERE pe.user_id = ? AND pe.ts >= ? AND pe.pos_ms > 30000), 
+					 FROM play_sessions ps 
+					 WHERE ps.user_id = ? AND ps.started_at >= ? AND ps.ended_at IS NOT NULL), 
 					0
 				) AS plays
 			FROM emby_user u
 			LEFT JOIN lifetime_watch lw ON lw.user_id = u.id
 			WHERE u.id = ?
-		`, userID, fromMs, userID).Scan(&detail.TotalHours, &detail.Plays)
+		`, userID, fromMs/1000, userID).Scan(&detail.TotalHours, &detail.Plays)
 
-		// Use completion-based approach for user's top items
+		// Get user's top items based on play sessions
 		if rows, err := db.Query(`
-            SELECT 
-                li.id, 
-                li.name, 
-                li.media_type,
-                COUNT(*) * 0.8 AS hours  -- Simplified for user detail
-            FROM play_event pe
-            JOIN library_item li ON li.id = pe.item_id
-            WHERE pe.user_id = ? AND pe.ts >= ? AND pe.pos_ms > (
-                SELECT MAX(pos_ms) * 0.85 FROM play_event pe2 
-                WHERE pe2.item_id = pe.item_id
-            )
-            GROUP BY li.id, li.name, li.media_type
-            ORDER BY hours DESC
-            LIMIT ?;
-        `, userID, fromMs, limit); err == nil {
+			SELECT 
+				li.id, 
+				li.name, 
+				li.media_type,
+				COUNT(*) as play_count
+			FROM play_sessions ps
+			JOIN library_item li ON li.id = ps.item_id
+			WHERE ps.user_id = ? AND ps.started_at >= ? 
+			AND ps.ended_at IS NOT NULL
+			GROUP BY li.id, li.name, li.media_type
+			ORDER BY play_count DESC
+			LIMIT ?
+		`, userID, fromMs, limit); err == nil {
 			defer rows.Close()
 			for rows.Next() {
 				var ti UserTopItem
-				if err := rows.Scan(&ti.ItemID, &ti.Name, &ti.Type, &ti.Hours); err == nil {
+				var playCount int
+				if err := rows.Scan(&ti.ItemID, &ti.Name, &ti.Type, &playCount); err == nil {
+					ti.Hours = float64(playCount) // Using play count as a proxy for engagement
 					detail.TopItems = append(detail.TopItems, ti)
 				}
 			}
@@ -105,18 +117,157 @@ func UserDetailHandler(db *sql.DB) fiber.Handler {
 
 		// recent activity
 		if rows, err := db.Query(`
-			SELECT pe.ts, li.id, li.name, li.media_type, pe.pos_ms/3600000.0
-			FROM play_event pe
-			LEFT JOIN library_item li ON li.id = pe.item_id
-			WHERE pe.user_id = ? AND pe.ts >= ?
-			ORDER BY pe.ts DESC
-			LIMIT ?;
-		`, userID, fromMs, limit); err == nil {
+			SELECT ps.started_at, li.id, li.name, li.media_type, 0.0 as pos_hours
+			FROM play_sessions ps
+			LEFT JOIN library_item li ON li.id = ps.item_id
+			WHERE ps.user_id = ? AND ps.started_at >= ?
+			ORDER BY ps.started_at DESC
+			LIMIT ?
+		`, userID, fromMs/1000, limit); err == nil {
 			defer rows.Close()
 			for rows.Next() {
 				var a UserActivity
 				if err := rows.Scan(&a.Timestamp, &a.ItemID, &a.ItemName, &a.ItemType, &a.PosHours); err == nil {
 					detail.RecentActivity = append(detail.RecentActivity, a)
+				}
+			}
+		}
+
+		// Get total movies watched by user
+		_ = db.QueryRow(`
+			SELECT COUNT(DISTINCT ps.item_id)
+			FROM play_sessions ps
+			JOIN library_item li ON li.id = ps.item_id
+			WHERE ps.user_id = ? AND li.media_type = 'Movie'
+			AND ps.ended_at IS NOT NULL
+		`, userID).Scan(&detail.TotalMovies)
+
+		// Get total episodes watched by user
+		_ = db.QueryRow(`
+			SELECT COUNT(DISTINCT ps.item_id)
+			FROM play_sessions ps
+			JOIN library_item li ON li.id = ps.item_id
+			WHERE ps.user_id = ? AND li.media_type = 'Episode'
+			AND ps.ended_at IS NOT NULL
+		`, userID).Scan(&detail.TotalEpisodes)
+
+		// Get total series finished - simplified approach without series_id
+		// For now, we'll count unique series names that the user has watched episodes from
+		_ = db.QueryRow(`
+			SELECT COUNT(DISTINCT 
+				CASE 
+					WHEN li.name LIKE '%-%' THEN SUBSTR(li.name, 1, INSTR(li.name, ' - ') - 1)
+					ELSE NULL
+				END
+			)
+			FROM play_sessions ps
+			JOIN library_item li ON li.id = ps.item_id
+			WHERE ps.user_id = ? AND li.media_type = 'Episode'
+			AND ps.ended_at IS NOT NULL
+			AND li.name LIKE '%-%'
+		`, userID).Scan(&detail.TotalSeriesFinished)
+
+		// Get last seen movies (limit 10)
+		if rows, err := db.Query(`
+			SELECT li.id, li.name, li.media_type, MAX(ps.ended_at) as last_seen
+			FROM play_sessions ps
+			JOIN library_item li ON li.id = ps.item_id
+			WHERE ps.user_id = ? AND li.media_type = 'Movie'
+			AND ps.ended_at IS NOT NULL
+			GROUP BY li.id, li.name, li.media_type
+			ORDER BY last_seen DESC
+			LIMIT 10
+		`, userID); err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var movie UserTopItem
+				var lastSeen int64
+				if err := rows.Scan(&movie.ItemID, &movie.Name, &movie.Type, &lastSeen); err == nil {
+					movie.Hours = float64(lastSeen) // Store timestamp for date display
+					detail.LastSeenMovies = append(detail.LastSeenMovies, movie)
+				}
+			}
+		}
+
+		// Get last seen series (limit 10) - using episode data to infer series
+		if rows, err := db.Query(`
+			SELECT li.id, 
+				CASE 
+					WHEN li.name LIKE '%-%' THEN SUBSTR(li.name, 1, INSTR(li.name, ' - ') - 1)
+					ELSE li.name
+				END as series_name,
+				'Series' as media_type,
+				MAX(ps.ended_at) as last_seen
+			FROM play_sessions ps
+			JOIN library_item li ON li.id = ps.item_id
+			WHERE ps.user_id = ? AND li.media_type = 'Episode'
+			AND ps.ended_at IS NOT NULL
+			AND li.name LIKE '%-%'
+			GROUP BY series_name
+			ORDER BY last_seen DESC
+			LIMIT 10
+		`, userID); err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var series UserTopItem
+				var lastSeen int64
+				if err := rows.Scan(&series.ItemID, &series.Name, &series.Type, &lastSeen); err == nil {
+					series.Hours = float64(lastSeen) // Store timestamp for date display
+					detail.LastSeenEpisodes = append(detail.LastSeenEpisodes, series)
+				}
+			}
+		}
+
+		// Get finished series list (limit 10) - only series where user watched ALL episodes
+		if rows, err := db.Query(`
+			SELECT
+				watched_series.series_id,
+				watched_series.series_name,
+				'Series' as media_type,
+				watched_series.watched_episodes as episode_count
+			FROM
+			(
+				SELECT
+					MIN(li.id) as series_id,
+					CASE
+						WHEN li.name LIKE '%-%' THEN SUBSTR(li.name, 1, INSTR(li.name, ' - ') - 1)
+						ELSE li.name
+					END as series_name,
+					COUNT(DISTINCT li.name) as watched_episodes,
+					MAX(ps.ended_at) as last_watched
+				FROM play_sessions ps
+				JOIN library_item li ON li.id = ps.item_id
+				WHERE ps.user_id = ?
+					AND li.media_type = 'Episode'
+					AND ps.ended_at IS NOT NULL
+				GROUP BY series_name
+			) AS watched_series
+			JOIN
+			(
+				SELECT
+					CASE
+						WHEN name LIKE '%-%' THEN SUBSTR(name, 1, INSTR(name, ' - ') - 1)
+						ELSE name
+					END as series_name,
+					COUNT(DISTINCT name) as total_episodes
+				FROM library_item
+				WHERE media_type = 'Episode'
+				GROUP BY series_name
+			) AS total_series ON watched_series.series_name = total_series.series_name
+			WHERE
+				watched_series.watched_episodes = total_series.total_episodes
+				AND total_series.total_episodes > 1
+			ORDER BY
+				watched_series.last_watched DESC
+			LIMIT 10
+		`, userID); err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var series UserTopItem
+				var episodeCount int
+				if err := rows.Scan(&series.ItemID, &series.Name, &series.Type, &episodeCount); err == nil {
+					series.Hours = float64(episodeCount) // Using episode count as engagement metric
+					detail.FinishedSeries = append(detail.FinishedSeries, series)
 				}
 			}
 		}
