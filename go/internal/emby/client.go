@@ -82,23 +82,23 @@ func (c *Client) doWithRetry(req *http.Request, maxRetries int) (*http.Response,
 			// Success or client error (don't retry client errors)
 			return resp, nil
 		}
-		
+
 		if resp != nil {
 			resp.Body.Close()
 		}
-		
+
 		lastErr = err
 		if err == nil {
 			lastErr = fmt.Errorf("server error: %d", resp.StatusCode)
 		}
-		
+
 		if attempt < maxRetries {
 			// Exponential backoff: 1s, 2s, 4s, 8s
 			backoff := time.Duration(1<<uint(attempt)) * time.Second
 			time.Sleep(backoff)
 		}
 	}
-	
+
 	return nil, fmt.Errorf("request failed after %d attempts: %w", maxRetries+1, lastErr)
 }
 
@@ -122,9 +122,9 @@ func New(baseURL, apiKey string) *Client {
 		http: &http.Client{
 			Timeout: 30 * time.Second, // Increased from 15s to 30s
 			Transport: &http.Transport{
-				MaxIdleConns:        10,
-				IdleConnTimeout:     30 * time.Second,
-				DisableCompression:  false,
+				MaxIdleConns:       10,
+				IdleConnTimeout:    30 * time.Second,
+				DisableCompression: false,
 			},
 		},
 	}
@@ -245,35 +245,35 @@ func (c *Client) ItemsByIDs(ids []string) ([]EmbyItem, error) {
 }
 
 type LibraryItem struct {
-    Id           string `json:"Id"`
-    Name         string `json:"Name"`
-    Type         string `json:"Type"`
-    Height       *int   `json:"Height,omitempty"`
-    Width        *int   `json:"Width,omitempty"`
-    Codec        string `json:"VideoCodec,omitempty"`
-    Container    string `json:"Container,omitempty"`
-    RunTimeTicks *int64 `json:"RunTimeTicks,omitempty"`
-    BitrateBps   *int64 `json:"Bitrate,omitempty"`
-    FileSizeBytes *int64 `json:"Size,omitempty"`
+	Id            string `json:"Id"`
+	Name          string `json:"Name"`
+	Type          string `json:"Type"`
+	Height        *int   `json:"Height,omitempty"`
+	Width         *int   `json:"Width,omitempty"`
+	Codec         string `json:"VideoCodec,omitempty"`
+	Container     string `json:"Container,omitempty"`
+	RunTimeTicks  *int64 `json:"RunTimeTicks,omitempty"`
+	BitrateBps    *int64 `json:"Bitrate,omitempty"`
+	FileSizeBytes *int64 `json:"Size,omitempty"`
 }
 
 // Detailed struct for fetching media info with codec data
 type DetailedLibraryItem struct {
-    Id           string `json:"Id"`
-    Name         string `json:"Name"`
-    Type         string `json:"Type"`
-    Container    string `json:"Container"`
-    RunTimeTicks int64  `json:"RunTimeTicks"`
-    MediaSources []struct {
-        Bitrate int64 `json:"Bitrate"`
-        Size    int64 `json:"Size"`
-        MediaStreams []struct {
-            Type   string `json:"Type"`
-            Codec  string `json:"Codec"`
-            Height *int   `json:"Height"`
-            Width  *int   `json:"Width"`
-        } `json:"MediaStreams"`
-    } `json:"MediaSources"`
+	Id           string `json:"Id"`
+	Name         string `json:"Name"`
+	Type         string `json:"Type"`
+	Container    string `json:"Container"`
+	RunTimeTicks int64  `json:"RunTimeTicks"`
+	MediaSources []struct {
+		Bitrate      int64 `json:"Bitrate"`
+		Size         int64 `json:"Size"`
+		MediaStreams []struct {
+			Type   string `json:"Type"`
+			Codec  string `json:"Codec"`
+			Height *int   `json:"Height"`
+			Width  *int   `json:"Width"`
+		} `json:"MediaStreams"`
+	} `json:"MediaSources"`
 }
 
 type itemsResp struct {
@@ -310,11 +310,11 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-    q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container")
+	q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container")
 	q.Set("Recursive", "true")
 	q.Set("Limit", fmt.Sprintf("%d", limit))
 	q.Set("IncludeItemTypes", "Movie,Episode") // Only get video items
-	
+
 	// Add incremental sync parameter
 	if minDateLastSaved != nil {
 		q.Set("MinDateLastSaved", minDateLastSaved.Format(time.RFC3339))
@@ -329,40 +329,40 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 	}
 
 	var out struct {
-		Items []DetailedLibraryItem `json:"Items"`
-		TotalRecordCount int `json:"TotalRecordCount"`
+		Items            []DetailedLibraryItem `json:"Items"`
+		TotalRecordCount int                   `json:"TotalRecordCount"`
 	}
 	if err := readJSON(resp, &out); err != nil {
 		return nil, 0, err
 	}
 
-    // Convert to LibraryItem format, creating ONE entry per media item
-    var result []LibraryItem
+	// Convert to LibraryItem format, creating ONE entry per media item
+	var result []LibraryItem
 
-    for _, item := range out.Items {
-        var firstVideoCodec string
-        var firstVideoHeight *int
-        var firstVideoWidth *int
-        var firstBitrate int64
-        var firstSize int64
+	for _, item := range out.Items {
+		var firstVideoCodec string
+		var firstVideoHeight *int
+		var firstVideoWidth *int
+		var firstBitrate int64
+		var firstSize int64
 
-        // Find the FIRST video stream only (matches C# plugin logic)
-        for _, source := range item.MediaSources {
-            if firstBitrate == 0 && source.Bitrate > 0 {
-                firstBitrate = source.Bitrate
-            }
-            if firstSize == 0 && source.Size > 0 {
-                firstSize = source.Size
-            }
-            for _, stream := range source.MediaStreams {
-                if stream.Type == "Video" && stream.Codec != "" {
-                    firstVideoCodec = stream.Codec
-                    firstVideoHeight = stream.Height
-                    firstVideoWidth = stream.Width
-                    goto found // Break out of both loops
-                }
-            }
-        }
+		// Find the FIRST video stream only (matches C# plugin logic)
+		for _, source := range item.MediaSources {
+			if firstBitrate == 0 && source.Bitrate > 0 {
+				firstBitrate = source.Bitrate
+			}
+			if firstSize == 0 && source.Size > 0 {
+				firstSize = source.Size
+			}
+			for _, stream := range source.MediaStreams {
+				if stream.Type == "Video" && stream.Codec != "" {
+					firstVideoCodec = stream.Codec
+					firstVideoHeight = stream.Height
+					firstVideoWidth = stream.Width
+					goto found // Break out of both loops
+				}
+			}
+		}
 
 	found:
 		// Set codec to "Unknown" if no video stream found
@@ -370,25 +370,29 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 			firstVideoCodec = "Unknown"
 		}
 
-        // Create ONE LibraryItem entry per media item
-        rt := item.RunTimeTicks
-        var brPtr *int64
-        var szPtr *int64
-        if firstBitrate > 0 { brPtr = &firstBitrate }
-        if firstSize > 0 { szPtr = &firstSize }
-        result = append(result, LibraryItem{
-            Id:           item.Id, // Use original ID without suffix
-            Name:         item.Name,
-            Type:         item.Type,
-            Height:       firstVideoHeight,
-            Width:        firstVideoWidth,
-            Codec:        firstVideoCodec,
-            Container:    item.Container,
-            RunTimeTicks: &rt,
-            BitrateBps:   brPtr,
-            FileSizeBytes: szPtr,
-        })
-    }
+		// Create ONE LibraryItem entry per media item
+		rt := item.RunTimeTicks
+		var brPtr *int64
+		var szPtr *int64
+		if firstBitrate > 0 {
+			brPtr = &firstBitrate
+		}
+		if firstSize > 0 {
+			szPtr = &firstSize
+		}
+		result = append(result, LibraryItem{
+			Id:            item.Id, // Use original ID without suffix
+			Name:          item.Name,
+			Type:          item.Type,
+			Height:        firstVideoHeight,
+			Width:         firstVideoWidth,
+			Codec:         firstVideoCodec,
+			Container:     item.Container,
+			RunTimeTicks:  &rt,
+			BitrateBps:    brPtr,
+			FileSizeBytes: szPtr,
+		})
+	}
 
 	return result, out.TotalRecordCount, nil
 }
@@ -398,7 +402,7 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-    q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container")
+	q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container")
 	q.Set("Recursive", "true")
 	q.Set("StartIndex", fmt.Sprintf("%d", page*limit))
 	q.Set("Limit", fmt.Sprintf("%d", limit))
@@ -419,33 +423,33 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 		return nil, err
 	}
 
-    // Convert to LibraryItem format, creating ONE entry per media item
-    var result []LibraryItem
+	// Convert to LibraryItem format, creating ONE entry per media item
+	var result []LibraryItem
 
-    for _, item := range out.Items {
-        var firstVideoCodec string
-        var firstVideoHeight *int
-        var firstVideoWidth *int
-        var firstBitrate int64
-        var firstSize int64
+	for _, item := range out.Items {
+		var firstVideoCodec string
+		var firstVideoHeight *int
+		var firstVideoWidth *int
+		var firstBitrate int64
+		var firstSize int64
 
-        // Find the FIRST video stream only (matches C# plugin logic)
-        for _, source := range item.MediaSources {
-            if firstBitrate == 0 && source.Bitrate > 0 {
-                firstBitrate = source.Bitrate
-            }
-            if firstSize == 0 && source.Size > 0 {
-                firstSize = source.Size
-            }
-            for _, stream := range source.MediaStreams {
-                if stream.Type == "Video" && stream.Codec != "" {
-                    firstVideoCodec = stream.Codec
-                    firstVideoHeight = stream.Height
-                    firstVideoWidth = stream.Width
-                    goto found // Break out of both loops
-                }
-            }
-        }
+		// Find the FIRST video stream only (matches C# plugin logic)
+		for _, source := range item.MediaSources {
+			if firstBitrate == 0 && source.Bitrate > 0 {
+				firstBitrate = source.Bitrate
+			}
+			if firstSize == 0 && source.Size > 0 {
+				firstSize = source.Size
+			}
+			for _, stream := range source.MediaStreams {
+				if stream.Type == "Video" && stream.Codec != "" {
+					firstVideoCodec = stream.Codec
+					firstVideoHeight = stream.Height
+					firstVideoWidth = stream.Width
+					goto found // Break out of both loops
+				}
+			}
+		}
 
 	found:
 		// Set codec to "Unknown" if no video stream found
@@ -453,25 +457,29 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 			firstVideoCodec = "Unknown"
 		}
 
-        // Create ONE LibraryItem entry per media item
-        rt := item.RunTimeTicks
-        var brPtr *int64
-        var szPtr *int64
-        if firstBitrate > 0 { brPtr = &firstBitrate }
-        if firstSize > 0 { szPtr = &firstSize }
-        result = append(result, LibraryItem{
-            Id:           item.Id, // Use original ID without suffix
-            Name:         item.Name,
-            Type:         item.Type,
-            Height:       firstVideoHeight,
-            Width:        firstVideoWidth,
-            Codec:        firstVideoCodec,
-            Container:    item.Container,
-            RunTimeTicks: &rt,
-            BitrateBps:   brPtr,
-            FileSizeBytes: szPtr,
-        })
-    }
+		// Create ONE LibraryItem entry per media item
+		rt := item.RunTimeTicks
+		var brPtr *int64
+		var szPtr *int64
+		if firstBitrate > 0 {
+			brPtr = &firstBitrate
+		}
+		if firstSize > 0 {
+			szPtr = &firstSize
+		}
+		result = append(result, LibraryItem{
+			Id:            item.Id, // Use original ID without suffix
+			Name:          item.Name,
+			Type:          item.Type,
+			Height:        firstVideoHeight,
+			Width:         firstVideoWidth,
+			Codec:         firstVideoCodec,
+			Container:     item.Container,
+			RunTimeTicks:  &rt,
+			BitrateBps:    brPtr,
+			FileSizeBytes: szPtr,
+		})
+	}
 
 	return result, nil
 }
@@ -740,9 +748,9 @@ type EmbySession struct {
 	TransHeight       int      `json:"TransHeight,omitempty"`
 	TransReasons      []string `json:"TransReasons,omitempty"`
 	TransCompletion   float64  `json:"TransCompletion,omitempty"`
-    TransPosTicks     int64    `json:"TransPosTicks,omitempty"`
-    RemoteAddress     string   `json:"RemoteAddress,omitempty"`
-    IsPaused          bool     `json:"IsPaused,omitempty"`
+	TransPosTicks     int64    `json:"TransPosTicks,omitempty"`
+	RemoteAddress     string   `json:"RemoteAddress,omitempty"`
+	IsPaused          bool     `json:"IsPaused,omitempty"`
 }
 
 type rawSession struct {
@@ -978,18 +986,18 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 		}
 		es.SubsCount = subs
 
-        // PlayState
-        if rs.PlayState != nil {
-            es.PosTicks = rs.PlayState.PositionTicks
-            es.IsPaused = rs.PlayState.IsPaused
-            if rs.PlayState.PlayMethod != "" {
-                if strings.HasPrefix(strings.ToLower(rs.PlayState.PlayMethod), "trans") {
-                    es.PlayMethod = "Transcode"
-                } else {
-                    es.PlayMethod = "Direct"
-                }
-            }
-        }
+		// PlayState
+		if rs.PlayState != nil {
+			es.PosTicks = rs.PlayState.PositionTicks
+			es.IsPaused = rs.PlayState.IsPaused
+			if rs.PlayState.PlayMethod != "" {
+				if strings.HasPrefix(strings.ToLower(rs.PlayState.PlayMethod), "trans") {
+					es.PlayMethod = "Transcode"
+				} else {
+					es.PlayMethod = "Direct"
+				}
+			}
+		}
 		if es.PlayMethod == "" {
 			es.PlayMethod = "Direct"
 		}

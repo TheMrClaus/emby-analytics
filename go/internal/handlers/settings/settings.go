@@ -1,8 +1,8 @@
 package settings
 
 import (
-	"emby-analytics/internal/logging"
 	"database/sql"
+	"emby-analytics/internal/logging"
 	"time"
 
 	"github.com/gofiber/fiber/v3"

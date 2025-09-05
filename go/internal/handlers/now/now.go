@@ -1,9 +1,9 @@
 package now
 
 import (
-	"emby-analytics/internal/logging"
 	"bufio"
 	"database/sql"
+	"emby-analytics/internal/logging"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -32,10 +32,10 @@ type NowEntry struct {
 	Bitrate     int64   `json:"bitrate"`
 	ProgressPct float64 `json:"progress_pct"`
 	// New: explicit time fields for nicer UI formatting
-	PositionSec int64   `json:"position_sec,omitempty"`
-	DurationSec int64   `json:"duration_sec,omitempty"`
-	Poster      string  `json:"poster"`
-	SessionID   string  `json:"session_id"`
+	PositionSec int64  `json:"position_sec,omitempty"`
+	DurationSec int64  `json:"duration_sec,omitempty"`
+	Poster      string `json:"poster"`
+	SessionID   string `json:"session_id"`
 
 	ItemID   string `json:"item_id"`
 	ItemType string `json:"item_type,omitempty"`
@@ -67,14 +67,14 @@ type NowEntry struct {
 	TransReason  string `json:"trans_reason,omitempty"`
 
 	// For the red transcode bar
-    TransPct float64 `json:"trans_pct,omitempty"`
+	TransPct float64 `json:"trans_pct,omitempty"`
 
 	// For parentheses after lines when transcoding
-    TransAudioBitrate int64 `json:"trans_audio_bitrate,omitempty"`
-    TransVideoBitrate int64 `json:"trans_video_bitrate,omitempty"`
+	TransAudioBitrate int64 `json:"trans_audio_bitrate,omitempty"`
+	TransVideoBitrate int64 `json:"trans_video_bitrate,omitempty"`
 
-    // Playback state
-    IsPaused bool `json:"is_paused,omitempty"`
+	// Playback state
+	IsPaused bool `json:"is_paused,omitempty"`
 }
 
 // sanitizeMessageInput cleans user input to prevent injection attacks
@@ -324,8 +324,8 @@ func Snapshot(c fiber.Ctx) error {
 		if s.ItemID != "" {
 			poster = "/img/primary/" + s.ItemID
 		}
-        out = append(out, NowEntry{
-            Timestamp:   nowMs,
+		out = append(out, NowEntry{
+			Timestamp:   nowMs,
 			Title:       s.ItemName,
 			User:        s.UserName,
 			App:         s.App,
@@ -336,12 +336,22 @@ func Snapshot(c fiber.Ctx) error {
 			Subs:        subsText,
 			Bitrate:     s.Bitrate,
 			ProgressPct: progressPct,
-			PositionSec: func() int64 { if s.PosTicks>0 { return s.PosTicks / 10_000_000 }; return 0 }(),
-            DurationSec: func() int64 { if s.DurationTicks>0 { return s.DurationTicks / 10_000_000 }; return 0 }(),
-            Poster:      poster,
-            SessionID:   s.SessionID,
-            ItemID:      s.ItemID,
-            ItemType:    s.ItemType,
+			PositionSec: func() int64 {
+				if s.PosTicks > 0 {
+					return s.PosTicks / 10_000_000
+				}
+				return 0
+			}(),
+			DurationSec: func() int64 {
+				if s.DurationTicks > 0 {
+					return s.DurationTicks / 10_000_000
+				}
+				return 0
+			}(),
+			Poster:    poster,
+			SessionID: s.SessionID,
+			ItemID:    s.ItemID,
+			ItemType:  s.ItemType,
 
 			Container: s.Container,
 
@@ -402,11 +412,11 @@ func Snapshot(c fiber.Ctx) error {
 			}(),
 
 			// expose targets/bitrates once (no duplicates)
-            TransAudioBitrate: s.TransAudioBitrate,
-            TransVideoBitrate: s.TransVideoBitrate,
+			TransAudioBitrate: s.TransAudioBitrate,
+			TransVideoBitrate: s.TransVideoBitrate,
 
-            IsPaused: s.IsPaused,
-        })
+			IsPaused: s.IsPaused,
+		})
 	}
 	return c.JSON(out)
 }
@@ -486,8 +496,8 @@ func Stream(c fiber.Ctx) error {
 			if s.ItemID != "" {
 				poster = "/img/primary/" + s.ItemID
 			}
-            out = append(out, NowEntry{
-                Timestamp:   nowMs,
+			out = append(out, NowEntry{
+				Timestamp:   nowMs,
 				Title:       s.ItemName,
 				User:        s.UserName,
 				App:         s.App,
@@ -498,12 +508,22 @@ func Stream(c fiber.Ctx) error {
 				Subs:        subsText,
 				Bitrate:     s.Bitrate,
 				ProgressPct: progressPct,
-				PositionSec: func() int64 { if s.PosTicks>0 { return s.PosTicks / 10_000_000 }; return 0 }(),
-                DurationSec: func() int64 { if s.DurationTicks>0 { return s.DurationTicks / 10_000_000 }; return 0 }(),
-                Poster:      poster,
-                SessionID:   s.SessionID,
-                ItemID:      s.ItemID,
-                ItemType:    s.ItemType,
+				PositionSec: func() int64 {
+					if s.PosTicks > 0 {
+						return s.PosTicks / 10_000_000
+					}
+					return 0
+				}(),
+				DurationSec: func() int64 {
+					if s.DurationTicks > 0 {
+						return s.DurationTicks / 10_000_000
+					}
+					return 0
+				}(),
+				Poster:    poster,
+				SessionID: s.SessionID,
+				ItemID:    s.ItemID,
+				ItemType:  s.ItemType,
 
 				Container: s.Container,
 
@@ -562,10 +582,10 @@ func Stream(c fiber.Ctx) error {
 				}(),
 
 				// expose targets/bitrates once (no duplicates)
-                TransAudioBitrate: s.TransAudioBitrate,
-                TransVideoBitrate: s.TransVideoBitrate,
-                IsPaused: s.IsPaused,
-            })
+				TransAudioBitrate: s.TransAudioBitrate,
+				TransVideoBitrate: s.TransVideoBitrate,
+				IsPaused:          s.IsPaused,
+			})
 		}
 		b, _ := json.Marshal(out)
 		if _, err := w.WriteString("data: " + string(b) + "\n\n"); err != nil {
@@ -647,23 +667,23 @@ func StopSession(c fiber.Ctx) error {
 // POST /now/sessions/:id/message  body: {header?, text, timeout_ms?}
 func MessageSession(c fiber.Ctx) error {
 	id := c.Params("id")
-    var body struct {
-        Header    string `json:"header"`
-        Text      string `json:"text"`
-        // Accept alternate field name for convenience
-        Message   string `json:"message"`
-        TimeoutMs int    `json:"timeout_ms"`
-    }
+	var body struct {
+		Header string `json:"header"`
+		Text   string `json:"text"`
+		// Accept alternate field name for convenience
+		Message   string `json:"message"`
+		TimeoutMs int    `json:"timeout_ms"`
+	}
 	if err := c.Bind().Body(&body); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON body"})
 	}
 
-    // If client sent {message: "..."}, treat as text
-    if strings.TrimSpace(body.Text) == "" && strings.TrimSpace(body.Message) != "" {
-        body.Text = body.Message
-    }
+	// If client sent {message: "..."}, treat as text
+	if strings.TrimSpace(body.Text) == "" && strings.TrimSpace(body.Message) != "" {
+		body.Text = body.Message
+	}
 
-    // Sanitize inputs
+	// Sanitize inputs
 	const maxHeaderLength = 100
 	const maxTextLength = 500
 

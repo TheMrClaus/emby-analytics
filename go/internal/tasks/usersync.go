@@ -1,8 +1,8 @@
 package tasks
 
 import (
-	"emby-analytics/internal/logging"
 	"database/sql"
+	"emby-analytics/internal/logging"
 	"time"
 
 	"emby-analytics/internal/config"
@@ -82,27 +82,27 @@ func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) {
 
 	// Check if Trakt-synced items should be included for backward compatibility
 	includeTrakt := settings.GetSettingBool(db, "include_trakt_items", false)
-	
+
 	var embyWatchMs, traktWatchMs, totalWatchMs int64
 	var traktItems, embyItems int
-	
+
 	for _, item := range userDataItems {
 		if item.UserData.Played && item.RunTimeTicks > 0 {
 			// Better Trakt detection: Trakt-synced items typically have:
-			// - Played=true (marked as watched)  
+			// - Played=true (marked as watched)
 			// - PlayCount=0 (never actually streamed through Emby)
 			// - LastPlayedDate="" (no actual playback timestamp)
 			// - PlaybackPositionTicks=0 (no resume position)
-			
+
 			hasLastPlayedDate := item.UserData.LastPlayedDate != ""
 			hasPlaybackPosition := item.UserData.PlaybackPos > 0
 			hasPlayCount := item.UserData.PlayCount > 0
-			
+
 			// Consider it Trakt-synced if it's marked played but has no Emby streaming evidence
 			isTraktSynced := !hasLastPlayedDate && !hasPlaybackPosition && !hasPlayCount
-			
+
 			watchTimeMs := item.RunTimeTicks / 10000
-			
+
 			if isTraktSynced {
 				traktItems++
 				traktWatchMs += watchTimeMs
@@ -116,13 +116,13 @@ func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) {
 			}
 		}
 	}
-	
+
 	// Log the breakdown for debugging
 	if traktItems > 0 || embyItems > 0 {
-		logging.Debug("[usersync] %s: %d Emby items (%dms), %d Trakt items (%dms), includeTrakt=%v", 
+		logging.Debug("[usersync] %s: %d Emby items (%dms), %d Trakt items (%dms), includeTrakt=%v",
 			userName, embyItems, embyWatchMs, traktItems, traktWatchMs, includeTrakt)
 	}
-	
+
 	// Store all three values: separate breakdown plus total for backward compatibility
 	_, err = db.Exec(`INSERT INTO lifetime_watch (user_id, total_ms, emby_ms, trakt_ms)
 	                  VALUES (?, ?, ?, ?)

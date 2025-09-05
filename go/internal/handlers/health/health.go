@@ -1,26 +1,26 @@
 package health
 
 import (
-	"emby-analytics/internal/logging"
 	"database/sql"
+	"emby-analytics/internal/logging"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
 
 type HealthStatus struct {
-	OK           bool              `json:"ok"`
-	Timestamp    string            `json:"timestamp"`
-	Database     DatabaseHealth    `json:"database"`
+	OK            bool                `json:"ok"`
+	Timestamp     string              `json:"timestamp"`
+	Database      DatabaseHealth      `json:"database"`
 	DataIntegrity DataIntegrityHealth `json:"data_integrity"`
-	Performance  PerformanceHealth `json:"performance"`
+	Performance   PerformanceHealth   `json:"performance"`
 }
 
 type DatabaseHealth struct {
-	OK            bool   `json:"ok"`
-	Error         string `json:"error,omitempty"`
-	OpenConns     int    `json:"open_connections"`
-	IdleConns     int    `json:"idle_connections"`
+	OK             bool   `json:"ok"`
+	Error          string `json:"error,omitempty"`
+	OpenConns      int    `json:"open_connections"`
+	IdleConns      int    `json:"idle_connections"`
 	ConnectionTime string `json:"connection_time"`
 }
 
@@ -34,10 +34,10 @@ type DataIntegrityHealth struct {
 }
 
 type PerformanceHealth struct {
-	OK           bool   `json:"ok"`
-	QueryTime    string `json:"query_time"`
-	SlowQueries  int    `json:"slow_queries"`
-	Warning      string `json:"warning,omitempty"`
+	OK          bool   `json:"ok"`
+	QueryTime   string `json:"query_time"`
+	SlowQueries int    `json:"slow_queries"`
+	Warning     string `json:"warning,omitempty"`
 }
 
 func Health(db *sql.DB) fiber.Handler {
@@ -52,7 +52,7 @@ func Health(db *sql.DB) fiber.Handler {
 		dbStart := time.Now()
 		err := db.Ping()
 		dbDuration := time.Since(dbStart)
-		
+
 		status.Database.ConnectionTime = dbDuration.String()
 		if err != nil {
 			status.OK = false
@@ -61,7 +61,7 @@ func Health(db *sql.DB) fiber.Handler {
 			logging.Debug("Database ping failed: %v", err)
 		} else {
 			status.Database.OK = true
-			
+
 			// Get connection pool stats
 			stats := db.Stats()
 			status.Database.OpenConns = stats.OpenConnections
@@ -121,7 +121,7 @@ func Health(db *sql.DB) fiber.Handler {
 		queryDuration := time.Since(start)
 		status.Performance.QueryTime = queryDuration.String()
 		status.Performance.OK = queryDuration < 5*time.Second
-		
+
 		if queryDuration > 2*time.Second {
 			status.Performance.Warning = "Health check taking longer than expected"
 			status.Performance.SlowQueries = 1

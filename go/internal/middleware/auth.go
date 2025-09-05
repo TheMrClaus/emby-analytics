@@ -12,11 +12,11 @@ import (
 
 // AdminAuth creates middleware to protect admin endpoints with token authentication
 func AdminAuth(adminToken string) fiber.Handler {
-    return func(c fiber.Ctx) error {
-        // Skip authentication if no token is configured (with warning logged at startup)
-        if adminToken == "" {
-            return c.Next()
-        }
+	return func(c fiber.Ctx) error {
+		// Skip authentication if no token is configured (with warning logged at startup)
+		if adminToken == "" {
+			return c.Next()
+		}
 
 		// Check for Authorization: Bearer <token>
 		authHeader := c.Get("Authorization")
@@ -30,28 +30,28 @@ func AdminAuth(adminToken string) fiber.Handler {
 			}
 		}
 
-        // Check for X-Admin-Token header
-        tokenHeader := c.Get("X-Admin-Token")
-        if tokenHeader != "" {
-            if constantTimeCompare(tokenHeader, adminToken) {
-                return c.Next()
-            }
-        }
+		// Check for X-Admin-Token header
+		tokenHeader := c.Get("X-Admin-Token")
+		if tokenHeader != "" {
+			if constantTimeCompare(tokenHeader, adminToken) {
+				return c.Next()
+			}
+		}
 
-        // Check for HttpOnly cookie (auto-auth for same-origin UI)
-        cookieToken := c.Cookies("admin_token")
-        if cookieToken != "" {
-            if constantTimeCompare(cookieToken, adminToken) {
-                return c.Next()
-            }
-        }
+		// Check for HttpOnly cookie (auto-auth for same-origin UI)
+		cookieToken := c.Cookies("admin_token")
+		if cookieToken != "" {
+			if constantTimeCompare(cookieToken, adminToken) {
+				return c.Next()
+			}
+		}
 
 		// No valid token found
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error":   "Unauthorized",
 			"message": "Valid admin token required. Use 'Authorization: Bearer <token>' or 'X-Admin-Token: <token>' header.",
 		})
-    }
+	}
 }
 
 // WebhookAuth creates middleware to validate webhook signatures using HMAC-SHA256

@@ -18,7 +18,7 @@ func GetLastSyncTime(db *sql.DB, syncType string) (*time.Time, error) {
 		SELECT last_sync_at FROM sync_tracking 
 		WHERE sync_type = ?
 	`, syncType).Scan(&lastSync)
-	
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// No previous sync, return epoch time
@@ -27,14 +27,14 @@ func GetLastSyncTime(db *sql.DB, syncType string) (*time.Time, error) {
 		}
 		return nil, err
 	}
-	
+
 	return &lastSync, nil
 }
 
 // UpdateSyncTime updates the last sync timestamp and item count for a sync type
 func UpdateSyncTime(db *sql.DB, syncType string, itemsProcessed int) error {
 	now := time.Now().UTC()
-	
+
 	_, err := db.Exec(`
 		INSERT INTO sync_tracking (sync_type, last_sync_at, items_processed, updated_at)
 		VALUES (?, ?, ?, ?)
@@ -43,7 +43,7 @@ func UpdateSyncTime(db *sql.DB, syncType string, itemsProcessed int) error {
 			items_processed = excluded.items_processed,
 			updated_at = excluded.updated_at
 	`, syncType, now, itemsProcessed, now)
-	
+
 	return err
 }
 
@@ -54,6 +54,6 @@ func GetSyncStats(db *sql.DB, syncType string) (lastSync time.Time, itemsProcess
 		FROM sync_tracking 
 		WHERE sync_type = ?
 	`, syncType).Scan(&lastSync, &itemsProcessed)
-	
+
 	return lastSync, itemsProcessed, err
 }

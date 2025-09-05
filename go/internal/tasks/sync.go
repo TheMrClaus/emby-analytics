@@ -1,8 +1,8 @@
 package tasks
 
 import (
-	"emby-analytics/internal/logging"
 	"database/sql"
+	"emby-analytics/internal/logging"
 	"fmt"
 	"strings"
 	"time"

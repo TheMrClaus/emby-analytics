@@ -20,12 +20,15 @@ type SessionProcessor struct {
 
 // TrackedSession represents a session we're tracking internally
 type TrackedSession struct {
-	SessionFK  int64
-	SessionID  string
-	UserID     string
-	ItemID     string
-	StartTime  time.Time
-	LastUpdate time.Time
+    SessionFK  int64
+    SessionID  string
+    UserID     string
+    ItemID     string
+    StartTime  time.Time
+    LastUpdate time.Time
+    LastPosTicks int64
+    AccumulatedSec int // sum of active (unpaused, progressing) seconds
+    LastPaused    bool
 }
 
 // NewSessionProcessor creates a new session processor
@@ -51,9 +54,9 @@ func (sp *SessionProcessor) ProcessActiveSessions(activeSessions []emby.EmbySess
 		sessionKey := session.SessionID // Track by Emby SessionID
 		activeSessionMap[sessionKey] = true
 
-		if tracked, exists := sp.trackedSessions[sessionKey]; exists {
-			// Detect item change within the same Emby session
-			if tracked.ItemID != session.ItemID {
+        if tracked, exists := sp.trackedSessions[sessionKey]; exists {
+            // Detect item change within the same Emby session
+            if tracked.ItemID != session.ItemID {
 				log.Printf("[session-processor] Item changed within session %s: %s -> %s; rotating session row",
 					sessionKey, tracked.ItemID, session.ItemID)
 				// Finalize previous item session
@@ -63,14 +66,32 @@ func (sp *SessionProcessor) ProcessActiveSessions(activeSessions []emby.EmbySess
 				sp.startNewSession(session, currentTime)
 				continue
 			}
-			// Same item: update duration in database
-			sp.updateSessionDuration(tracked, currentTime)
-			tracked.LastUpdate = currentTime
-		} else {
-			// New session - add to tracked list and create database entry
-			log.Printf("[session-processor] New session detected: %s (user: %s, item: %s)", sessionKey, session.UserID, session.ItemName)
-			sp.startNewSession(session, currentTime)
-		}
+            // Same item: accumulate only when playing (not paused) and position advanced
+            advancedSec := 0
+            if !session.IsPaused {
+                if session.PosTicks > 0 && tracked.LastPosTicks > 0 {
+                    deltaTicks := session.PosTicks - tracked.LastPosTicks
+                    if deltaTicks < 0 { deltaTicks = 0 }
+                    advancedSec = int(deltaTicks / 10_000_000)
+                }
+                // Fallback: if ticks missing but not paused, approximate using wall time since last update
+                if advancedSec == 0 && !tracked.LastUpdate.IsZero() {
+                    advancedSec = int(currentTime.Sub(tracked.LastUpdate).Seconds())
+                    if advancedSec < 0 { advancedSec = 0 }
+                }
+            }
+            tracked.AccumulatedSec += advancedSec
+            tracked.LastUpdate = currentTime
+            tracked.LastPosTicks = session.PosTicks
+            tracked.LastPaused = session.IsPaused
+
+            // Persist: end_ts reflects last seen; duration_seconds is accumulated active seconds
+            sp.updateSessionDuration(tracked, currentTime)
+        } else {
+            // New session - add to tracked list and create database entry
+            log.Printf("[session-processor] New session detected: %s (user: %s, item: %s)", sessionKey, session.UserID, session.ItemName)
+            sp.startNewSession(session, currentTime)
+        }
 	}
 
 	// Step C: Find What's Missing (The Crucial Part)
@@ -94,27 +115,30 @@ func (sp *SessionProcessor) startNewSession(session emby.EmbySession, startTime 
 	}
 
 	// Add to tracked sessions
-	sp.trackedSessions[session.SessionID] = &TrackedSession{
-		SessionFK:  sessionFK,
-		SessionID:  session.SessionID,
-		UserID:     session.UserID,
-		ItemID:     session.ItemID,
-		StartTime:  startTime,
-		LastUpdate: startTime,
-	}
+    sp.trackedSessions[session.SessionID] = &TrackedSession{
+        SessionFK:  sessionFK,
+        SessionID:  session.SessionID,
+        UserID:     session.UserID,
+        ItemID:     session.ItemID,
+        StartTime:  startTime,
+        LastUpdate: startTime,
+        LastPosTicks: session.PosTicks,
+        AccumulatedSec: 0,
+        LastPaused: session.IsPaused,
+    }
 
 	log.Printf("[session-processor] Started tracking session %s (FK: %d)", session.SessionID, sessionFK)
 }
 
 // updateSessionDuration updates the session duration in the database
 func (sp *SessionProcessor) updateSessionDuration(tracked *TrackedSession, currentTime time.Time) {
-	duration := int(currentTime.Sub(tracked.StartTime).Seconds())
+    duration := tracked.AccumulatedSec
 
-	_, err := sp.DB.Exec(`
-		UPDATE play_sessions 
-		SET ended_at = ?, is_active = true 
-		WHERE id = ?
-	`, currentTime.Unix(), tracked.SessionFK)
+    _, err := sp.DB.Exec(`
+        UPDATE play_sessions 
+        SET ended_at = ?, is_active = true 
+        WHERE id = ?
+    `, currentTime.Unix(), tracked.SessionFK)
 
 	if err != nil {
 		log.Printf("[session-processor] Failed to update session duration: %v", err)
@@ -122,12 +146,12 @@ func (sp *SessionProcessor) updateSessionDuration(tracked *TrackedSession, curre
 	}
 
 	// Create/update play interval
-	sp.createOrUpdateInterval(tracked, currentTime, duration)
+    sp.createOrUpdateInterval(tracked, currentTime, duration)
 }
 
 // finalizeSession performs final database updates when a session ends
 func (sp *SessionProcessor) finalizeSession(tracked *TrackedSession, endTime time.Time) {
-	duration := int(endTime.Sub(tracked.StartTime).Seconds())
+    duration := tracked.AccumulatedSec
 
 	// Update play_session as ended
 	_, err := sp.DB.Exec(`
