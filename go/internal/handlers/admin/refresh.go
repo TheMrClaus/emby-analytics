@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -272,11 +273,11 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
 		// For episodes, ensure we have proper series info
 		if entry.Type == "Episode" && em != nil {
 			// Enrich episode data immediately during refresh
-			if episodeItems, err := em.ItemsByIDs([]string{entry.Id}); err == nil && len(episodeItems) > 0 {
-				ep := episodeItems[0]
-				if ep.SeriesName != "" {
-					// Build proper display name
-					display := ep.Name
+            if episodeItems, err := em.ItemsByIDs([]string{entry.Id}); err == nil && len(episodeItems) > 0 {
+                ep := episodeItems[0]
+                if ep.SeriesName != "" {
+                    // Build proper display name
+                    display := ep.Name
 					if ep.ParentIndexNumber != nil && ep.IndexNumber != nil {
 						season := *ep.ParentIndexNumber
 						episode := *ep.IndexNumber
@@ -285,12 +286,12 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
 							display = fmt.Sprintf("%s - %s (%s)", ep.SeriesName, ep.Name, epcode)
 						}
 					}
-					// Update the database with enriched info
-					db.Exec(`UPDATE library_item SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-						display, entry.Id)
-				}
-			}
-		}
+                    // Update the database with enriched info (+ series linkage)
+                    db.Exec(`UPDATE library_item SET name = ?, series_id = COALESCE(?, series_id), series_name = COALESCE(?, series_name), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+                        display, nullIfEmpty(ep.SeriesId), nullIfEmpty(ep.SeriesName), entry.Id)
+                }
+            }
+        }
 
 		if err == nil {
 			if rows, _ := result.RowsAffected(); rows > 0 {
@@ -299,6 +300,12 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
 		}
 	}
 	return dbEntriesInserted
+}
+
+// helper: convert empty string to nil for COALESCE updates
+func nullIfEmpty(s string) any {
+    if strings.TrimSpace(s) == "" { return nil }
+    return s
 }
 
 // StartHandler kicks off a background refresh using the provided chunk size.
