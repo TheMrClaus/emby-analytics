@@ -188,7 +188,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                   <div className="text-gray-400">Episodes Watched</div>
                 </div>
                 <div className="bg-neutral-700/50 rounded p-3">
-                  <div className="text-white font-bold text-lg">{fmtLongSpanFromHours(userDetail.total_hours)}</div>
+                  <div className="text-white font-bold text-lg">{fmtSpanDHMW(userDetail.total_hours)}</div>
                   <div className="text-gray-400">Total Time Watched</div>
                 </div>
               </div>
