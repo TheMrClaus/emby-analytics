@@ -257,16 +257,17 @@ func (c *Client) ItemsByIDs(ids []string) ([]EmbyItem, error) {
 }
 
 type LibraryItem struct {
-	Id            string `json:"Id"`
-	Name          string `json:"Name"`
-	Type          string `json:"Type"`
-	Height        *int   `json:"Height,omitempty"`
-	Width         *int   `json:"Width,omitempty"`
-	Codec         string `json:"VideoCodec,omitempty"`
-	Container     string `json:"Container,omitempty"`
-	RunTimeTicks  *int64 `json:"RunTimeTicks,omitempty"`
-	BitrateBps    *int64 `json:"Bitrate,omitempty"`
-	FileSizeBytes *int64 `json:"Size,omitempty"`
+    Id            string `json:"Id"`
+    Name          string `json:"Name"`
+    Type          string `json:"Type"`
+    Height        *int   `json:"Height,omitempty"`
+    Width         *int   `json:"Width,omitempty"`
+    Codec         string `json:"VideoCodec,omitempty"`
+    Container     string `json:"Container,omitempty"`
+    RunTimeTicks  *int64 `json:"RunTimeTicks,omitempty"`
+    BitrateBps    *int64 `json:"Bitrate,omitempty"`
+    FileSizeBytes *int64 `json:"Size,omitempty"`
+    ProductionYear *int  `json:"ProductionYear,omitempty"`
 }
 
 // Detailed struct for fetching media info with codec data
@@ -344,7 +345,7 @@ func (c *Client) TotalItems() (int, error) {
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-	q.Set("IncludeItemTypes", "Movie,Episode") // Only count video items
+    q.Set("IncludeItemTypes", "Movie,Episode") // Only count video items (exclude Series)
 	q.Set("Recursive", "true")
 	q.Set("StartIndex", "0")
 	q.Set("Limit", "1")
@@ -369,10 +370,10 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-	q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container")
-	q.Set("Recursive", "true")
-	q.Set("Limit", fmt.Sprintf("%d", limit))
-	q.Set("IncludeItemTypes", "Movie,Episode") // Only get video items
+    q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container,ProductionYear")
+    q.Set("Recursive", "true")
+    q.Set("Limit", fmt.Sprintf("%d", limit))
+    q.Set("IncludeItemTypes", "Series,Movie,Episode")
 
 	// Add incremental sync parameter
 	if minDateLastSaved != nil {
@@ -461,11 +462,11 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-	q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container")
-	q.Set("Recursive", "true")
-	q.Set("StartIndex", fmt.Sprintf("%d", page*limit))
-	q.Set("Limit", fmt.Sprintf("%d", limit))
-	q.Set("IncludeItemTypes", "Movie,Episode") // Only get video items
+    q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container,ProductionYear")
+    q.Set("Recursive", "true")
+    q.Set("StartIndex", fmt.Sprintf("%d", page*limit))
+    q.Set("Limit", fmt.Sprintf("%d", limit))
+    q.Set("IncludeItemTypes", "Series,Movie,Episode")
 
 	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
 	req.Header.Set("X-Emby-Token", c.APIKey)

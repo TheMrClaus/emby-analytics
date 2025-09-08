@@ -241,8 +241,21 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 
 // processLibraryEntries handles the insertion and enrichment of library items
 func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, libraryEntries []emby.LibraryItem) int {
-	dbEntriesInserted := 0
-	for _, entry := range libraryEntries {
+    dbEntriesInserted := 0
+    for _, entry := range libraryEntries {
+        // Handle Series directly: upsert into series table and continue
+        if entry.Type == "Series" {
+            _, _ = db.Exec(`
+                INSERT INTO series (id, name, year, created_at, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = COALESCE(excluded.name, series.name),
+                    year = COALESCE(excluded.year, series.year),
+                    updated_at = CURRENT_TIMESTAMP
+            `, entry.Id, entry.Name, entry.ProductionYear)
+            // Do not insert Series into library_item
+            continue
+        }
 		// Extract width from height for older data compatibility
 		var width *int
 		if entry.Height != nil && *entry.Height > 0 {
