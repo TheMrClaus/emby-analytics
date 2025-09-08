@@ -261,6 +261,9 @@ func main() {
 	app.Get("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
 	app.Post("/admin/cleanup/intervals/superset", adminAuth, admin.CleanupSupersetIntervals(sqlDB))
 	app.Get("/admin/cleanup/intervals/superset", adminAuth, admin.CleanupSupersetIntervals(sqlDB))
+	// Cleanup missing items: scan library_item against Emby and delete safe orphans
+	app.Get("/admin/cleanup/missing-items", adminAuth, admin.CleanupMissingItems(sqlDB, em))
+	app.Post("/admin/cleanup/missing-items", adminAuth, admin.CleanupMissingItems(sqlDB, em))
 	app.Get("/admin/debug/item-intervals/:id", adminAuth, admin.DebugItemIntervals(sqlDB))
 
 	// Debug: inspect recent play_sessions

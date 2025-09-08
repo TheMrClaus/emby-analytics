@@ -46,6 +46,8 @@ const endpoints: Endpoint[] = [
   { id: 'admin-debug-series-from-episode', category: 'Admin', method: 'GET', path: '/admin/debug/series-from-episode', description: 'Resolve a Series ID from an Episode ID via Emby.', usage: 'Find parent series for an episode.', params: [{ key: 'id', kind: 'query', required: true, placeholder: '721139' }] },
   { id: 'admin-backfill-series-dry', category: 'Admin', method: 'GET', path: '/admin/backfill/series', description: 'Dry-run: count episodes missing series_id.', usage: 'Preview backfill impact.' },
   { id: 'admin-backfill-series-apply', category: 'Admin', method: 'POST', path: '/admin/backfill/series', description: 'Apply: populate series_id/series_name for episodes.', usage: 'Fix links for finished series.' },
+  { id: 'admin-cleanup-missing-dry', category: 'Admin', method: 'GET', path: '/admin/cleanup/missing-items', description: 'Dry-run: scan library_item for IDs missing in Emby.', usage: 'Identify stale items (deleted in Emby).', params: [{ key: 'limit', kind: 'query', placeholder: '1000' }] },
+  { id: 'admin-cleanup-missing-apply', category: 'Admin', method: 'POST', path: '/admin/cleanup/missing-items', description: 'Apply: delete stale library items with no play_intervals.', usage: 'Cleanup DB from stale Emby IDs.', params: [{ key: 'limit', kind: 'query', placeholder: '1000' }] },
 
   // Stats
   { id: 'stats-overview', category: 'Stats', method: 'GET', path: '/stats/overview', description: 'High-level library overview counters.', usage: 'Populate Overview widgets.' },
