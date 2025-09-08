@@ -316,7 +316,7 @@ func UserDetailHandler(db *sql.DB, em *emby.Client) fiber.Handler {
                     counts[series.ItemID] = episodeCount
                 }
             }
-            // Map episode ids -> series ids via Emby
+            // Map episode ids -> series ids via Emby; if missing, fallback by series name lookup
             if em != nil && len(ids) > 0 {
                 if items, err := em.ItemsByIDs(ids); err == nil && len(items) > 0 {
                     for _, t := range tmp {
@@ -327,6 +327,12 @@ func UserDetailHandler(db *sql.DB, em *emby.Client) fiber.Handler {
                                     t.ItemID = items[i].SeriesId
                                 }
                                 break
+                            }
+                        }
+                        // Fallback: best-effort find series by name
+                        if t.ItemID == sid {
+                            if seriesID, _ := em.FindSeriesIDByName(t.Name); seriesID != "" {
+                                t.ItemID = seriesID
                             }
                         }
                         detail.FinishedSeries = append(detail.FinishedSeries, t)

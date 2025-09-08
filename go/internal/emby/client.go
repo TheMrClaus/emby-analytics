@@ -288,6 +288,33 @@ type DetailedLibraryItem struct {
 	} `json:"MediaSources"`
 }
 
+// FindSeriesIDByName looks up a Series by name and returns its Id, if found.
+func (c *Client) FindSeriesIDByName(name string) (string, error) {
+    if c == nil || c.BaseURL == "" || c.APIKey == "" || strings.TrimSpace(name) == "" {
+        return "", nil
+    }
+    u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
+    q := url.Values{}
+    q.Set("api_key", c.APIKey)
+    q.Set("IncludeItemTypes", "Series")
+    q.Set("SearchTerm", name)
+    q.Set("Limit", "1")
+    req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+    req.Header.Set("X-Emby-Token", c.APIKey)
+    resp, err := c.doWithRetry(req, 2)
+    if err != nil {
+        return "", err
+    }
+    var out itemsResp
+    if err := readJSON(resp, &out); err != nil {
+        return "", err
+    }
+    if len(out.Items) == 0 {
+        return "", nil
+    }
+    return out.Items[0].Id, nil
+}
+
 type itemsResp struct {
 	Items []LibraryItem `json:"Items"`
 	Total int           `json:"TotalRecordCount"`
