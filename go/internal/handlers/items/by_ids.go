@@ -45,9 +45,9 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 			args[i] = v
 		}
 
-		rows, err := db.Query(
-			`SELECT id, name, type FROM library_item WHERE id IN (`+placeholders+`)`, args...,
-		)
+    rows, err := db.Query(
+        `SELECT id, name, media_type FROM library_item WHERE id IN (`+placeholders+`)`, args...,
+    )
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -177,15 +177,43 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 
 				out = append(out, r)
 			} else {
-				// Unknown ID: not in database at all
-				log.Printf("Item %s not found in database", id)
-				out = append(out, ItemRow{
-					ID:      id,
-					Name:    fmt.Sprintf("Missing Item (%s)", id),
-					Type:    "Unknown",
-					Display: fmt.Sprintf("Missing Item (%s)", id),
-				})
-			}
+            // Unknown ID: not in database at all. Best-effort lookup via Emby.
+            log.Printf("Item %s not found in database; attempting Emby lookup", id)
+            if em != nil {
+                if items, err := em.ItemsByIDs([]string{id}); err == nil && len(items) > 0 {
+                    it := items[0]
+                    rec := ItemRow{ID: it.Id, Name: it.Name, Type: it.Type}
+                    // Build display for episodes; otherwise, use name
+                    if strings.EqualFold(it.Type, "Episode") && it.SeriesName != "" {
+                        epcode := ""
+                        if it.ParentIndexNumber != nil && it.IndexNumber != nil {
+                            epcode = fmt.Sprintf("S%02dE%02d", *it.ParentIndexNumber, *it.IndexNumber)
+                        }
+                        if epcode != "" && it.Name != "" {
+                            rec.Display = fmt.Sprintf("%s - %s (%s)", it.SeriesName, it.Name, epcode)
+                        } else if it.Name != "" {
+                            rec.Display = fmt.Sprintf("%s - %s", it.SeriesName, it.Name)
+                        } else {
+                            rec.Display = it.SeriesName
+                        }
+                    } else {
+                        if rec.Name != "" {
+                            rec.Display = rec.Name
+                        } else {
+                            rec.Display = fmt.Sprintf("Unknown Item (%s)", id)
+                        }
+                    }
+                    out = append(out, rec)
+                    continue
+                }
+            }
+            out = append(out, ItemRow{
+                ID:      id,
+                Name:    fmt.Sprintf("Missing Item (%s)", id),
+                Type:    "Unknown",
+                Display: fmt.Sprintf("Missing Item (%s)", id),
+            })
+        }
 		}
 		return c.JSON(out)
 	}
