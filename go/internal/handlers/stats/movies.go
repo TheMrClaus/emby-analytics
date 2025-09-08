@@ -1,13 +1,13 @@
 package stats
 
 import (
-	"database/sql"
-	"log"
-	"time"
+    "database/sql"
+    "log"
+    "time"
 
-	"emby-analytics/internal/handlers/admin"
+    "emby-analytics/internal/handlers/admin"
 
-	"github.com/gofiber/fiber/v3"
+    "github.com/gofiber/fiber/v3"
 )
 
 type MoviesData struct {
@@ -112,18 +112,49 @@ func Movies(db *sql.DB) fiber.Handler {
 			log.Printf("[movies] Error finding newest movie: %v", err)
 		}
 
-		// Get most watched movie from play_intervals
-		err = db.QueryRow(`
-			SELECT li.name, SUM(pi.duration_seconds) / 3600.0 as hours
-			FROM play_intervals pi
-			JOIN library_item li ON pi.item_id = li.id
-			WHERE li.media_type = 'Movie' AND `+excludeLiveTvFilter()+`
-			GROUP BY pi.item_id, li.name
-			ORDER BY hours DESC
-			LIMIT 1`).Scan(&data.MostWatchedMovie.Name, &data.MostWatchedMovie.Hours)
-		if err != nil && err != sql.ErrNoRows {
-			log.Printf("[movies] Error finding most watched movie: %v", err)
-		}
+        // Get most watched movie using exact interval merging (avoids over/under-count)
+        {
+            // Candidate movie IDs that appear in intervals
+            ids := []string{}
+            rows, qerr := db.Query(`
+                SELECT DISTINCT pi.item_id
+                FROM play_intervals pi
+                JOIN library_item li ON li.id = pi.item_id
+                WHERE li.media_type = 'Movie' AND ` + excludeLiveTvFilter() + `
+            `)
+            if qerr == nil {
+                defer rows.Close()
+                for rows.Next() {
+                    var id string
+                    if err := rows.Scan(&id); err == nil && id != "" {
+                        ids = append(ids, id)
+                    }
+                }
+                _ = rows.Err()
+            }
+
+            if len(ids) > 0 {
+                // Compute exact hours across "all time" window
+                now := time.Now().UTC()
+                hoursMap, herr := computeExactItemHours(db, ids, 0, now.AddDate(100, 0, 0).Unix())
+                if herr == nil {
+                    var bestID string
+                    var bestHours float64
+                    for id, hrs := range hoursMap {
+                        if hrs > bestHours {
+                            bestHours = hrs
+                            bestID = id
+                        }
+                    }
+                    if bestID != "" {
+                        _ = db.QueryRow(`SELECT COALESCE(name,'Unknown') FROM library_item WHERE id = ?`, bestID).Scan(&data.MostWatchedMovie.Name)
+                        data.MostWatchedMovie.Hours = bestHours
+                    }
+                } else {
+                    log.Printf("[movies] computeExactItemHours failed: %v", herr)
+                }
+            }
+        }
 
 		// Calculate total runtime hours
 		err = db.QueryRow(`
