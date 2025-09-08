@@ -19,13 +19,22 @@ func TopSeries(db *sql.DB) fiber.Handler {
         timeframe := c.Query("timeframe", "")
         if timeframe == "" {
             days := parseQueryInt(c, "days", 14)
-            if days <= 0 {
+            switch {
+            case days <= 0:
                 timeframe = "all-time"
-            } else if days == 1 { timeframe = "1d" }
-            else if days == 3 { timeframe = "3d" }
-            else if days == 7 { timeframe = "7d" }
-            else if days == 14 { timeframe = "14d" }
-            else if days == 30 { timeframe = "30d" } else { timeframe = "30d" }
+            case days == 1:
+                timeframe = "1d"
+            case days == 3:
+                timeframe = "3d"
+            case days == 7:
+                timeframe = "7d"
+            case days == 14:
+                timeframe = "14d"
+            case days == 30:
+                timeframe = "30d"
+            default:
+                timeframe = "30d"
+            }
         }
         limit := parseQueryInt(c, "limit", 10)
         if limit <= 0 || limit > 100 { limit = 10 }
@@ -74,4 +83,3 @@ func TopSeries(db *sql.DB) fiber.Handler {
         return c.JSON(out)
     }
 }
-

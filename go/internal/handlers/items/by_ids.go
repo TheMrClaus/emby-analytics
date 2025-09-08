@@ -79,44 +79,40 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 				log.Printf("Enriching %d episodes: %v", len(episodeIDs), episodeIDs)
 				if items, err := em.ItemsByIDs(episodeIDs); err == nil {
 					log.Printf("Emby API returned %d items", len(items))
-					for _, it := range items {
+                for _, it := range items {
 						log.Printf("Emby item %s: name='%s', type='%s', series='%s'",
 							it.Id, it.Name, it.Type, it.SeriesName)
 
 						rec := base[it.Id]
-						// Prefer API name if DB name empty or if it's just the episode title
-						name := rec.Name
-						if (name == "" || name == it.Name) && it.Name != "" {
-							name = it.Name
-							rec.Name = name
-						}
-                    // Build display with better fallbacks
+                    // Prefer Emby item name for episode title to avoid duplicating pre-enriched strings
+                    if it.Name != "" {
+                        rec.Name = it.Name
+                    }
+                    // Build display from Emby fields (SeriesName + item.Name + epcode)
                     season := it.ParentIndexNumber
                     ep := it.IndexNumber
                     series := it.SeriesName
-                    epname := name
+                    epname := it.Name
 
 						// Handle cases where we have partial data
 						if series == "" {
 							// Try to get series name from the episode's parent
-							rec.Display = epname
-							if epname != "" {
-								rec.Type = "Episode" // Keep as Episode if no series info
-							}
-						} else {
-							// We have series info, build full display
-							epcode := ""
-							if season != nil && ep != nil {
-								epcode = fmt.Sprintf("S%02dE%02d", *season, *ep)
-							}
-							if epcode != "" && epname != "" {
-								rec.Display = fmt.Sprintf("%s - %s (%s)", series, epname, epcode)
-							} else if epname != "" {
-								rec.Display = fmt.Sprintf("%s - %s", series, epname)
-							} else {
-								rec.Display = series
-							}
-                        // Keep actual type as Episode
+                        rec.Display = epname
+                        rec.Type = "Episode"
+                    } else {
+                        // We have series info, build full display
+                        epcode := ""
+                        if season != nil && ep != nil {
+                            epcode = fmt.Sprintf("S%02dE%02d", *season, *ep)
+                        }
+                        if epcode != "" && epname != "" {
+                            rec.Display = fmt.Sprintf("%s - %s (%s)", series, epname, epcode)
+                        } else if epname != "" {
+                            rec.Display = fmt.Sprintf("%s - %s", series, epname)
+                        } else {
+                            rec.Display = series
+                        }
+                        // Keep Episode type
                         rec.Type = "Episode"
                     }
                     base[it.Id] = rec
