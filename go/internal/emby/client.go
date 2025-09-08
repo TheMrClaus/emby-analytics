@@ -215,16 +215,27 @@ func (c *Client) ItemsByIDs(ids []string) ([]EmbyItem, error) {
 	// Generate cache key
 	cacheKey := c.generateCacheKey(ids)
 
-	// Check cache first
-	if cachedItems, found := c.getCachedItems(cacheKey); found {
-		return cachedItems, nil
-	}
+    // Check cache first, but ensure we have required linkage fields for episodes
+    if cachedItems, found := c.getCachedItems(cacheKey); found {
+        needsRefresh := false
+        for _, it := range cachedItems {
+            if strings.EqualFold(it.Type, "Episode") && it.SeriesId == "" {
+                needsRefresh = true
+                break
+            }
+        }
+        if !needsRefresh {
+            return cachedItems, nil
+        }
+    }
 
 	// Cache miss - fetch from API
 	endpoint := fmt.Sprintf("%s/emby/Items", c.BaseURL)
-	q := url.Values{}
-	q.Set("api_key", c.APIKey)
-	q.Set("Ids", strings.Join(ids, ","))
+    q := url.Values{}
+    q.Set("api_key", c.APIKey)
+    q.Set("Ids", strings.Join(ids, ","))
+    // Ensure we get series linkage and episode codes when requesting
+    q.Set("Fields", "SeriesId,SeriesName,ParentIndexNumber,IndexNumber")
 
 	req, _ := http.NewRequest("GET", endpoint+"?"+q.Encode(), nil)
 	req.Header.Set("X-Emby-Token", c.APIKey)
