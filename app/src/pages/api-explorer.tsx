@@ -41,6 +41,11 @@ const endpoints: Endpoint[] = [
   // Config
   { id: 'config', category: 'Config', method: 'GET', path: '/config', description: 'Returns UI config like Emby external URL and Server ID.', usage: 'Used by UI deep-links to Emby.' },
 
+  // Admin (Debug/Backfill)
+  { id: 'admin-debug-series-id', category: 'Admin', method: 'GET', path: '/admin/debug/series-id', description: 'Resolve a Series ID by name via Emby search.', usage: 'Check Emby SeriesId for linking.', params: [{ key: 'name', kind: 'query', required: true, placeholder: 'Hostage (2025)' }] },
+  { id: 'admin-backfill-series-dry', category: 'Admin', method: 'GET', path: '/admin/backfill/series', description: 'Dry-run: count episodes missing series_id.', usage: 'Preview backfill impact.' },
+  { id: 'admin-backfill-series-apply', category: 'Admin', method: 'POST', path: '/admin/backfill/series', description: 'Apply: populate series_id/series_name for episodes.', usage: 'Fix links for finished series.' },
+
   // Stats
   { id: 'stats-overview', category: 'Stats', method: 'GET', path: '/stats/overview', description: 'High-level library overview counters.', usage: 'Populate Overview widgets.' },
   { id: 'stats-usage', category: 'Stats', method: 'GET', path: '/stats/usage', description: 'Watch time per day.', usage: 'Usage trends over time.', params: [{ key: 'days', kind: 'query', placeholder: '14' }] },
