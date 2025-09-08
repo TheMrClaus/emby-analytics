@@ -200,7 +200,7 @@ func main() {
 	app.Get("/stats/codecs", stats.Codecs(sqlDB))
 	app.Get("/stats/active-users", stats.ActiveUsersLifetime(sqlDB))
 	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))
-	app.Get("/stats/users/:id", stats.UserDetailHandler(sqlDB))
+    app.Get("/stats/users/:id", stats.UserDetailHandler(sqlDB, em))
 	app.Get("/stats/users/:id/watch-time", stats.UserWatchTimeHandler(sqlDB))
 	app.Get("/stats/users/watch-time", stats.AllUsersWatchTimeHandler(sqlDB))
 	app.Get("/stats/play-methods", stats.PlayMethods(sqlDB, em))

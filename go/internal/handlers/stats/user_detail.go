@@ -1,10 +1,13 @@
 package stats
 
 import (
-	"database/sql"
-	"time"
+    "database/sql"
+    "fmt"
+    "time"
 
-	"github.com/gofiber/fiber/v3"
+    "emby-analytics/internal/emby"
+
+    "github.com/gofiber/fiber/v3"
 )
 
 type UserTopItem struct {
@@ -38,7 +41,7 @@ type UserDetail struct {
 }
 
 // GET /stats/users/:id?days=30&limit=10
-func UserDetailHandler(db *sql.DB) fiber.Handler {
+func UserDetailHandler(db *sql.DB, em *emby.Client) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		userID := c.Params("id", "")
 		if userID == "" {
@@ -194,34 +197,67 @@ func UserDetailHandler(db *sql.DB) fiber.Handler {
 			}
 		}
 
-		// Get last seen series (limit 10) - using episode data to infer series
-		if rows, err := db.Query(`
-			SELECT li.id, 
-				CASE 
-					WHEN li.name LIKE '%-%' THEN SUBSTR(li.name, 1, INSTR(li.name, ' - ') - 1)
-					ELSE li.name
-				END as series_name,
-				'Series' as media_type,
-				MAX(ps.ended_at) as last_seen
-			FROM play_sessions ps
-			JOIN library_item li ON li.id = ps.item_id
-			WHERE ps.user_id = ? AND li.media_type = 'Episode'
-			AND ps.ended_at IS NOT NULL
-			AND li.name LIKE '%-%'
-			GROUP BY series_name
-			ORDER BY last_seen DESC
-			LIMIT 10
-		`, userID); err == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var series UserTopItem
-				var lastSeen int64
-				if err := rows.Scan(&series.ItemID, &series.Name, &series.Type, &lastSeen); err == nil {
-					series.Hours = float64(lastSeen) // Store timestamp for date display
-					detail.LastSeenEpisodes = append(detail.LastSeenEpisodes, series)
-				}
-			}
-		}
+        // Get last seen episodes (limit 10) and enrich display as "Series - Episode (SxxExx)"
+        if rows, err := db.Query(`
+            SELECT li.id, li.name, li.media_type, MAX(ps.ended_at) as last_seen
+            FROM play_sessions ps
+            JOIN library_item li ON li.id = ps.item_id
+            WHERE ps.user_id = ? AND li.media_type = 'Episode'
+              AND ps.ended_at IS NOT NULL
+            GROUP BY li.id, li.name, li.media_type
+            ORDER BY last_seen DESC
+            LIMIT 10
+        `, userID); err == nil {
+            defer rows.Close()
+            tmp := make([]UserTopItem, 0, 10)
+            ids := make([]string, 0, 10)
+            lastSeenByID := make(map[string]int64)
+            for rows.Next() {
+                var it UserTopItem
+                var lastSeen int64
+                if err := rows.Scan(&it.ItemID, &it.Name, &it.Type, &lastSeen); err == nil {
+                    it.Hours = float64(lastSeen) // store timestamp for date display
+                    tmp = append(tmp, it)
+                    ids = append(ids, it.ItemID)
+                    lastSeenByID[it.ItemID] = lastSeen
+                }
+            }
+            // Enrich via Emby for proper episode display
+            if em != nil && len(ids) > 0 {
+                if items, err := em.ItemsByIDs(ids); err == nil && len(items) > 0 {
+                    byID := make(map[string]emby.EmbyItem, len(items))
+                    for i := range items { byID[items[i].Id] = items[i] }
+                    detail.LastSeenEpisodes = make([]UserTopItem, 0, len(tmp))
+                    for _, it := range tmp {
+                        if emIt, ok := byID[it.ItemID]; ok && (emIt.Type == "Episode" || it.Type == "Episode") {
+                            name := emIt.Name
+                            series := emIt.SeriesName
+                            epcode := ""
+                            if emIt.ParentIndexNumber != nil && emIt.IndexNumber != nil {
+                                epcode = fmt.Sprintf("S%02dE%02d", *emIt.ParentIndexNumber, *emIt.IndexNumber)
+                            }
+                            disp := name
+                            if series != "" && name != "" {
+                                disp = fmt.Sprintf("%s - %s", series, name)
+                            } else if series != "" {
+                                disp = series
+                            }
+                            if epcode != "" { disp = disp + " (" + epcode + ")" }
+                            it.Name = disp
+                            it.Type = "Episode"
+                        }
+                        // ensure timestamp preserved
+                        if ts, ok := lastSeenByID[it.ItemID]; ok { it.Hours = float64(ts) }
+                        detail.LastSeenEpisodes = append(detail.LastSeenEpisodes, it)
+                    }
+                } else {
+                    // fallback without enrichment
+                    detail.LastSeenEpisodes = append(detail.LastSeenEpisodes, tmp...)
+                }
+            } else {
+                detail.LastSeenEpisodes = append(detail.LastSeenEpisodes, tmp...)
+            }
+        }
 
 		// Get finished series list (limit 10) - only series where user watched ALL episodes
 		if rows, err := db.Query(`
