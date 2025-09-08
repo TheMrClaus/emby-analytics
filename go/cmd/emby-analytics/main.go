@@ -270,6 +270,9 @@ func main() {
 	// Debug: force-ingest current active Emby sessions into play_sessions
 	app.Post("/admin/debug/ingest-active", adminAuth, admin.IngestActiveSessions(sqlDB, em))
 
+	// Debug: resolve Series Id by name
+	app.Get("/admin/debug/series-id", adminAuth, admin.DebugFindSeriesID(em))
+
 	// Admin diagnostics for media metadata coverage
 	app.Get("/admin/diagnostics/media-field-coverage", adminAuth, admin.MediaFieldCoverage(sqlDB))
 	app.Get("/admin/diagnostics/items/missing", adminAuth, admin.MissingItems(sqlDB))
