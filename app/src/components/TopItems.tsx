@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTopItems } from "../hooks/useData";
-import { imgPrimary } from "../lib/api";
+import { imgPrimary, fetchConfig } from "../lib/api";
 import { fmtTooltipTime, fmtHours } from "../lib/format";
 import Card from "./ui/Card";
+import { openInEmby } from "../lib/emby";
 
 const timeframeOptions = [
   { value: "all-time", label: "All Time" },
@@ -15,11 +16,23 @@ const timeframeOptions = [
 
 export default function TopItems({ limit = 10 }: { limit?: number }) {
   const [timeframe, setTimeframe] = useState("14d");
+  const [embyExternalUrl, setEmbyExternalUrl] = useState<string>("");
+  const [embyServerId, setEmbyServerId] = useState<string>("");
 
   // Convert timeframe to days for the API (backwards compatibility)
   const days = timeframe === "all-time" ? 0 : parseInt(timeframe.replace("d", "")) || 14;
 
   const { data: rows = [], error, isLoading } = useTopItems(days, limit, timeframe);
+
+  // Fetch Emby config once for deep-linking to items
+  useEffect(() => {
+    fetchConfig()
+      .then(cfg => {
+        setEmbyExternalUrl(cfg.emby_external_url);
+        setEmbyServerId(cfg.emby_server_id);
+      })
+      .catch(() => {/* best-effort; keep links disabled if it fails */});
+  }, []);
 
   if (error) {
     return (
@@ -80,7 +93,16 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
                         t.style.display = "none";
                       }}
                     />
-                    <span>{displayName}</span>
+                    <span
+                      className="cursor-pointer hover:text-blue-400 transition-colors"
+                      title={embyExternalUrl ? "Click to open in Emby" : undefined}
+                      onClick={() => {
+                        if (!embyExternalUrl) return;
+                        openInEmby(r.item_id, embyExternalUrl, embyServerId);
+                      }}
+                    >
+                      {displayName}
+                    </span>
                   </div>
                 </td>
                 <td className="py-3">{displayType}</td>
