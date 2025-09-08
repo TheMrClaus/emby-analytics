@@ -18,71 +18,103 @@ type Intervalizer struct {
 }
 
 type liveState struct {
-	SessionFK        int64
-	SessionID        string // Session identifier from Emby
-	DeviceID         string // Device identifier from Emby
-	UserID           string
-	ItemID           string
-	LastPosTicks     int64
-	LastEventTS      time.Time
-	SessionStartTS   time.Time
-	IsIntervalOpen   bool
-	IntervalStartTS  time.Time
+    SessionFK        int64
+    SessionID        string // Session identifier from Emby
+    DeviceID         string // Device identifier from Emby
+    UserID           string
+    ItemID           string
+    ItemType         string
+    LastPosTicks     int64
+    LastEventTS      time.Time
+    SessionStartTS   time.Time
+    IsIntervalOpen   bool
+    IntervalStartTS  time.Time
 	IntervalStartPos int64
 	// Tracks whether we have recorded any interval for this session
 	HadAnyInterval bool
 }
 
 var (
-	LiveSessions = make(map[string]*liveState)
-	LiveMutex    = &sync.Mutex{}
+    LiveSessions = make(map[string]*liveState)
+    LiveMutex    = &sync.Mutex{}
 )
 
 // NEW: Expose live watch times for active intervals
-func GetLiveUserWatchTimes() map[string]float64 {
-	LiveMutex.Lock()
-	defer LiveMutex.Unlock()
-	watchTimes := make(map[string]float64)
-	now := time.Now()
-	for _, session := range LiveSessions {
-		if session.IsIntervalOpen {
-			duration := now.Sub(session.IntervalStartTS).Seconds()
-			watchTimes[session.UserID] += duration
-		}
-	}
-	return watchTimes
+func isLiveTVType(t string) bool {
+    switch strings.ToLower(strings.TrimSpace(t)) {
+    case "tvchannel", "livetv", "channel", "tvprogram":
+        return true
+    default:
+        return false
+    }
 }
 
+// NEW: Expose live watch times for active intervals (excluding Live TV)
+func GetLiveUserWatchTimes() map[string]float64 {
+    LiveMutex.Lock()
+    defer LiveMutex.Unlock()
+    watchTimes := make(map[string]float64)
+    now := time.Now()
+    for _, session := range LiveSessions {
+        if session.IsIntervalOpen {
+            duration := now.Sub(session.IntervalStartTS).Seconds()
+            watchTimes[session.UserID] += duration
+        }
+    }
+    return watchTimes
+}
+
+// Excludes Live TV
 func GetLiveItemWatchTimes() map[string]float64 {
-	LiveMutex.Lock()
-	defer LiveMutex.Unlock()
-	watchTimes := make(map[string]float64)
-	now := time.Now()
-	for _, session := range LiveSessions {
-		if session.IsIntervalOpen {
-			duration := now.Sub(session.IntervalStartTS).Seconds()
-			watchTimes[session.ItemID] += duration
-		}
-	}
-	return watchTimes
+    LiveMutex.Lock()
+    defer LiveMutex.Unlock()
+    watchTimes := make(map[string]float64)
+    now := time.Now()
+    for _, session := range LiveSessions {
+        if session.IsIntervalOpen && !isLiveTVType(session.ItemType) {
+            duration := now.Sub(session.IntervalStartTS).Seconds()
+            watchTimes[session.ItemID] += duration
+        }
+    }
+    return watchTimes
+}
+
+// Helper specifically for TopUsers to exclude Live TV
+func GetLiveUserWatchTimesExcludingLiveTV() map[string]float64 {
+    LiveMutex.Lock()
+    defer LiveMutex.Unlock()
+    watchTimes := make(map[string]float64)
+    now := time.Now()
+    for _, session := range LiveSessions {
+        if session.IsIntervalOpen && !isLiveTVType(session.ItemType) {
+            duration := now.Sub(session.IntervalStartTS).Seconds()
+            watchTimes[session.UserID] += duration
+        }
+    }
+    return watchTimes
 }
 
 func sessionKey(sessionID, itemID string) string { return sessionID + "|" + itemID }
 
 func (iz *Intervalizer) Handle(evt emby.EmbyEvent) {
-	logging.Debug("Received event: %s", evt.MessageType)
+    logging.Debug("Received event: %s", evt.MessageType)
 
 	LiveMutex.Lock()
 	defer LiveMutex.Unlock()
 	var data emby.PlaybackProgressData
-	if err := json.Unmarshal(evt.Data, &data); err != nil {
-		logging.Debug("JSON unmarshal error: %v", err)
-		return
-	}
-	if data.NowPlaying.ID == "" {
-		logging.Debug("[intervalizer] Empty NowPlaying.ID, skipping event")
-		return
-	}
+    if err := json.Unmarshal(evt.Data, &data); err != nil {
+        logging.Debug("JSON unmarshal error: %v", err)
+        return
+    }
+    if data.NowPlaying.ID == "" {
+        logging.Debug("[intervalizer] Empty NowPlaying.ID, skipping event")
+        return
+    }
+    // Skip Live TV content entirely
+    if isLiveTVType(data.NowPlaying.Type) {
+        logging.Debug("[intervalizer] Skipping Live TV event for item %s", data.NowPlaying.ID)
+        return
+    }
 
 	logging.Debug("Processing %s for user %s, item %s", evt.MessageType, data.UserID, data.NowPlaying.Name)
 
@@ -111,17 +143,18 @@ func (iz *Intervalizer) onStart(d emby.PlaybackProgressData) {
 	logging.Debug("onStart created session FK: %d", sessionFK)
 
 	insertEvent(iz.DB, sessionFK, "start", d.PlayState.IsPaused, d.PlayState.PositionTicks)
-	s := &liveState{
-		SessionFK:      sessionFK,
-		SessionID:      d.SessionID,
-		DeviceID:       d.DeviceID,
-		UserID:         d.UserID,
-		ItemID:         d.NowPlaying.ID,
-		LastPosTicks:   d.PlayState.PositionTicks,
-		LastEventTS:    now,
-		SessionStartTS: now, // Store the absolute start time
-		IsIntervalOpen: false,
-	}
+    s := &liveState{
+        SessionFK:      sessionFK,
+        SessionID:      d.SessionID,
+        DeviceID:       d.DeviceID,
+        UserID:         d.UserID,
+        ItemID:         d.NowPlaying.ID,
+        ItemType:       d.NowPlaying.Type,
+        LastPosTicks:   d.PlayState.PositionTicks,
+        LastEventTS:    now,
+        SessionStartTS: now, // Store the absolute start time
+        IsIntervalOpen: false,
+    }
 	LiveSessions[k] = s
 	logging.Debug("onStart complete, added to LiveSessions: %s", k)
 }

@@ -37,17 +37,19 @@ func ResetLifetimeWatch(db *sql.DB) fiber.Handler {
 		}
 
 		// Use play_intervals table for more accurate calculation
-		rows, err := db.Query(`
-			SELECT 
-				user_id,
-				SUM(duration_seconds * 1000) AS total_watch_ms,
-				COUNT(DISTINCT item_id) AS items_watched,
-				AVG(duration_seconds * 1000) AS avg_item_watch_ms
-			FROM play_intervals 
-			WHERE duration_seconds > 30  -- Only intervals longer than 30 seconds
-			GROUP BY user_id
-			HAVING total_watch_ms > 60000  -- At least 1 minute total
-		`)
+        rows, err := db.Query(`
+            SELECT 
+                pi.user_id,
+                SUM(pi.duration_seconds * 1000) AS total_watch_ms,
+                COUNT(DISTINCT pi.item_id) AS items_watched,
+                AVG(pi.duration_seconds * 1000) AS avg_item_watch_ms
+            FROM play_intervals pi
+            JOIN library_item li ON li.id = pi.item_id
+            WHERE pi.duration_seconds > 30  -- Only intervals longer than 30 seconds
+              AND COALESCE(li.media_type, 'Unknown') NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')
+            GROUP BY pi.user_id
+            HAVING total_watch_ms > 60000  -- At least 1 minute total
+        `)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to calculate durations: " + err.Error()})
 		}

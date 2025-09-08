@@ -50,9 +50,15 @@ func (sp *SessionProcessor) ProcessActiveSessions(activeSessions []emby.EmbySess
 	activeSessionMap := make(map[string]bool)
 
 	// Step B: Process Active Sessions
-	for _, session := range activeSessions {
-		sessionKey := session.SessionID // Track by Emby SessionID
-		activeSessionMap[sessionKey] = true
+    for _, session := range activeSessions {
+        sessionKey := session.SessionID // Track by Emby SessionID
+        activeSessionMap[sessionKey] = true
+
+        // Skip Live TV completely
+        switch strings.ToLower(strings.TrimSpace(session.ItemType)) {
+        case "tvchannel", "livetv", "channel", "tvprogram":
+            continue
+        }
 
         if tracked, exists := sp.trackedSessions[sessionKey]; exists {
             // Detect item change within the same Emby session

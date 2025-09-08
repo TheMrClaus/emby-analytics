@@ -53,8 +53,8 @@ func ItemsByCodec(db *sql.DB) fiber.Handler {
 			args = append(args, mediaType)
 		}
 
-		// Exclude live/TV channel types
-		whereClause += " AND COALESCE(li.media_type, 'Unknown') NOT IN ('TvChannel', 'LiveTv', 'Channel')"
+        // Exclude live/TV channel types
+        whereClause += " AND COALESCE(li.media_type, 'Unknown') NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')"
 
 		// Get total count
 		countQuery := `

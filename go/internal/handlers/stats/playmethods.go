@@ -100,7 +100,7 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 		}
 
 		// Enhanced query with new columns - handle empty strings and NULLs properly
-		query := `
+        query := `
             WITH derived AS (
                 SELECT 
                     -- Per-stream derivation (no blanket fallback)
@@ -126,6 +126,7 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
                 FROM play_sessions
                 WHERE started_at >= (strftime('%s','now') - (? * 86400))
                     AND started_at IS NOT NULL
+                    AND COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')
             )
             SELECT 
                 video_method,
@@ -137,7 +138,7 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
         `
 
 		// Build session query with filters
-		sessionQueryBase := `
+        sessionQueryBase := `
             SELECT 
                 ps.item_name, 
                 ps.item_type, 
@@ -179,7 +180,8 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
             FROM play_sessions ps
             LEFT JOIN emby_user eu ON ps.user_id = eu.id
             WHERE ps.started_at >= (strftime('%s','now') - (? * 86400))
-                AND ps.started_at IS NOT NULL`
+                AND ps.started_at IS NOT NULL
+                AND COALESCE(ps.item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')`
 
 		// Add filters
 		var queryParams []interface{}
@@ -392,15 +394,16 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 
 // legacyPlayMethods provides the original functionality when new columns don't exist
 func legacyPlayMethods(c fiber.Ctx, db *sql.DB, days int, limit int, offset int) error {
-	query := `
-		SELECT
-			COALESCE(play_method, '') AS raw_method,
-			COUNT(*) AS cnt
-		FROM play_sessions
-		WHERE started_at >= (strftime('%s','now') - (? * 86400))
-			AND started_at IS NOT NULL
-		GROUP BY raw_method
-	`
+    query := `
+        SELECT
+            COALESCE(play_method, '') AS raw_method,
+            COUNT(*) AS cnt
+        FROM play_sessions
+        WHERE started_at >= (strftime('%s','now') - (? * 86400))
+            AND started_at IS NOT NULL
+            AND COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')
+        GROUP BY raw_method
+    `
 
 	rows, err := db.Query(query, days)
 	if err != nil {

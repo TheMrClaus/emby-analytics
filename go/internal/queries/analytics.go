@@ -21,16 +21,18 @@ type TopItemRow struct {
 
 // TopUsersByWatchSeconds calculates top users based on interval overlap in a time window.
 func TopUsersByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd int64, limit int) ([]TopUserRow, error) {
-	// Sum overlapped duration across all intervals in the window
-	query := `
+    // Sum overlapped duration across all intervals in the window
+    query := `
         SELECT
             l.user_id,
             u.name,
             SUM(MIN(l.end_ts, ?) - MAX(l.start_ts, ?)) / 3600.0 AS hours
         FROM play_intervals l
         JOIN emby_user u ON u.id = l.user_id
+        JOIN library_item li ON li.id = l.item_id
         WHERE
             l.start_ts <= ? AND l.end_ts >= ?
+            AND COALESCE(li.media_type, 'Unknown') NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')
         GROUP BY l.user_id, u.name
         HAVING hours > 0
         ORDER BY hours DESC
@@ -55,8 +57,8 @@ func TopUsersByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd in
 
 // TopItemsByWatchSeconds calculates top items based on interval overlap.
 func TopItemsByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd int64, limit int) ([]TopItemRow, error) {
-	// Sum overlapped duration across all intervals in the window
-	query := `
+    // Sum overlapped duration across all intervals in the window
+    query := `
         SELECT
             l.item_id,
             li.name,
@@ -66,6 +68,7 @@ func TopItemsByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd in
         JOIN library_item li ON li.id = l.item_id
         WHERE
             l.start_ts <= ? AND l.end_ts >= ?
+            AND COALESCE(li.media_type, 'Unknown') NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')
         GROUP BY l.item_id, li.name, li.media_type
         HAVING hours > 0
         ORDER BY hours DESC

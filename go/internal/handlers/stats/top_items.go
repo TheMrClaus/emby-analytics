@@ -70,7 +70,7 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 
 		if err != nil || len(historicalRows) == 0 {
 			// Fallback to counting sessions if intervals aren't populated
-			rows, err := db.Query(`
+            rows, err := db.Query(`
         SELECT 
             li.id,
             li.name,
@@ -79,6 +79,7 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
         FROM library_item li
         LEFT JOIN play_sessions ps ON ps.item_id = li.id
         WHERE ps.started_at >= ? AND ps.started_at <= ?
+          AND `+excludeLiveTvFilter()+`
         GROUP BY li.id, li.name, li.media_type
         ORDER BY hours DESC
         LIMIT ?
@@ -102,6 +103,10 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
         itemDetails := make(map[string]TopItem)
         candidateIDs := make(map[string]struct{})
         for _, row := range historicalRows {
+            // Exclude Live TV content from candidates
+            if strings.EqualFold(row.Type, "TvChannel") || strings.EqualFold(row.Type, "LiveTv") || strings.EqualFold(row.Type, "Channel") || strings.EqualFold(row.Type, "TvProgram") {
+                continue
+            }
             itemDetails[row.ItemID] = TopItem{ItemID: row.ItemID, Name: row.Name, Type: row.Type}
             candidateIDs[row.ItemID] = struct{}{}
         }
@@ -109,10 +114,12 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 		// 2.5. Always supplement from play_intervals to include items missing from library_item
 		// This ensures currently playing or newly seen items appear even before metadata sync.
 		{
-			intervalRows, err := db.Query(`
+            intervalRows, err := db.Query(`
                 SELECT l.item_id, SUM(MIN(l.end_ts, ?) - MAX(l.start_ts, ?)) / 3600.0 as hours
                 FROM play_intervals l
+                JOIN library_item li ON li.id = l.item_id
                 WHERE l.start_ts <= ? AND l.end_ts >= ?
+                  AND `+excludeLiveTvFilter()+`
                 GROUP BY l.item_id
                 HAVING hours > 0
                 ORDER BY hours DESC
@@ -175,35 +182,41 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
         // 4. Get live data and merge
         liveWatchTimes := tasks.GetLiveItemWatchTimes() // Returns seconds
         for itemID, seconds := range liveWatchTimes {
+            // Determine type to allow exclusion of Live TV
+            var name, itemType string
+            if det, ok := itemDetails[itemID]; ok {
+                name, itemType = det.Name, det.Type
+            } else {
+                _ = db.QueryRow("SELECT name, media_type FROM library_item WHERE id = ?", itemID).Scan(&name, &itemType)
+            }
+            if strings.EqualFold(itemType, "TvChannel") || strings.EqualFold(itemType, "LiveTv") || strings.EqualFold(itemType, "Channel") || strings.EqualFold(itemType, "TvProgram") {
+                continue // Skip live TV from Top Items
+            }
+
             combinedHours[itemID] += seconds / 3600.0
-            // Ensure we have item details, even if it only has a live session
+
+            // Ensure we have item details for display
             if _, ok := itemDetails[itemID]; !ok {
-				var name, itemType string
-				err := db.QueryRow("SELECT name, media_type FROM library_item WHERE id = ?", itemID).Scan(&name, &itemType)
-				if err != nil && em != nil {
-					// Just-in-time fetch from Emby if not in database
-					if embyItems, fetchErr := em.ItemsByIDs([]string{itemID}); fetchErr == nil && len(embyItems) > 0 {
-						item := embyItems[0]
-						name = item.Name
-						itemType = item.Type
-						// Insert into database for future use
-						_, _ = db.Exec(`
-							INSERT INTO library_item (id, server_id, item_id, name, media_type, created_at, updated_at)
-							VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-							ON CONFLICT(id) DO UPDATE SET
-								name = excluded.name,
-								media_type = excluded.media_type,
-								updated_at = CURRENT_TIMESTAMP
-						`, item.Id, item.Id, item.Id, item.Name, item.Type)
-					} else {
-						// Fallback for unknown items
-						name = fmt.Sprintf("Unknown Item (%s)", itemID[:8])
-						itemType = "Unknown"
-					}
-				}
-				itemDetails[itemID] = TopItem{ItemID: itemID, Name: name, Type: itemType}
-			}
-		}
+                if name == "" && em != nil {
+                    if embyItems, fetchErr := em.ItemsByIDs([]string{itemID}); fetchErr == nil && len(embyItems) > 0 {
+                        it := embyItems[0]
+                        name = it.Name
+                        itemType = it.Type
+                        _, _ = db.Exec(`
+                            INSERT INTO library_item (id, server_id, item_id, name, media_type, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                            ON CONFLICT(id) DO UPDATE SET
+                                name = excluded.name,
+                                media_type = excluded.media_type,
+                                updated_at = CURRENT_TIMESTAMP
+                        `, it.Id, it.Id, it.Id, it.Name, it.Type)
+                    }
+                }
+                if name == "" { name = fmt.Sprintf("Unknown Item (%s)", itemID[:8]) }
+                if itemType == "" { itemType = "Unknown" }
+                itemDetails[itemID] = TopItem{ItemID: itemID, Name: name, Type: itemType}
+            }
+        }
 
         // 5. Convert map back to slice
         finalResult := make([]TopItem, 0, len(combinedHours))

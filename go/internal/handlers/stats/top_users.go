@@ -99,14 +99,16 @@ func TopUsers(db *sql.DB) fiber.Handler {
 
 		if err != nil || len(historicalRows) == 0 {
 			// Fallback to counting sessions if intervals aren't populated
-			rows, err := db.Query(`
+        rows, err := db.Query(`
         SELECT 
             u.id, 
             u.name, 
             COUNT(DISTINCT ps.id) * 0.5 as hours
         FROM emby_user u
         LEFT JOIN play_sessions ps ON ps.user_id = u.id
+        LEFT JOIN library_item li ON li.id = ps.item_id
         WHERE ps.started_at >= ? AND ps.started_at <= ?
+          AND (li.id IS NULL OR ` + excludeLiveTvFilter() + `)
         GROUP BY u.id, u.name
         ORDER BY hours DESC
         LIMIT ?
@@ -134,12 +136,13 @@ func TopUsers(db *sql.DB) fiber.Handler {
 		}
 
 		// 3. Get live data from the Intervalizer and merge it
-		liveWatchTimes := tasks.GetLiveUserWatchTimes() // Returns seconds
-		for userID, seconds := range liveWatchTimes {
-			combinedHours[userID] += seconds / 3600.0 // Convert seconds to hours
-			// Ensure we have a username, even if the user only has a live session
-			if _, ok := userNames[userID]; !ok {
-				var name string
+        // Live contribution (exclude LiveTV)
+        liveWatchTimes := tasks.GetLiveUserWatchTimesExcludingLiveTV() // Returns seconds
+        for userID, seconds := range liveWatchTimes {
+            combinedHours[userID] += seconds / 3600.0 // Convert seconds to hours
+            // Ensure we have a username, even if the user only has a live session
+            if _, ok := userNames[userID]; !ok {
+                var name string
 				// This query is fast and only runs for new users with live sessions
 				_ = db.QueryRow("SELECT name FROM emby_user WHERE id = ?", userID).Scan(&name)
 				userNames[userID] = name

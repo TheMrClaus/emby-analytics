@@ -75,35 +75,39 @@ func UserDetailHandler(db *sql.DB) fiber.Handler {
 		_ = db.QueryRow(`SELECT name FROM emby_user WHERE id = ?`, userID).Scan(&detail.UserName)
 
 		// Use accurate lifetime watch data for user totals
-		_ = db.QueryRow(`
-			SELECT 
-				COALESCE(lw.total_ms / 3600000.0, 0) AS hours,
-				COALESCE(
-					(SELECT COUNT(DISTINCT item_id) 
-					 FROM play_sessions ps 
-					 WHERE ps.user_id = ? AND ps.started_at >= ? AND ps.ended_at IS NOT NULL), 
-					0
-				) AS plays
-			FROM emby_user u
-			LEFT JOIN lifetime_watch lw ON lw.user_id = u.id
-			WHERE u.id = ?
-		`, userID, fromMs/1000, userID).Scan(&detail.TotalHours, &detail.Plays)
+        _ = db.QueryRow(`
+            SELECT 
+                COALESCE(lw.total_ms / 3600000.0, 0) AS hours,
+                COALESCE(
+                    (SELECT COUNT(DISTINCT ps.item_id)
+                     FROM play_sessions ps 
+                     LEFT JOIN library_item li ON li.id = ps.item_id
+                     WHERE ps.user_id = ? AND ps.started_at >= ? AND ps.ended_at IS NOT NULL
+                       AND (li.id IS NULL OR `+excludeLiveTvFilter()+`)
+                    ), 
+                    0
+                ) AS plays
+            FROM emby_user u
+            LEFT JOIN lifetime_watch lw ON lw.user_id = u.id
+            WHERE u.id = ?
+        `, userID, fromMs/1000, userID).Scan(&detail.TotalHours, &detail.Plays)
 
 		// Get user's top items based on play sessions
-		if rows, err := db.Query(`
-			SELECT 
-				li.id, 
-				li.name, 
-				li.media_type,
-				COUNT(*) as play_count
-			FROM play_sessions ps
-			JOIN library_item li ON li.id = ps.item_id
-			WHERE ps.user_id = ? AND ps.started_at >= ? 
-			AND ps.ended_at IS NOT NULL
-			GROUP BY li.id, li.name, li.media_type
-			ORDER BY play_count DESC
-			LIMIT ?
-		`, userID, fromMs, limit); err == nil {
+        if rows, err := db.Query(`
+            SELECT 
+                li.id, 
+                li.name, 
+                li.media_type,
+                COUNT(*) as play_count
+            FROM play_sessions ps
+            JOIN library_item li ON li.id = ps.item_id
+            WHERE ps.user_id = ? AND ps.started_at >= ? 
+            AND ps.ended_at IS NOT NULL
+            AND `+excludeLiveTvFilter()+`
+            GROUP BY li.id, li.name, li.media_type
+            ORDER BY play_count DESC
+            LIMIT ?
+        `, userID, fromMs, limit); err == nil {
 			defer rows.Close()
 			for rows.Next() {
 				var ti UserTopItem
@@ -116,14 +120,15 @@ func UserDetailHandler(db *sql.DB) fiber.Handler {
 		}
 
 		// recent activity
-		if rows, err := db.Query(`
-			SELECT ps.started_at, li.id, li.name, li.media_type, 0.0 as pos_hours
-			FROM play_sessions ps
-			LEFT JOIN library_item li ON li.id = ps.item_id
-			WHERE ps.user_id = ? AND ps.started_at >= ?
-			ORDER BY ps.started_at DESC
-			LIMIT ?
-		`, userID, fromMs/1000, limit); err == nil {
+        if rows, err := db.Query(`
+            SELECT ps.started_at, li.id, li.name, li.media_type, 0.0 as pos_hours
+            FROM play_sessions ps
+            LEFT JOIN library_item li ON li.id = ps.item_id
+            WHERE ps.user_id = ? AND ps.started_at >= ?
+            AND (li.id IS NULL OR `+excludeLiveTvFilter()+`)
+            ORDER BY ps.started_at DESC
+            LIMIT ?
+        `, userID, fromMs/1000, limit); err == nil {
 			defer rows.Close()
 			for rows.Next() {
 				var a UserActivity
