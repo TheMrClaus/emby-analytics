@@ -86,3 +86,45 @@ export const fmtLongSpanFromHours = (hours: number) => {
   if (!isFinite(hours) || hours <= 0) return '0m';
   return fmtLongSpanFromMinutes(Math.round(hours * 60));
 };
+
+// hours (float) -> compact hierarchical span using weeks/days/hours/minutes
+// Examples:
+//  - 2.0 days -> "2d"
+//  - 2.5 days -> "2d 12h"
+//  - 9.2 days -> "1w 2d 5h"
+//  - 3.2 hours -> "3h 12m"
+//  - 45 minutes -> "45m"
+export const fmtSpanDHMW = (hours: number) => {
+  if (!isFinite(hours) || hours <= 0) return '0m';
+  let totalMin = Math.round(hours * 60);
+  const MIN_PER_HOUR = 60;
+  const MIN_PER_DAY = 24 * MIN_PER_HOUR;
+  const MIN_PER_WEEK = 7 * MIN_PER_DAY;
+
+  const weeks = Math.floor(totalMin / MIN_PER_WEEK);
+  totalMin -= weeks * MIN_PER_WEEK;
+  const days = Math.floor(totalMin / MIN_PER_DAY);
+  totalMin -= days * MIN_PER_DAY;
+  const hrs = Math.floor(totalMin / MIN_PER_HOUR);
+  const mins = totalMin % MIN_PER_HOUR;
+
+  const parts: string[] = [];
+  if (weeks > 0) {
+    parts.push(`${weeks}w`);
+    if (days > 0) parts.push(`${days}d`);
+    if (hrs > 0) parts.push(`${hrs}h`);
+    return parts.join(' ');
+  }
+  if (days > 0) {
+    parts.push(`${days}d`);
+    if (hrs > 0) parts.push(`${hrs}h`);
+    if (mins > 0) parts.push(`${mins}m`);
+    return parts.join(' ');
+  }
+  if (hrs > 0) {
+    parts.push(`${hrs}h`);
+    if (mins > 0) parts.push(`${mins}m`);
+    return parts.join(' ');
+  }
+  return `${mins}m`;
+};

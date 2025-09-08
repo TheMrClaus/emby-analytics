@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useTopUsers, useUserDetail } from "../hooks/useData";
-import { fmtTooltipTime, fmtHours, fmtLongSpanFromHours } from "../lib/format";
+import { fmtTooltipTime, fmtSpanDHMW } from "../lib/format";
 import Card from "./ui/Card";
 import type { TopUser } from "../types";
 
@@ -127,7 +127,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                     </span>
                   </td>
                   <td className="py-1 text-right tabular-nums" title={fmtTooltipTime(r.hours)}>
-                    {fmtLongSpanFromHours(r.hours)}
+                    {fmtSpanDHMW(r.hours)}
                   </td>
                 </tr>
               ))}
