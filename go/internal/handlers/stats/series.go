@@ -46,26 +46,27 @@ const seriesNameExpr = "TRIM(CASE WHEN INSTR(name, ' - ') > 0 THEN SUBSTR(name, 
 
 func Series(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		start := time.Now()
-		data := SeriesData{}
+        start := time.Now()
+        data := SeriesData{}
+        var err error
 
-        // Total series: prefer 'series' table if populated; fallback to derived from episodes
-        var seriesTableCount int
-        if e := db.QueryRow(`SELECT COUNT(*) FROM series`).Scan(&seriesTableCount); e == nil && seriesTableCount > 0 {
-            data.TotalSeries = seriesTableCount
+		// Total series: prefer 'series' table if populated; fallback to derived from episodes
+		var seriesTableCount int
+		if e := db.QueryRow(`SELECT COUNT(*) FROM series`).Scan(&seriesTableCount); e == nil && seriesTableCount > 0 {
+			data.TotalSeries = seriesTableCount
         } else {
-            err := db.QueryRow(`
+            err = db.QueryRow(`
                 SELECT COUNT(*) FROM (
                     SELECT DISTINCT ` + seriesNameExpr + ` AS series
                     FROM library_item
                     WHERE media_type = 'Episode' AND ` + excludeLiveTvFilter() + `
                 ) WHERE series IS NOT NULL AND series != ''
             `).Scan(&data.TotalSeries)
-            if err != nil {
-                log.Printf("[series] Error counting series: %v", err)
-                return c.Status(500).JSON(fiber.Map{"error": "Failed to count series"})
-            }
-        }
+			if err != nil {
+				log.Printf("[series] Error counting series: %v", err)
+				return c.Status(500).JSON(fiber.Map{"error": "Failed to count series"})
+			}
+		}
 
 		// Total episodes
 		err = db.QueryRow(`
