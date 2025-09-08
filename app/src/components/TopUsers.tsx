@@ -127,7 +127,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                     </span>
                   </td>
                   <td className="py-1 text-right tabular-nums" title={fmtTooltipTime(r.hours)}>
-                    {fmtHours(r.hours)}
+                    {fmtLongSpanFromHours(r.hours)}
                   </td>
                 </tr>
               ))}
