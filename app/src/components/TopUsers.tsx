@@ -1,8 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useTopUsers, useUserDetail } from "../hooks/useData";
 import { fmtTooltipTime, fmtSpanDHMW } from "../lib/format";
 import Card from "./ui/Card";
 import type { TopUser } from "../types";
+import { fetchConfig } from "../lib/api";
+import { openInEmby } from "../lib/emby";
 
 const timeframeOptions = [
   { value: "all-time", label: "All Time" },
@@ -18,6 +20,8 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
   const [showDetailed, setShowDetailed] = useState(false);
   const [selectedUser, setSelectedUser] = useState<TopUser | null>(null);
   const [userFilter, setUserFilter] = useState<string>("");
+  const [embyExternalUrl, setEmbyExternalUrl] = useState<string>("");
+  const [embyServerId, setEmbyServerId] = useState<string>("");
 
   // Convert timeframe to days for the API (backwards compatibility)
   const days = timeframe === "all-time" ? 0 : parseInt(timeframe.replace("d", "")) || 14;
@@ -27,6 +31,14 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
     userFilter || selectedUser?.user_id || null,
     days
   );
+
+  // Fetch Emby config for deep-linking
+  useEffect(() => {
+    fetchConfig().then(cfg => {
+      setEmbyExternalUrl(cfg.emby_external_url);
+      setEmbyServerId(cfg.emby_server_id);
+    }).catch(() => {/* optional */});
+  }, []);
 
   if (error) {
     return (
@@ -200,7 +212,13 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {userDetail.last_seen_movies.map((movie, idx) => (
                       <div key={`${movie.item_id}-${idx}`} className="py-2 px-3 bg-neutral-700/30 rounded">
-                        <div className="font-medium text-white text-sm">{movie.name}</div>
+                        <div
+                          className="font-medium text-white text-sm cursor-pointer hover:text-blue-400 transition-colors"
+                          onClick={() => { if (embyExternalUrl) openInEmby(movie.item_id, embyExternalUrl, embyServerId); }}
+                          title={embyExternalUrl ? "Open in Emby" : undefined}
+                        >
+                          {movie.name}
+                        </div>
                         <div className="text-xs text-gray-400">
                           {new Date(movie.hours * 1000).toLocaleString()}
                         </div>
@@ -217,7 +235,13 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {userDetail.last_seen_episodes.map((episode, idx) => (
                       <div key={`${episode.item_id}-${idx}`} className="py-2 px-3 bg-neutral-700/30 rounded">
-                        <div className="font-medium text-white text-sm">{episode.name}</div>
+                        <div
+                          className="font-medium text-white text-sm cursor-pointer hover:text-blue-400 transition-colors"
+                          onClick={() => { if (embyExternalUrl) openInEmby(episode.item_id, embyExternalUrl, embyServerId); }}
+                          title={embyExternalUrl ? "Open in Emby" : undefined}
+                        >
+                          {episode.name}
+                        </div>
                         <div className="text-xs text-gray-400">
                           {new Date(episode.hours * 1000).toLocaleString()}
                         </div>
@@ -234,7 +258,13 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {userDetail.finished_series.map((series, idx) => (
                       <div key={`${series.item_id}-${idx}`} className="py-2 px-3 bg-neutral-700/30 rounded">
-                        <div className="font-medium text-white text-sm">{series.name}</div>
+                        <div
+                          className="font-medium text-white text-sm cursor-pointer hover:text-blue-400 transition-colors"
+                          onClick={() => { if (embyExternalUrl) openInEmby(series.item_id, embyExternalUrl, embyServerId); }}
+                          title={embyExternalUrl ? "Open in Emby" : undefined}
+                        >
+                          {series.name}
+                        </div>
                         <div className="text-xs text-gray-400">
                           {series.type} • {Math.round(series.hours)} episodes watched
                         </div>
