@@ -289,6 +289,17 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
                     // Update the database with enriched info (+ series linkage)
                     db.Exec(`UPDATE library_item SET name = ?, series_id = COALESCE(?, series_id), series_name = COALESCE(?, series_name), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
                         display, nullIfEmpty(ep.SeriesId), nullIfEmpty(ep.SeriesName), entry.Id)
+
+                    // Upsert series row when possible
+                    if strings.TrimSpace(ep.SeriesId) != "" {
+                        _, _ = db.Exec(`
+                            INSERT INTO series (id, name, year, created_at, updated_at)
+                            VALUES (?, ?, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                            ON CONFLICT(id) DO UPDATE SET
+                                name = COALESCE(excluded.name, series.name),
+                                updated_at = CURRENT_TIMESTAMP
+                        `, ep.SeriesId, ep.SeriesName)
+                    }
                 }
             }
         }

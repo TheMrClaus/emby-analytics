@@ -47,6 +47,15 @@ func BackfillSeries(db *sql.DB, em *emby.Client) fiber.Handler {
                 if _, err := db.Exec(`UPDATE library_item SET series_id = COALESCE(?, series_id), series_name = COALESCE(?, series_name) WHERE id = ?`, nullIfEmpty(sid), nullIfEmpty(sname), it.Id); err == nil {
                     updated++
                 }
+                if sid != "" { // Upsert into series table too
+                    _, _ = db.Exec(`
+                        INSERT INTO series (id, name, year, created_at, updated_at)
+                        VALUES (?, ?, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        ON CONFLICT(id) DO UPDATE SET
+                            name = COALESCE(excluded.name, series.name),
+                            updated_at = CURRENT_TIMESTAMP
+                    `, sid, sname)
+                }
             } else {
                 updated++ // report would update
             }
@@ -54,4 +63,3 @@ func BackfillSeries(db *sql.DB, em *emby.Client) fiber.Handler {
         return c.JSON(fiber.Map{"updated": updated, "pending": len(ids), "applied": apply})
     }
 }
-
