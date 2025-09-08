@@ -140,13 +140,14 @@ type cacheEntry struct {
 //
 
 type EmbyItem struct {
-	Id                string `json:"Id"`
-	Name              string `json:"Name"`
-	Type              string `json:"Type"`
-	SeriesName        string `json:"SeriesName"`
-	ParentIndexNumber *int   `json:"ParentIndexNumber"` // season
-	IndexNumber       *int   `json:"IndexNumber"`       // episode
-	ProductionYear    *int   `json:"ProductionYear"`    // year for movies
+    Id                string `json:"Id"`
+    Name              string `json:"Name"`
+    Type              string `json:"Type"`
+    SeriesId          string `json:"SeriesId,omitempty"`
+    SeriesName        string `json:"SeriesName"`
+    ParentIndexNumber *int   `json:"ParentIndexNumber"` // season
+    IndexNumber       *int   `json:"IndexNumber"`       // episode
+    ProductionYear    *int   `json:"ProductionYear"`    // year for movies
 }
 
 type embyItemsResp struct {

@@ -259,59 +259,85 @@ func UserDetailHandler(db *sql.DB, em *emby.Client) fiber.Handler {
             }
         }
 
-		// Get finished series list (limit 10) - only series where user watched ALL episodes
-		if rows, err := db.Query(`
-			SELECT
-				watched_series.series_id,
-				watched_series.series_name,
-				'Series' as media_type,
-				watched_series.watched_episodes as episode_count
-			FROM
-			(
-				SELECT
-					MIN(li.id) as series_id,
-					CASE
-						WHEN li.name LIKE '%-%' THEN SUBSTR(li.name, 1, INSTR(li.name, ' - ') - 1)
-						ELSE li.name
-					END as series_name,
-					COUNT(DISTINCT li.name) as watched_episodes,
-					MAX(ps.ended_at) as last_watched
-				FROM play_sessions ps
-				JOIN library_item li ON li.id = ps.item_id
-				WHERE ps.user_id = ?
-					AND li.media_type = 'Episode'
-					AND ps.ended_at IS NOT NULL
-				GROUP BY series_name
-			) AS watched_series
-			JOIN
-			(
-				SELECT
-					CASE
-						WHEN name LIKE '%-%' THEN SUBSTR(name, 1, INSTR(name, ' - ') - 1)
-						ELSE name
-					END as series_name,
-					COUNT(DISTINCT name) as total_episodes
-				FROM library_item
-				WHERE media_type = 'Episode'
-				GROUP BY series_name
-			) AS total_series ON watched_series.series_name = total_series.series_name
-			WHERE
-				watched_series.watched_episodes = total_series.total_episodes
-				AND total_series.total_episodes > 1
-			ORDER BY
-				watched_series.last_watched DESC
-			LIMIT 10
-		`, userID); err == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var series UserTopItem
-				var episodeCount int
-				if err := rows.Scan(&series.ItemID, &series.Name, &series.Type, &episodeCount); err == nil {
-					series.Hours = float64(episodeCount) // Using episode count as engagement metric
-					detail.FinishedSeries = append(detail.FinishedSeries, series)
-				}
-			}
-		}
+        // Get finished series list (limit 10) - only series where user watched ALL episodes
+        if rows, err := db.Query(`
+            SELECT
+                watched_series.series_id,
+                watched_series.series_name,
+                'Series' as media_type,
+                watched_series.watched_episodes as episode_count
+            FROM
+            (
+                SELECT
+                    MIN(li.id) as series_id, -- episode id placeholder, will be mapped to SeriesId via Emby
+                    CASE
+                        WHEN li.name LIKE '%-%' THEN SUBSTR(li.name, 1, INSTR(li.name, ' - ') - 1)
+                        ELSE li.name
+                    END as series_name,
+                    COUNT(DISTINCT li.name) as watched_episodes,
+                    MAX(ps.ended_at) as last_watched
+                FROM play_sessions ps
+                JOIN library_item li ON li.id = ps.item_id
+                WHERE ps.user_id = ?
+                    AND li.media_type = 'Episode'
+                    AND ps.ended_at IS NOT NULL
+                GROUP BY series_name
+            ) AS watched_series
+            JOIN
+            (
+                SELECT
+                    CASE
+                        WHEN name LIKE '%-%' THEN SUBSTR(name, 1, INSTR(name, ' - ') - 1)
+                        ELSE name
+                    END as series_name,
+                    COUNT(DISTINCT name) as total_episodes
+                FROM library_item
+                WHERE media_type = 'Episode'
+                GROUP BY series_name
+            ) AS total_series ON watched_series.series_name = total_series.series_name
+            WHERE
+                watched_series.watched_episodes = total_series.total_episodes
+                AND total_series.total_episodes > 1
+            ORDER BY
+                watched_series.last_watched DESC
+            LIMIT 10
+        `, userID); err == nil {
+            defer rows.Close()
+            tmp := make([]UserTopItem, 0, 10)
+            ids := make([]string, 0, 10)
+            counts := make(map[string]int)
+            for rows.Next() {
+                var series UserTopItem
+                var episodeCount int
+                if err := rows.Scan(&series.ItemID, &series.Name, &series.Type, &episodeCount); err == nil {
+                    series.Hours = float64(episodeCount)
+                    tmp = append(tmp, series)
+                    ids = append(ids, series.ItemID)
+                    counts[series.ItemID] = episodeCount
+                }
+            }
+            // Map episode ids -> series ids via Emby
+            if em != nil && len(ids) > 0 {
+                if items, err := em.ItemsByIDs(ids); err == nil && len(items) > 0 {
+                    for _, t := range tmp {
+                        sid := t.ItemID
+                        for i := range items {
+                            if items[i].Id == sid {
+                                if items[i].SeriesId != "" {
+                                    t.ItemID = items[i].SeriesId
+                                }
+                                break
+                            }
+                        }
+                        detail.FinishedSeries = append(detail.FinishedSeries, t)
+                    }
+                } else {
+                    detail.FinishedSeries = append(detail.FinishedSeries, tmp...)
+                }
+            } else {
+                detail.FinishedSeries = append(detail.FinishedSeries, tmp...)
+            }
+        }
 
 		return c.JSON(detail)
 	}
