@@ -67,15 +67,15 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 			base[r.ID] = r
 		}
 
-		// 2) Enrich Episodes via Emby API to build nice display strings
-		episodeIDs := make([]string, 0)
-		for _, id := range ids {
-			if rec, ok := base[id]; ok && strings.EqualFold(rec.Type, "Episode") {
-				episodeIDs = append(episodeIDs, id)
-			}
-		}
-		if len(episodeIDs) > 0 {
-			if em != nil {
+        // 2) Enrich Episodes via Emby API to build nice display strings
+        episodeIDs := make([]string, 0)
+        for _, id := range ids {
+            if rec, ok := base[id]; ok && strings.EqualFold(rec.Type, "Episode") {
+                episodeIDs = append(episodeIDs, id)
+            }
+        }
+        if len(episodeIDs) > 0 {
+            if em != nil {
 				log.Printf("Enriching %d episodes: %v", len(episodeIDs), episodeIDs)
 				if items, err := em.ItemsByIDs(episodeIDs); err == nil {
 					log.Printf("Emby API returned %d items", len(items))
@@ -90,11 +90,11 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 							name = it.Name
 							rec.Name = name
 						}
-						// Build display with better fallbacks
-						season := it.ParentIndexNumber
-						ep := it.IndexNumber
-						series := it.SeriesName
-						epname := name
+                    // Build display with better fallbacks
+                    season := it.ParentIndexNumber
+                    ep := it.IndexNumber
+                    series := it.SeriesName
+                    epname := name
 
 						// Handle cases where we have partial data
 						if series == "" {
@@ -116,12 +116,13 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 							} else {
 								rec.Display = series
 							}
-							rec.Type = "Series" // Change type to Series for display
-						}
-						base[it.Id] = rec
-					}
-				} else {
-					log.Printf("Emby API error for episodes: %v", err)
+                        // Keep actual type as Episode
+                        rec.Type = "Episode"
+                    }
+                    base[it.Id] = rec
+                }
+            } else {
+                log.Printf("Emby API error for episodes: %v", err)
 				}
 			} else {
 				log.Printf("Emby client is nil, cannot enrich episodes")
@@ -137,27 +138,28 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 					// Item exists in DB but has no data - try to get from Emby directly
 					log.Printf("Item %s has no name/type, attempting direct Emby lookup", id)
 					if em != nil {
-						if items, err := em.ItemsByIDs([]string{id}); err == nil && len(items) > 0 {
-							item := items[0]
-							r.Name = item.Name
-							r.Type = item.Type
-							if item.Type == "Episode" && item.SeriesName != "" {
-								// Build episode display
-								epcode := ""
-								if item.ParentIndexNumber != nil && item.IndexNumber != nil {
-									epcode = fmt.Sprintf("S%02dE%02d", *item.ParentIndexNumber, *item.IndexNumber)
-								}
-								if epcode != "" && item.Name != "" {
-									r.Display = fmt.Sprintf("%s - %s (%s)", item.SeriesName, item.Name, epcode)
-								} else {
-									r.Display = fmt.Sprintf("%s - %s", item.SeriesName, item.Name)
-								}
-								r.Type = "Series" // Show as Series in UI
-							} else {
-								r.Display = r.Name
-							}
-							log.Printf("Direct lookup success for %s: name='%s', display='%s'", id, r.Name, r.Display)
-						} else {
+                if items, err := em.ItemsByIDs([]string{id}); err == nil && len(items) > 0 {
+                    item := items[0]
+                    r.Name = item.Name
+                    r.Type = item.Type
+                    if strings.EqualFold(item.Type, "Episode") && item.SeriesName != "" {
+                        // Build episode display
+                        epcode := ""
+                        if item.ParentIndexNumber != nil && item.IndexNumber != nil {
+                            epcode = fmt.Sprintf("S%02dE%02d", *item.ParentIndexNumber, *item.IndexNumber)
+                        }
+                        if epcode != "" && item.Name != "" {
+                            r.Display = fmt.Sprintf("%s - %s (%s)", item.SeriesName, item.Name, epcode)
+                        } else {
+                            r.Display = fmt.Sprintf("%s - %s", item.SeriesName, item.Name)
+                        }
+                        // Keep Episode type
+                        r.Type = "Episode"
+                    } else {
+                        r.Display = r.Name
+                    }
+                    log.Printf("Direct lookup success for %s: name='%s', display='%s'", id, r.Name, r.Display)
+                } else {
 							log.Printf("Direct Emby lookup failed for %s: %v", id, err)
 						}
 					}

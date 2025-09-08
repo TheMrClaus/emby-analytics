@@ -208,6 +208,7 @@ func main() {
 	app.Get("/stats/items/by-quality/:quality", stats.ItemsByQuality(sqlDB))
 	app.Get("/stats/movies", stats.Movies(sqlDB))
 	app.Get("/stats/series", stats.Series(sqlDB))
+	app.Get("/stats/top/series", stats.TopSeries(sqlDB))
 
 	// Backward compatibility routes (hyphenated versions)
 	app.Get("/stats/top-users", stats.TopUsers(sqlDB))
