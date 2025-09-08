@@ -293,26 +293,46 @@ func (c *Client) FindSeriesIDByName(name string) (string, error) {
     if c == nil || c.BaseURL == "" || c.APIKey == "" || strings.TrimSpace(name) == "" {
         return "", nil
     }
-    u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
-    q := url.Values{}
-    q.Set("api_key", c.APIKey)
-    q.Set("IncludeItemTypes", "Series")
-    q.Set("SearchTerm", name)
-    q.Set("Limit", "1")
-    req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
-    req.Header.Set("X-Emby-Token", c.APIKey)
-    resp, err := c.doWithRetry(req, 2)
-    if err != nil {
-        return "", err
+    // helper to query Emby with a given search term
+    query := func(term string) (string, error) {
+        u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
+        q := url.Values{}
+        q.Set("api_key", c.APIKey)
+        q.Set("IncludeItemTypes", "Series")
+        q.Set("Recursive", "true")
+        q.Set("SearchTerm", term)
+        q.Set("Limit", "1")
+        req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+        req.Header.Set("X-Emby-Token", c.APIKey)
+        resp, err := c.doWithRetry(req, 2)
+        if err != nil {
+            return "", err
+        }
+        var out itemsResp
+        if err := readJSON(resp, &out); err != nil {
+            return "", err
+        }
+        if len(out.Items) == 0 {
+            return "", nil
+        }
+        return out.Items[0].Id, nil
     }
-    var out itemsResp
-    if err := readJSON(resp, &out); err != nil {
-        return "", err
+
+    // Try exact input first
+    if id, err := query(name); err != nil || id != "" {
+        return id, err
     }
-    if len(out.Items) == 0 {
-        return "", nil
+    // Fallback: strip year suffix like " (2025)"
+    short := name
+    if i := strings.LastIndex(short, " ("); i > 0 && strings.HasSuffix(short, ")") {
+        short = short[:i]
     }
-    return out.Items[0].Id, nil
+    if short != name {
+        if id, err := query(short); err != nil || id != "" {
+            return id, err
+        }
+    }
+    return "", nil
 }
 
 type itemsResp struct {

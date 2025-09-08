@@ -275,6 +275,8 @@ func main() {
 
 	// Debug: resolve Series Id by name
 	app.Get("/admin/debug/series-id", adminAuth, admin.DebugFindSeriesID(em))
+    // Debug: resolve Series Id from episode id
+    app.Get("/admin/debug/series-from-episode", adminAuth, admin.DebugSeriesFromEpisode(em))
 
 	// Admin diagnostics for media metadata coverage
 	app.Get("/admin/diagnostics/media-field-coverage", adminAuth, admin.MediaFieldCoverage(sqlDB))
