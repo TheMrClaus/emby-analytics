@@ -215,13 +215,30 @@ func (iz *Intervalizer) onStop(d emby.PlaybackProgressData) {
 
 	insertEvent(iz.DB, s.SessionFK, "stop", false, d.PlayState.PositionTicks)
 
-	if s.IsIntervalOpen {
-		// If an interval was open, close it normally.
-		iz.closeInterval(s, s.IntervalStartTS, now, s.IntervalStartPos, d.PlayState.PositionTicks, false)
-	} else if !s.HadAnyInterval && !s.SessionStartTS.IsZero() && s.LastPosTicks > 0 {
-		// Create interval only for sessions that never produced any progress-based intervals
-		iz.closeInterval(s, s.SessionStartTS, now, 0, d.PlayState.PositionTicks, false)
-	}
+    if s.IsIntervalOpen {
+        // If an interval was open, close it normally.
+        iz.closeInterval(s, s.IntervalStartTS, now, s.IntervalStartPos, d.PlayState.PositionTicks, false)
+    } else if !s.HadAnyInterval && !s.SessionStartTS.IsZero() && s.LastPosTicks > 0 {
+        // Fallback: We never opened an interval (e.g., no progress before pause/stop),
+        // but we have a non-zero position. Estimate watched time from position ticks
+        // and anchor the interval to the last activity timestamp to avoid counting
+        // long paused/disconnected wall-clock time as watched.
+        const ticksPerSecond = 10000000
+        watchedSeconds := time.Duration(d.PlayState.PositionTicks/ticksPerSecond) * time.Second
+
+        // Use the last event timestamp if available; it represents the last
+        // moment we observed activity (progress/pause). This avoids dragging
+        // the interval end to "now" after hours of being paused.
+        endTS := s.LastEventTS
+        if endTS.IsZero() {
+            endTS = now
+        }
+        startTS := endTS.Add(-watchedSeconds)
+        if startTS.Before(s.SessionStartTS) {
+            startTS = s.SessionStartTS
+        }
+        iz.closeInterval(s, startTS, endTS, 0, d.PlayState.PositionTicks, false)
+    }
 
 	_, _ = iz.DB.Exec(`UPDATE play_sessions SET ended_at = ?, is_active = false WHERE id = ?`, now.Unix(), s.SessionFK)
 	delete(LiveSessions, k)
