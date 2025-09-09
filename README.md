@@ -61,6 +61,12 @@ Emby Analytics is a self-hosted dashboard and API service for monitoring and vis
 - **Emby Server** with API access
 - **Docker** (optional, for containerized deployment)
 
+### Frontend Stack Versions
+
+- Next.js 15 (static export mode)
+- React 19
+- Node 20 used in Docker build
+
 ## Development Setup
 
 ### Backend Setup
