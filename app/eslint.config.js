@@ -28,6 +28,8 @@ export default [
       ...nextPlugin.configs.recommended.rules,
       ...reactPlugin.configs.recommended.rules,
       ...hooksPlugin.configs.recommended.rules,
+      // React 17+ and Next.js use the new JSX transform; no need to import React in scope
+      'react/react-in-jsx-scope': 'off',
     },
   },
 ];
