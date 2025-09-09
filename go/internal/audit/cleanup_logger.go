@@ -131,16 +131,17 @@ func GetCleanupJobs(db *sql.DB, limit int) ([]CleanupJob, error) {
 	var jobs []CleanupJob
 	for rows.Next() {
 		var job CleanupJob
+		var startedAtUnix int64
 		var completedAtUnix *int64
 		
 		err := rows.Scan(&job.ID, &job.OperationType, &job.Status, 
-			&completedAtUnix, &job.TotalItemsChecked, &job.ItemsProcessed, 
+			&startedAtUnix, &completedAtUnix, &job.TotalItemsChecked, &job.ItemsProcessed, 
 			&job.Summary, &job.CreatedBy)
 		if err != nil {
 			continue
 		}
 		
-		job.StartedAt = time.Unix(*completedAtUnix, 0)
+		job.StartedAt = time.Unix(startedAtUnix, 0)
 		if completedAtUnix != nil {
 			t := time.Unix(*completedAtUnix, 0)
 			job.CompletedAt = &t
