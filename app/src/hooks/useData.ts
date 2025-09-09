@@ -1,5 +1,5 @@
 // app/src/hooks/useData.ts
-import useSWR from 'swr';
+import useSWR from "swr";
 import {
   fetchOverview,
   fetchUsage,
@@ -13,7 +13,7 @@ import {
   fetchNowSnapshot,
   fetchRefreshStatus,
   fetchUserDetail,
-} from '../lib/api';
+} from "../lib/api";
 import type {
   OverviewData,
   UsageRow,
@@ -27,7 +27,7 @@ import type {
   NowEntry,
   RefreshState,
   UserDetail,
-} from '../types';
+} from "../types";
 
 // SWR configuration
 const config = {
@@ -41,31 +41,27 @@ const fetcher = (fn: () => Promise<any>) => fn();
 
 // Overview data hook
 export function useOverview() {
-  return useSWR<OverviewData>('overview', () => fetchOverview(), config);
+  return useSWR<OverviewData>("overview", () => fetchOverview(), config);
 }
 
 // Usage data hook with dynamic days parameter
 export function useUsage(days = 14) {
-  return useSWR<UsageRow[]>(
-    ['usage', days],
-    () => fetchUsage(days),
-    config
-  );
+  return useSWR<UsageRow[]>(["usage", days], () => fetchUsage(days), config);
 }
 
 // Top users hook with dynamic parameters + optional timeframe
 export function useTopUsers(days = 14, limit = 10, timeframe?: string) {
   return useSWR<TopUser[]>(
-    ['topUsers', days, limit, timeframe],
+    ["topUsers", days, limit, timeframe],
     () => fetchTopUsers(days, limit, timeframe),
     config
   );
 }
 
-// Top items hook with dynamic parameters + optional timeframe  
+// Top items hook with dynamic parameters + optional timeframe
 export function useTopItems(days = 14, limit = 10, timeframe?: string) {
   return useSWR<TopItem[]>(
-    ['topItems', days, limit, timeframe],
+    ["topItems", days, limit, timeframe],
     () => fetchTopItems(days, limit, timeframe),
     config
   );
@@ -73,18 +69,18 @@ export function useTopItems(days = 14, limit = 10, timeframe?: string) {
 
 // Qualities data hook
 export function useQualities() {
-  return useSWR<QualityBuckets>('qualities', () => fetchQualities(), config);
+  return useSWR<QualityBuckets>("qualities", () => fetchQualities(), config);
 }
 
 // Codecs data hook
 export function useCodecs() {
-  return useSWR<CodecBuckets>('codecs', () => fetchCodecs(), config);
+  return useSWR<CodecBuckets>("codecs", () => fetchCodecs(), config);
 }
 
 // Active users lifetime hook with dynamic limit
 export function useActiveUsersLifetime(limit = 10) {
   return useSWR<ActiveUserLifetime[]>(
-    ['activeUsersLifetime', limit],
+    ["activeUsersLifetime", limit],
     () => fetchActiveUsersLifetime(limit),
     config
   );
@@ -92,43 +88,35 @@ export function useActiveUsersLifetime(limit = 10) {
 
 // Movie stats hook
 export function useMovieStats() {
-  return useSWR<MovieStats>('movieStats', () => fetchMovieStats(), config);
+  return useSWR<MovieStats>("movieStats", () => fetchMovieStats(), config);
 }
 
 // Series stats hook
 export function useSeriesStats() {
-  return useSWR<SeriesStats>('seriesStats', () => fetchSeriesStats(), config);
+  return useSWR<SeriesStats>("seriesStats", () => fetchSeriesStats(), config);
 }
 
 // User detail hook
 export function useUserDetail(userId: string | null, days = 30, limit = 10) {
   return useSWR<UserDetail>(
-    userId ? ['userDetail', userId, days, limit] : null,
-    () => userId ? fetchUserDetail(userId, days, limit) : null,
+    userId ? ["userDetail", userId, days, limit] : null,
+    () => (userId ? fetchUserDetail(userId, days, limit) : null),
     config
   );
 }
 
 // Now playing snapshot with frequent refresh
 export function useNowSnapshot() {
-  return useSWR<NowEntry[]>(
-    'nowSnapshot',
-    () => fetchNowSnapshot(),
-    {
-      ...config,
-      refreshInterval: 5000, // Refresh every 5 seconds for real-time data
-    }
-  );
+  return useSWR<NowEntry[]>("nowSnapshot", () => fetchNowSnapshot(), {
+    ...config,
+    refreshInterval: 5000, // Refresh every 5 seconds for real-time data
+  });
 }
 
 // Refresh status with polling when refreshing
 export function useRefreshStatus(enabled = true) {
-  return useSWR<RefreshState>(
-    enabled ? 'refreshStatus' : null,
-    () => fetchRefreshStatus(),
-    {
-      ...config,
-      refreshInterval: 1000, // Poll every second when checking refresh status
-    }
-  );
+  return useSWR<RefreshState>(enabled ? "refreshStatus" : null, () => fetchRefreshStatus(), {
+    ...config,
+    refreshInterval: 1000, // Poll every second when checking refresh status
+  });
 }

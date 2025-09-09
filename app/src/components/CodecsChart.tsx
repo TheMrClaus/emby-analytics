@@ -1,11 +1,20 @@
 // app/src/components/CodecsChart.tsx
 import { useMemo } from "react";
-import { ResponsiveContainer, CartesianGrid, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
+import {
+  ResponsiveContainer,
+  CartesianGrid,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+} from "recharts";
 import { useCodecs } from "../hooks/useData";
 import type { CodecBuckets } from "../types";
 import { fmtInt } from "../lib/format";
 
-import { colors } from '../theme/colors';
+import { colors } from "../theme/colors";
 
 export default function CodecsChart() {
   const { data, error, isLoading } = useCodecs();
@@ -45,40 +54,43 @@ export default function CodecsChart() {
             </defs>
 
             <CartesianGrid vertical={false} stroke={colors.grid} />
-            <XAxis 
-              dataKey="codec" 
-              tick={{ fill: colors.axis }} 
-              axisLine={{ stroke: colors.grid }} 
-              tickLine={{ stroke: colors.grid }} 
-              interval={0} 
-              angle={0} 
+            <XAxis
+              dataKey="codec"
+              tick={{ fill: colors.axis }}
+              axisLine={{ stroke: colors.grid }}
+              tickLine={{ stroke: colors.grid }}
+              interval={0}
+              angle={0}
               height={48}
             />
-            <YAxis 
-              tick={{ fill: colors.axis }} 
-              axisLine={{ stroke: colors.grid }} 
-              tickLine={{ stroke: colors.grid }} 
+            <YAxis
+              tick={{ fill: colors.axis }}
+              axisLine={{ stroke: colors.grid }}
+              tickLine={{ stroke: colors.grid }}
             />
             <Tooltip
-              wrapperStyle={{ borderRadius: 12, overflow: 'hidden' }}
-              contentStyle={{ background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}` }}
+              wrapperStyle={{ borderRadius: 12, overflow: "hidden" }}
+              contentStyle={{
+                background: colors.tooltipBg,
+                border: `1px solid ${colors.tooltipBorder}`,
+              }}
               labelStyle={{ color: colors.gold500 }}
-              itemStyle={{ color: '#fff' }}
-              formatter={(value: any) => [fmtInt(Number(value)), '']}
+              itemStyle={{ color: "#fff" }}
+              formatter={(value: any) => [fmtInt(Number(value)), ""]}
             />
 
-            <Bar 
-              dataKey="Movie"   
-              fill="url(#barGoldCodecs)" 
-              radius={[8,8,0,0]} 
-              stroke="rgba(255,255,255,0.1)" 
+            <Bar
+              dataKey="Movie"
+              fill="url(#barGoldCodecs)"
+              radius={[8, 8, 0, 0]}
+              stroke="rgba(255,255,255,0.1)"
               strokeWidth={0.5}
             />
-            <Bar 
-              dataKey="Episode" 
-              fill={colors.ink}          
-              radius={[8,8,0,0]} 
-              stroke="rgba(255,255,255,0.08)"  
+            <Bar
+              dataKey="Episode"
+              fill={colors.ink}
+              radius={[8, 8, 0, 0]}
+              stroke="rgba(255,255,255,0.08)"
               strokeWidth={0.5}
             />
 

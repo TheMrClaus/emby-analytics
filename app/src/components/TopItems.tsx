@@ -27,11 +27,13 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
   // Fetch Emby config once for deep-linking to items
   useEffect(() => {
     fetchConfig()
-      .then(cfg => {
+      .then((cfg) => {
         setEmbyExternalUrl(cfg.emby_external_url);
         setEmbyServerId(cfg.emby_server_id);
       })
-      .catch(() => {/* best-effort; keep links disabled if it fails */});
+      .catch(() => {
+        /* best-effort; keep links disabled if it fails */
+      });
   }, []);
 
   if (error) {

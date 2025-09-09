@@ -34,7 +34,13 @@ export type UserActivity = {
 };
 // Compatible with backend 'TopUser' and your previous UI 'TopUser' shape.
 
-export type TopItem = { item_id: string; name: string; type: string; hours: number; display?: string };
+export type TopItem = {
+  item_id: string;
+  name: string;
+  type: string;
+  hours: number;
+  display?: string;
+};
 
 export type ItemRow = { id: string; name?: string; type?: string; display?: string };
 

@@ -1,5 +1,5 @@
 // app/src/contexts/NowPlayingContext.tsx
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 
 export type NowEntry = {
   timestamp: number;
@@ -51,7 +51,7 @@ interface NowPlayingContextType {
 
 const NowPlayingContext = createContext<NowPlayingContextType | undefined>(undefined);
 
-const apiBase = 
+const apiBase =
   (typeof window !== "undefined" && (window as any).NEXT_PUBLIC_API_BASE) ||
   process.env.NEXT_PUBLIC_API_BASE ||
   "";
@@ -81,7 +81,7 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
 
   const connectWS = () => {
     if (typeof window === "undefined") return;
-    
+
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
     const wsURL = `${proto}://${window.location.host}/now/ws`;
 
@@ -161,17 +161,13 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
     isConnected,
   };
 
-  return (
-    <NowPlayingContext.Provider value={value}>
-      {children}
-    </NowPlayingContext.Provider>
-  );
+  return <NowPlayingContext.Provider value={value}>{children}</NowPlayingContext.Provider>;
 }
 
 export function useNowPlaying(): NowPlayingContextType {
   const context = useContext(NowPlayingContext);
   if (context === undefined) {
-    throw new Error('useNowPlaying must be used within a NowPlayingProvider');
+    throw new Error("useNowPlaying must be used within a NowPlayingProvider");
   }
   return context;
 }

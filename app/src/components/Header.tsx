@@ -1,8 +1,8 @@
 // app/src/components/Header.tsx
-import { useRef } from 'react';
-import { useUsage, useNowSnapshot, useRefreshStatus } from '../hooks/useData';
-import { startRefresh, setAdminToken, clearAdminToken } from '../lib/api';
-import { fmtHours } from '../lib/format';
+import { useRef } from "react";
+import { useUsage, useNowSnapshot, useRefreshStatus } from "../hooks/useData";
+import { startRefresh, setAdminToken, clearAdminToken } from "../lib/api";
+import { fmtHours } from "../lib/format";
 
 type SnapshotEntry = {
   play_method?: string;
@@ -17,16 +17,15 @@ export default function Header() {
   // Derived UI counters
   const weeklyHours = weeklyUsage.reduce((acc, r) => acc + (r.hours || 0), 0);
   const streamsTotal = nowPlaying.length;
-  const directPlay = nowPlaying.filter((s: SnapshotEntry) =>
-    s.play_method === 'DirectPlay' || s.play_method === 'DirectStream'
+  const directPlay = nowPlaying.filter(
+    (s: SnapshotEntry) => s.play_method === "DirectPlay" || s.play_method === "DirectStream"
   ).length;
   const transcoding = streamsTotal - directPlay;
 
   // Progress %
   const imported = Number(refreshStatus?.imported ?? 0);
   const total = Number(refreshStatus?.total ?? 0);
-  const progress =
-    total > 0 ? Math.max(0, Math.min(100, (imported / total) * 100)) : 0;
+  const progress = total > 0 ? Math.max(0, Math.min(100, (imported / total) * 100)) : 0;
 
   // The running state is now driven directly by the SWR hook
   const isRunning = Boolean(refreshStatus?.running);
@@ -47,21 +46,21 @@ export default function Header() {
     try {
       await startRefresh(); // Fiber v3: kicks off the job; progress read via useRefreshStatus
     } catch (err: any) {
-      const msg = String(err?.message || err || '');
+      const msg = String(err?.message || err || "");
       // If unauthorized, prompt for admin token and retry once
-      if (typeof window !== 'undefined' && msg.startsWith('401')) {
-        const t = window.prompt('Enter admin token to use for admin actions:');
+      if (typeof window !== "undefined" && msg.startsWith("401")) {
+        const t = window.prompt("Enter admin token to use for admin actions:");
         if (t && t.trim()) {
           setAdminToken(t.trim());
           try {
             await startRefresh();
             return;
           } catch (e) {
-            console.error('Failed to start refresh after setting token:', e);
+            console.error("Failed to start refresh after setting token:", e);
           }
         }
       }
-      console.error('Failed to start refresh:', err);
+      console.error("Failed to start refresh:", err);
     }
   };
 
@@ -70,7 +69,10 @@ export default function Header() {
       <div className="flex items-center justify-between">
         {/* Title + Clock */}
         <div className="flex items-center gap-8">
-          <a href="/" className="text-2xl font-bold text-white hover:text-amber-300 transition-colors cursor-pointer">
+          <a
+            href="/"
+            className="text-2xl font-bold text-white hover:text-amber-300 transition-colors cursor-pointer"
+          >
             Emby Analytics
           </a>
         </div>
@@ -114,19 +116,19 @@ export default function Header() {
               onClick={handleRefresh}
               disabled={isRunning}
               className={[
-                'relative rounded-lg px-4 py-2 font-semibold text-black',
-                'bg-amber-600 hover:bg-amber-500 active:translate-y-[1px]',
-                'shadow-md transition-colors',
-                'h-10',
-                isRunning ? 'opacity-90 cursor-not-allowed' : ''
-              ].join(' ')}
+                "relative rounded-lg px-4 py-2 font-semibold text-black",
+                "bg-amber-600 hover:bg-amber-500 active:translate-y-[1px]",
+                "shadow-md transition-colors",
+                "h-10",
+                isRunning ? "opacity-90 cursor-not-allowed" : "",
+              ].join(" ")}
               style={{ minWidth: 220 }}
             >
               <span className="relative z-10">
-                {!isRunning && 'Refresh Library Index'}
+                {!isRunning && "Refresh Library Index"}
                 {isRunning && (
                   <>
-                    {'Refreshing… '}
+                    {"Refreshing… "}
                     {Math.round(progress)}%
                     {total > 0 && (
                       <span className="text-xs ml-1 opacity-90">
@@ -154,15 +156,25 @@ export default function Header() {
 
           {/* Admin token quick actions + API Explorer */}
           <div className="flex items-center gap-3 text-sm">
-            <a href="/settings" className="text-blue-300 hover:text-white underline decoration-dotted">Settings</a>
+            <a
+              href="/settings"
+              className="text-blue-300 hover:text-white underline decoration-dotted"
+            >
+              Settings
+            </a>
             <span className="text-gray-500">|</span>
-            <a href="/api-explorer" className="text-blue-300 hover:text-white underline decoration-dotted">API Explorer</a>
+            <a
+              href="/api-explorer"
+              className="text-blue-300 hover:text-white underline decoration-dotted"
+            >
+              API Explorer
+            </a>
             <span className="text-gray-500">|</span>
             <button
               className="text-gray-300 hover:text-white underline decoration-dotted"
               onClick={() => {
-                if (typeof window === 'undefined') return;
-                const t = window.prompt('Set admin token');
+                if (typeof window === "undefined") return;
+                const t = window.prompt("Set admin token");
                 if (t && t.trim()) setAdminToken(t.trim());
               }}
             >

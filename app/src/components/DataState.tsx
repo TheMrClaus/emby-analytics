@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode } from "react";
 
 interface DataStateProps {
   isLoading?: boolean;
@@ -24,13 +24,18 @@ export function DataState({
     if (errorFallback) {
       return <>{errorFallback}</>;
     }
-    
+
     return (
       <div className="flex items-center justify-center p-6 bg-red-50 border border-red-200 rounded-lg">
         <div className="text-center">
           <div className="text-red-600 mb-2">
             <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
             </svg>
           </div>
           <p className="text-red-800 font-medium">Failed to load data</p>
@@ -51,7 +56,7 @@ export function DataState({
     if (loadingFallback) {
       return <>{loadingFallback}</>;
     }
-    
+
     return (
       <div className="flex items-center justify-center p-6">
         <div className="text-center">
@@ -63,20 +68,26 @@ export function DataState({
   }
 
   // Show empty state (when data exists but is empty)
-  if (data !== undefined && (
-    (Array.isArray(data) && data.length === 0) ||
-    (typeof data === 'object' && data !== null && Object.keys(data).length === 0)
-  )) {
+  if (
+    data !== undefined &&
+    ((Array.isArray(data) && data.length === 0) ||
+      (typeof data === "object" && data !== null && Object.keys(data).length === 0))
+  ) {
     if (fallback) {
       return <>{fallback}</>;
     }
-    
+
     return (
       <div className="flex items-center justify-center p-6 bg-gray-50 border border-gray-200 rounded-lg">
         <div className="text-center">
           <div className="text-gray-400 mb-2">
             <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2M4 13h2m13-8v4h-2V5h2zM6 5v4h2V5H6z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2M4 13h2m13-8v4h-2V5h2zM6 5v4h2V5H6z"
+              />
             </svg>
           </div>
           <p className="text-gray-600">No data available</p>
@@ -92,13 +103,13 @@ export function DataState({
 // Hook for consistent error/loading patterns with SWR
 export function useDataState(swrResponse: { data?: any; error?: Error; isLoading?: boolean }) {
   const { data, error, isLoading } = swrResponse;
-  
+
   return {
     ...swrResponse,
-    isEmpty: data !== undefined && (
-      (Array.isArray(data) && data.length === 0) ||
-      (typeof data === 'object' && data !== null && Object.keys(data).length === 0)
-    ),
+    isEmpty:
+      data !== undefined &&
+      ((Array.isArray(data) && data.length === 0) ||
+        (typeof data === "object" && data !== null && Object.keys(data).length === 0)),
     hasData: data !== undefined && !error,
     isError: !!error,
   };

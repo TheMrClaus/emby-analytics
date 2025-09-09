@@ -87,13 +87,7 @@ export default function NowPlaying() {
   };
 
   // ---------- UI helpers ----------
-  const Chip = ({
-    tone,
-    label,
-  }: {
-    tone: "ok" | "warn";
-    label: string;
-  }) => (
+  const Chip = ({ tone, label }: { tone: "ok" | "warn"; label: string }) => (
     <span
       className={[
         "px-2 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap",
@@ -106,8 +100,7 @@ export default function NowPlaying() {
     </span>
   );
 
-  const pct = (n: number) =>
-    Math.min(100, Math.max(0, Math.floor(Number.isFinite(n) ? n : 0)));
+  const pct = (n: number) => Math.min(100, Math.max(0, Math.floor(Number.isFinite(n) ? n : 0)));
 
   const fmtHMS = (sec?: number) => {
     if (!Number.isFinite(sec as number) || (sec as number) <= 0) return "00:00";
@@ -115,7 +108,7 @@ export default function NowPlaying() {
     const hh = Math.floor(s / 3600);
     const mm = Math.floor((s % 3600) / 60);
     const ss = s % 60;
-    const pad = (n: number) => n.toString().padStart(2, '0');
+    const pad = (n: number) => n.toString().padStart(2, "0");
     return hh > 0 ? `${pad(hh)}:${pad(mm)}:${pad(ss)}` : `${pad(mm)}:${pad(ss)}`;
   };
 
@@ -199,7 +192,10 @@ export default function NowPlaying() {
               // Derive client-side ticking position using server timestamp
               const deltaSec = Math.max(0, Math.floor((Date.now() - s.timestamp) / 1000));
               const livePos = hasTime
-                ? Math.min(s.duration_sec as number, (s.position_sec || 0) + (s.is_paused ? 0 : deltaSec))
+                ? Math.min(
+                    s.duration_sec as number,
+                    (s.position_sec || 0) + (s.is_paused ? 0 : deltaSec)
+                  )
                 : undefined;
               const top = topBadge(s);
               const v = videoStatus(s);
@@ -242,9 +238,7 @@ export default function NowPlaying() {
                       <div className="flex flex-wrap gap-2 mb-3">
                         <Chip tone={top.tone} label={top.label} />
                         {s.container && <Chip tone="ok" label={s.container.toUpperCase()} />}
-                        {s.width && s.height && (
-                          <Chip tone="ok" label={`${s.width}×${s.height}`} />
-                        )}
+                        {s.width && s.height && <Chip tone="ok" label={`${s.width}×${s.height}`} />}
                       </div>
 
                       {/* Playback progress */}

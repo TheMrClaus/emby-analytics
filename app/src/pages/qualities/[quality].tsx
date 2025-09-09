@@ -4,7 +4,12 @@ import Head from "next/head";
 import Link from "next/link";
 import Header from "../../components/Header";
 import Card from "../../components/ui/Card";
-import { fetchItemsByQuality, ItemsByQualityResponse, LibraryItemResponse, fetchConfig } from "../../lib/api";
+import {
+  fetchItemsByQuality,
+  ItemsByQualityResponse,
+  LibraryItemResponse,
+  fetchConfig,
+} from "../../lib/api";
 import { openInEmby } from "../../lib/emby";
 import { fmtInt } from "../../lib/format";
 
@@ -15,25 +20,20 @@ export default function QualityDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [embyExternalUrl, setEmbyExternalUrl] = useState<string>('');
-  const [embyServerId, setEmbyServerId] = useState<string>('');
+  const [embyExternalUrl, setEmbyExternalUrl] = useState<string>("");
+  const [embyServerId, setEmbyServerId] = useState<string>("");
 
   useEffect(() => {
     if (!quality || typeof quality !== "string") return;
-    
+
     setLoading(true);
     setError(null);
-    
-    fetchItemsByQuality(
-      quality, 
-      page, 
-      50, 
-      typeof media_type === "string" ? media_type : undefined
-    )
+
+    fetchItemsByQuality(quality, page, 50, typeof media_type === "string" ? media_type : undefined)
       .then(setData)
       .catch((err) => {
-        console.error('Failed to fetch items:', err);
-        setError('Failed to load items');
+        console.error("Failed to fetch items:", err);
+        setError("Failed to load items");
       })
       .finally(() => setLoading(false));
   }, [quality, media_type, page]);
@@ -41,18 +41,18 @@ export default function QualityDetailPage() {
   // Fetch config once on component mount to get Emby external URL
   useEffect(() => {
     fetchConfig()
-      .then(config => {
+      .then((config) => {
         setEmbyExternalUrl(config.emby_external_url);
         setEmbyServerId(config.emby_server_id);
       })
-      .catch(err => console.error('Failed to fetch config:', err));
+      .catch((err) => console.error("Failed to fetch config:", err));
   }, []);
 
   const formatResolution = (item: LibraryItemResponse) => {
     if (item.height && item.width) {
       return `${item.width}×${item.height}`;
     } else if (item.height) {
-      const width = Math.round(item.height * 16 / 9);
+      const width = Math.round((item.height * 16) / 9);
       return `${width}×${item.height}`;
     }
     return "Unknown";
@@ -107,8 +107,8 @@ export default function QualityDetailPage() {
     );
   }
 
-  const title = media_type 
-    ? `${data.quality} Quality - ${media_type} Items` 
+  const title = media_type
+    ? `${data.quality} Quality - ${media_type} Items`
     : `${data.quality} Quality - All Items`;
 
   const totalPages = Math.ceil(data.total / data.page_size);
@@ -158,7 +158,7 @@ export default function QualityDetailPage() {
                         <tr
                           key={item.id}
                           className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 cursor-pointer transition-colors"
-                          onClick={() => openInEmby(item.id, embyExternalUrl, embyServerId)}  
+                          onClick={() => openInEmby(item.id, embyExternalUrl, embyServerId)}
                           title="Click to open in Emby"
                         >
                           <td className="py-3 font-medium">{item.name}</td>
@@ -168,13 +168,19 @@ export default function QualityDetailPage() {
                             </span>
                           </td>
                           <td className="py-3">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              getQualityLabel(item.height) === "4K" ? "bg-purple-900 text-purple-200" :
-                              getQualityLabel(item.height) === "1080p" ? "bg-blue-900 text-blue-200" :
-                              getQualityLabel(item.height) === "720p" ? "bg-green-900 text-green-200" :
-                              getQualityLabel(item.height) === "SD" ? "bg-yellow-900 text-yellow-200" :
-                              "bg-gray-700 text-gray-300"
-                            }`}>
+                            <span
+                              className={`px-2 py-1 rounded text-xs font-medium ${
+                                getQualityLabel(item.height) === "4K"
+                                  ? "bg-purple-900 text-purple-200"
+                                  : getQualityLabel(item.height) === "1080p"
+                                    ? "bg-blue-900 text-blue-200"
+                                    : getQualityLabel(item.height) === "720p"
+                                      ? "bg-green-900 text-green-200"
+                                      : getQualityLabel(item.height) === "SD"
+                                        ? "bg-yellow-900 text-yellow-200"
+                                        : "bg-gray-700 text-gray-300"
+                              }`}
+                            >
                               {getQualityLabel(item.height)}
                             </span>
                           </td>
@@ -198,14 +204,14 @@ export default function QualityDetailPage() {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
                         disabled={page <= 1}
                         className="px-3 py-1 bg-neutral-700 hover:bg-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors"
                       >
                         Previous
                       </button>
                       <button
-                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                         disabled={page >= totalPages}
                         className="px-3 py-1 bg-neutral-700 hover:bg-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors"
                       >

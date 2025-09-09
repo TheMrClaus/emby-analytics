@@ -3,5 +3,5 @@ export const openInEmby = (itemId: string, embyExternalUrl: string, serverId?: s
   if (serverId) {
     embyUrl += `&serverId=${serverId}`;
   }
-  window.open(embyUrl, '_blank', 'noopener,noreferrer');
+  window.open(embyUrl, "_blank", "noopener,noreferrer");
 };

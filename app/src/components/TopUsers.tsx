@@ -27,17 +27,22 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
   const days = timeframe === "all-time" ? 0 : parseInt(timeframe.replace("d", "")) || 14;
 
   const { data: rows = [], error, isLoading } = useTopUsers(days, limit, timeframe);
-  const { data: userDetail, error: userDetailError, isLoading: userDetailLoading } = useUserDetail(
-    userFilter || selectedUser?.user_id || null,
-    days
-  );
+  const {
+    data: userDetail,
+    error: userDetailError,
+    isLoading: userDetailLoading,
+  } = useUserDetail(userFilter || selectedUser?.user_id || null, days);
 
   // Fetch Emby config for deep-linking
   useEffect(() => {
-    fetchConfig().then(cfg => {
-      setEmbyExternalUrl(cfg.emby_external_url);
-      setEmbyServerId(cfg.emby_server_id);
-    }).catch(() => {/* optional */});
+    fetchConfig()
+      .then((cfg) => {
+        setEmbyExternalUrl(cfg.emby_external_url);
+        setEmbyServerId(cfg.emby_server_id);
+      })
+      .catch(() => {
+        /* optional */
+      });
   }, []);
 
   if (error) {
@@ -66,16 +71,18 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
 
   // Get all users for filter dropdown
   const allUsers = useMemo(() => {
-    return rows.filter(user => user.user_id).map(user => ({
-      id: user.user_id!,
-      name: user.name
-    }));
+    return rows
+      .filter((user) => user.user_id)
+      .map((user) => ({
+        id: user.user_id!,
+        name: user.name,
+      }));
   }, [rows]);
 
   // Current user for display
   const currentUser = useMemo(() => {
     const userId = userFilter || selectedUser?.user_id;
-    return allUsers.find(user => user.id === userId) || selectedUser;
+    return allUsers.find((user) => user.id === userId) || selectedUser;
   }, [allUsers, userFilter, selectedUser]);
 
   return (
@@ -84,7 +91,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
         <>
           {showDetailed ? (
             <>
-              {currentUser?.name || 'User Details'} ({selectedOption?.label})
+              {currentUser?.name || "User Details"} ({selectedOption?.label})
               {userDetailLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}
             </>
           ) : (
@@ -131,7 +138,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
               {rows.map((r, i) => (
                 <tr key={i} className="border-b border-neutral-800 last:border-0">
                   <td className="py-1">
-                    <span 
+                    <span
                       className="cursor-pointer hover:text-blue-400 transition-colors"
                       onClick={() => handleUserClick(r)}
                     >
@@ -165,12 +172,14 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
               ))}
             </select>
             <select
-              value={userFilter || selectedUser?.user_id || ''}
+              value={userFilter || selectedUser?.user_id || ""}
               onChange={(e) => setUserFilter(e.target.value)}
               className="bg-neutral-700 text-white text-xs px-3 py-2 rounded border border-neutral-600 focus:border-blue-500 focus:outline-none"
             >
-              {allUsers.map(user => (
-                <option key={user.id} value={user.id}>{user.name}</option>
+              {allUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
+                </option>
               ))}
             </select>
           </div>
@@ -192,7 +201,9 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                   <div className="text-gray-400">Movies Watched</div>
                 </div>
                 <div className="bg-neutral-700/50 rounded p-3">
-                  <div className="text-white font-bold text-lg">{userDetail.total_series_finished}</div>
+                  <div className="text-white font-bold text-lg">
+                    {userDetail.total_series_finished}
+                  </div>
                   <div className="text-gray-400">Series Finished</div>
                 </div>
                 <div className="bg-neutral-700/50 rounded p-3">
@@ -200,7 +211,9 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                   <div className="text-gray-400">Episodes Watched</div>
                 </div>
                 <div className="bg-neutral-700/50 rounded p-3">
-                  <div className="text-white font-bold text-lg">{fmtSpanDHMW(userDetail.total_hours)}</div>
+                  <div className="text-white font-bold text-lg">
+                    {fmtSpanDHMW(userDetail.total_hours)}
+                  </div>
                   <div className="text-gray-400">Total Time Watched</div>
                 </div>
               </div>
@@ -211,10 +224,16 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                   <div className="text-sm text-gray-300 mb-3">Last Seen Movies</div>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {userDetail.last_seen_movies.map((movie, idx) => (
-                      <div key={`${movie.item_id}-${idx}`} className="py-2 px-3 bg-neutral-700/30 rounded">
+                      <div
+                        key={`${movie.item_id}-${idx}`}
+                        className="py-2 px-3 bg-neutral-700/30 rounded"
+                      >
                         <div
                           className="font-medium text-white text-sm cursor-pointer hover:text-blue-400 transition-colors"
-                          onClick={() => { if (embyExternalUrl) openInEmby(movie.item_id, embyExternalUrl, embyServerId); }}
+                          onClick={() => {
+                            if (embyExternalUrl)
+                              openInEmby(movie.item_id, embyExternalUrl, embyServerId);
+                          }}
                           title={embyExternalUrl ? "Open in Emby" : undefined}
                         >
                           {movie.name}
@@ -234,10 +253,16 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                   <div className="text-sm text-gray-300 mb-3">Last Seen Episodes</div>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {userDetail.last_seen_episodes.map((episode, idx) => (
-                      <div key={`${episode.item_id}-${idx}`} className="py-2 px-3 bg-neutral-700/30 rounded">
+                      <div
+                        key={`${episode.item_id}-${idx}`}
+                        className="py-2 px-3 bg-neutral-700/30 rounded"
+                      >
                         <div
                           className="font-medium text-white text-sm cursor-pointer hover:text-blue-400 transition-colors"
-                          onClick={() => { if (embyExternalUrl) openInEmby(episode.item_id, embyExternalUrl, embyServerId); }}
+                          onClick={() => {
+                            if (embyExternalUrl)
+                              openInEmby(episode.item_id, embyExternalUrl, embyServerId);
+                          }}
                           title={embyExternalUrl ? "Open in Emby" : undefined}
                         >
                           {episode.name}
@@ -254,13 +279,21 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
               {/* Finished Series */}
               {userDetail.finished_series && userDetail.finished_series.length > 0 && (
                 <div>
-                  <div className="text-sm text-gray-300 mb-3">Finished Series ({userDetail.finished_series.length})</div>
+                  <div className="text-sm text-gray-300 mb-3">
+                    Finished Series ({userDetail.finished_series.length})
+                  </div>
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {userDetail.finished_series.map((series, idx) => (
-                      <div key={`${series.item_id}-${idx}`} className="py-2 px-3 bg-neutral-700/30 rounded">
+                      <div
+                        key={`${series.item_id}-${idx}`}
+                        className="py-2 px-3 bg-neutral-700/30 rounded"
+                      >
                         <div
                           className="font-medium text-white text-sm cursor-pointer hover:text-blue-400 transition-colors"
-                          onClick={() => { if (embyExternalUrl) openInEmby(series.item_id, embyExternalUrl, embyServerId); }}
+                          onClick={() => {
+                            if (embyExternalUrl)
+                              openInEmby(series.item_id, embyExternalUrl, embyServerId);
+                          }}
                           title={embyExternalUrl ? "Open in Emby" : undefined}
                         >
                           {series.name}

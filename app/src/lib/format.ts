@@ -40,7 +40,7 @@ export const fmtHours = (hours: number) => {
 //  - 72h -> "3.0 days"
 //  - very long -> "9.8 years", "2.3 centuries", "1.1 millennia"
 export const fmtLongSpanFromMinutes = (minutes: number) => {
-  if (!isFinite(minutes) || minutes <= 0) return '0m';
+  if (!isFinite(minutes) || minutes <= 0) return "0m";
   const hours = minutes / 60;
   // For short spans, keep detailed h/m format
   if (hours < 48) {
@@ -59,19 +59,19 @@ export const fmtLongSpanFromMinutes = (minutes: number) => {
   const H_PER_MILLENNIUM = H_PER_YEAR * 1000;
 
   const units: { label: string; hours: number }[] = [
-    { label: 'millennium', hours: H_PER_MILLENNIUM },
-    { label: 'century', hours: H_PER_CENTURY },
-    { label: 'year', hours: H_PER_YEAR },
-    { label: 'month', hours: H_PER_MONTH },
-    { label: 'week', hours: H_PER_WEEK },
-    { label: 'day', hours: H_PER_DAY },
+    { label: "millennium", hours: H_PER_MILLENNIUM },
+    { label: "century", hours: H_PER_CENTURY },
+    { label: "year", hours: H_PER_YEAR },
+    { label: "month", hours: H_PER_MONTH },
+    { label: "week", hours: H_PER_WEEK },
+    { label: "day", hours: H_PER_DAY },
   ];
 
   for (const u of units) {
     const v = hours / u.hours;
     if (v >= 1) {
       const n = v >= 10 ? Math.round(v) : Math.round(v * 10) / 10; // keep one decimal for <10
-      const label = n === 1 ? u.label : (u.label === 'millennium' ? 'millennia' : `${u.label}s`);
+      const label = n === 1 ? u.label : u.label === "millennium" ? "millennia" : `${u.label}s`;
       return `${n} ${label}`;
     }
   }
@@ -83,7 +83,7 @@ export const fmtLongSpanFromMinutes = (minutes: number) => {
 
 // hours (float) -> human long span via minutes
 export const fmtLongSpanFromHours = (hours: number) => {
-  if (!isFinite(hours) || hours <= 0) return '0m';
+  if (!isFinite(hours) || hours <= 0) return "0m";
   return fmtLongSpanFromMinutes(Math.round(hours * 60));
 };
 
@@ -95,7 +95,7 @@ export const fmtLongSpanFromHours = (hours: number) => {
 //  - 3.2 hours -> "3h 12m"
 //  - 45 minutes -> "45m"
 export const fmtSpanDHMW = (hours: number) => {
-  if (!isFinite(hours) || hours <= 0) return '0m';
+  if (!isFinite(hours) || hours <= 0) return "0m";
   let totalMin = Math.round(hours * 60);
   const MIN_PER_HOUR = 60;
   const MIN_PER_DAY = 24 * MIN_PER_HOUR;
@@ -113,18 +113,18 @@ export const fmtSpanDHMW = (hours: number) => {
     parts.push(`${weeks}w`);
     if (days > 0) parts.push(`${days}d`);
     if (hrs > 0) parts.push(`${hrs}h`);
-    return parts.join(' ');
+    return parts.join(" ");
   }
   if (days > 0) {
     parts.push(`${days}d`);
     if (hrs > 0) parts.push(`${hrs}h`);
     if (mins > 0) parts.push(`${mins}m`);
-    return parts.join(' ');
+    return parts.join(" ");
   }
   if (hrs > 0) {
     parts.push(`${hrs}h`);
     if (mins > 0) parts.push(`${mins}m`);
-    return parts.join(' ');
+    return parts.join(" ");
   }
   return `${mins}m`;
 };

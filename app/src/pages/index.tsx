@@ -51,7 +51,7 @@ export default function Dashboard() {
             <ErrorBoundary>
               <TopUsers />
             </ErrorBoundary>
-            
+
             <ErrorBoundary>
               <TopItems />
             </ErrorBoundary>

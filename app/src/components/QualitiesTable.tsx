@@ -24,7 +24,8 @@ export default function QualitiesTable() {
         <>
           Media Qualities {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}
         </>
-      }>
+      }
+    >
       <table className="w-full text-sm text-left text-gray-300">
         <thead className="text-gray-400 border-b border-neutral-700">
           <tr>
@@ -37,7 +38,7 @@ export default function QualitiesTable() {
           {rows.map((r) => (
             <tr key={r.label} className="border-b border-neutral-800 last:border-0">
               <td className="py-3">
-                <Link 
+                <Link
                   href={`/qualities/${encodeURIComponent(r.label)}`}
                   className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
                 >
@@ -46,7 +47,7 @@ export default function QualitiesTable() {
               </td>
               <td className="py-3 text-right">
                 {r.movies > 0 ? (
-                  <Link 
+                  <Link
                     href={`/qualities/${encodeURIComponent(r.label)}?media_type=Movie`}
                     className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
                   >
@@ -58,7 +59,7 @@ export default function QualitiesTable() {
               </td>
               <td className="py-3 text-right">
                 {r.episodes > 0 ? (
-                  <Link 
+                  <Link
                     href={`/qualities/${encodeURIComponent(r.label)}?media_type=Episode`}
                     className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
                   >

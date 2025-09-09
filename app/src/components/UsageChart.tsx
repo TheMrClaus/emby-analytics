@@ -4,7 +4,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } fro
 import { useUsage } from "../hooks/useData";
 import type { UsageRow } from "../types";
 import { fmtAxisTime, fmtTooltipTime } from "../lib/format";
-import { colors } from '../theme/colors';
+import { colors } from "../theme/colors";
 
 type ChartRow = { day: string; [user: string]: string | number };
 
@@ -19,11 +19,13 @@ export default function UsageChart({ days = 14 }: { days?: number }) {
     for (const r of rows) {
       users.add(r.user);
       if (!byDay[r.day]) byDay[r.day] = { day: r.day };
-      byDay[r.day][r.user] = (byDay[r.day][r.user] as number | undefined ?? 0) + r.hours;
+      byDay[r.day][r.user] = ((byDay[r.day][r.user] as number | undefined) ?? 0) + r.hours;
     }
 
     // maintain sorted by day
-    const arr = Object.values(byDay).sort((a, b) => (a.day as string).localeCompare(b.day as string));
+    const arr = Object.values(byDay).sort((a, b) =>
+      (a.day as string).localeCompare(b.day as string)
+    );
 
     // ensure all user keys exist (convert Set -> array to avoid downlevel iteration issue)
     const userArr = Array.from(users);
@@ -42,7 +44,7 @@ export default function UsageChart({ days = 14 }: { days?: number }) {
     return Array.from(s).sort();
   }, [rows]);
 
-  const themed = [colors.gold600, '#7a7a7a', '#4d4d4d', '#b99d3a']; // gold + charcoals
+  const themed = [colors.gold600, "#7a7a7a", "#4d4d4d", "#b99d3a"]; // gold + charcoals
 
   if (error) {
     return (
@@ -72,7 +74,7 @@ export default function UsageChart({ days = 14 }: { days?: number }) {
                 dataKey={u}
                 stackId="h"
                 fill={themed[i % themed.length]}
-                radius={[6,6,0,0]}
+                radius={[6, 6, 0, 0]}
                 stroke="rgba(255,255,255,0.08)"
                 strokeWidth={0.5}
               />

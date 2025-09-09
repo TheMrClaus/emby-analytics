@@ -22,7 +22,7 @@ export default function SeriesStatsCard() {
         <Card title="Series Statistics">
           <div className="animate-pulse">
             <div className="grid grid-cols-2 gap-4">
-              {[1, 2, 3, 4, 5, 6].map(i => (
+              {[1, 2, 3, 4, 5, 6].map((i) => (
                 <div key={i}>
                   <div className="h-3 bg-neutral-700 rounded w-20 mb-1"></div>
                   <div className="h-5 bg-neutral-700 rounded w-16"></div>
@@ -72,7 +72,7 @@ export default function SeriesStatsCard() {
             {/* Recency */}
             <StatItem
               label="Newest Added Episode"
-              value={`${data.newest_series.name} ${new Date(data.newest_series.date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}`}
+              value={`${data.newest_series.name} ${new Date(data.newest_series.date).toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" })}`}
             />
             <StatItem
               label="Episodes Added This Month"
@@ -94,35 +94,33 @@ function fmtHoursHM(hours: number) {
   return `${h}h ${m}m`;
 }
 
-function StatItem({ 
-  label, 
-  value, 
-  subtitle, 
-  isStale 
-}: { 
-  label: string; 
-  value: string; 
-  subtitle?: string; 
-  isStale?: boolean; 
+function StatItem({
+  label,
+  value,
+  subtitle,
+  isStale,
+}: {
+  label: string;
+  value: string;
+  subtitle?: string;
+  isStale?: boolean;
 }) {
   return (
-    <div className={`${isStale ? 'text-yellow-300' : 'text-white'}`}>
-      <div className={`text-xs ${isStale ? 'text-yellow-400' : 'text-gray-400'} mb-1`}>
+    <div className={`${isStale ? "text-yellow-300" : "text-white"}`}>
+      <div className={`text-xs ${isStale ? "text-yellow-400" : "text-gray-400"} mb-1`}>
         {label}
         {isStale && <span className="ml-1">⚠️</span>}
       </div>
-      <div className={`font-semibold ${isStale ? 'text-yellow-300' : 'text-white'}`}>
-        {value}
-      </div>
+      <div className={`font-semibold ${isStale ? "text-yellow-300" : "text-white"}`}>{value}</div>
       {subtitle && (
-        <div className={`text-xs mt-1 ${isStale ? 'text-yellow-400' : 'text-gray-500'} truncate`} 
-             title={subtitle}>
+        <div
+          className={`text-xs mt-1 ${isStale ? "text-yellow-400" : "text-gray-500"} truncate`}
+          title={subtitle}
+        >
           {subtitle}
         </div>
       )}
-      {isStale && (
-        <div className="text-xs text-yellow-400 mt-1">No data available</div>
-      )}
+      {isStale && <div className="text-xs text-yellow-400 mt-1">No data available</div>}
     </div>
   );
 }

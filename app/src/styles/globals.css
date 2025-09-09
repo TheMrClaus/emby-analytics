@@ -9,41 +9,83 @@
 }
 
 /* Page chrome */
-html, body, #__next { height: 100%; }
+html,
+body,
+#__next {
+  height: 100%;
+}
 body {
   background:
-    radial-gradient(1200px 800px at 20% -10%, rgba(58,170,53,.15), transparent),
-    radial-gradient(1000px 600px at 90% 10%, rgba(58,170,53,.10), transparent),
-    var(--bg);
+    radial-gradient(1200px 800px at 20% -10%, rgba(58, 170, 53, 0.15), transparent),
+    radial-gradient(1000px 600px at 90% 10%, rgba(58, 170, 53, 0.1), transparent), var(--bg);
   color: white;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Ubuntu,
+    Cantarell,
+    Noto Sans,
+    Arial;
 }
 
 /* Handy utilities */
-.card { @apply rounded-2xl border border-white/5 shadow-[0_8px_24px_rgba(0,0,0,.08)] bg-[color:var(--panel)]; }
-.badge { @apply inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-xs text-[color:var(--hi)]/90; }
-.h2   { @apply text-2xl font-semibold tracking-tight; }
-.h3   { @apply text-lg font-semibold tracking-tight; }
+.card {
+  @apply rounded-2xl border border-white/5 shadow-[0_8px_24px_rgba(0,0,0,.08)] bg-[color:var(--panel)];
+}
+.badge {
+  @apply inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-xs text-[color:var(--hi)]/90;
+}
+.h2 {
+  @apply text-2xl font-semibold tracking-tight;
+}
+.h3 {
+  @apply text-lg font-semibold tracking-tight;
+}
 
 /* ------------------ */
 /* Typographic system */
 /* ------------------ */
-.ty-display { @apply text-3xl/tight sm:text-4xl/tight font-extrabold tracking-tight; }
-.ty-title   { @apply text-2xl font-semibold tracking-tight; } /* section titles */
-.ty-h3      { @apply text-lg font-semibold tracking-tight; }  /* card titles */
-.ty-muted   { @apply text-sm text-white/70; }
-.ty-caption { @apply text-xs text-white/50; }
+.ty-display {
+  @apply text-3xl/tight sm:text-4xl/tight font-extrabold tracking-tight;
+}
+.ty-title {
+  @apply text-2xl font-semibold tracking-tight;
+} /* section titles */
+.ty-h3 {
+  @apply text-lg font-semibold tracking-tight;
+} /* card titles */
+.ty-muted {
+  @apply text-sm text-white/70;
+}
+.ty-caption {
+  @apply text-xs text-white/50;
+}
 
 /* -------------- */
 /* Dark table kit */
 /* -------------- */
-.table-dark { @apply w-full text-sm; }
-.table-dark thead th { @apply text-white/70 font-medium text-left; }
-.table-dark tbody tr { @apply border-t border-white/5; }
-.table-dark td, .table-dark th { @apply py-2; }
-.table-dark tbody tr:hover { @apply bg-white/5; }
-.table-dark .num { @apply text-right; } /* add className="num" to numeric columns */
-
+.table-dark {
+  @apply w-full text-sm;
+}
+.table-dark thead th {
+  @apply text-white/70 font-medium text-left;
+}
+.table-dark tbody tr {
+  @apply border-t border-white/5;
+}
+.table-dark td,
+.table-dark th {
+  @apply py-2;
+}
+.table-dark tbody tr:hover {
+  @apply bg-white/5;
+}
+.table-dark .num {
+  @apply text-right;
+} /* add className="num" to numeric columns */
 
 /* ========================= */
 /* Premium Hero (Now Playing) */
@@ -57,7 +99,9 @@ body {
 }
 
 /* Optional larger title look inside hero */
-.hero h2.ty-title { @apply text-3xl font-extrabold text-emerald-400; }
+.hero h2.ty-title {
+  @apply text-3xl font-extrabold text-emerald-400;
+}
 
 /* Two stacked layers that crossfade via opacity and gently parallax */
 .hero .hero-layer {
@@ -67,7 +111,9 @@ body {
   background-position: center;
   filter: blur(20px) saturate(120%);
   opacity: 0;
-  transition: opacity 600ms ease, transform 400ms ease;
+  transition:
+    opacity 600ms ease,
+    transform 400ms ease;
   pointer-events: none;
   will-change: opacity, transform;
   z-index: 0;
@@ -78,8 +124,8 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(60% 60% at 20% 10%, rgba(0,0,0,.25), transparent 60%),
-    linear-gradient(to bottom, rgba(0,0,0,.35), rgba(0,0,0,.75));
+    radial-gradient(60% 60% at 20% 10%, rgba(0, 0, 0, 0.25), transparent 60%),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.75));
   pointer-events: none;
   z-index: 1;
 }
@@ -100,13 +146,13 @@ body {
 
 /* --- Chart theme (black & gold) --- */
 :root {
-  --gold-400: #ffd54a;   /* premium gold (not neon) */
+  --gold-400: #ffd54a; /* premium gold (not neon) */
   --gold-500: #ffc838;
   --gold-600: #f5b515;
-  --ink: #000000;        /* true black */
-  --ink-raise: rgba(255,255,255,0.10);  /* subtle outline for black bars */
-  --axis: rgba(255,255,255,0.35);
-  --grid: rgba(255,255,255,0.06);
+  --ink: #000000; /* true black */
+  --ink-raise: rgba(255, 255, 255, 0.1); /* subtle outline for black bars */
+  --axis: rgba(255, 255, 255, 0.35);
+  --grid: rgba(255, 255, 255, 0.06);
   --tooltip-bg: #0b0e13;
   --tooltip-border: rgba(245, 181, 21, 0.35);
 }
@@ -127,8 +173,10 @@ body {
   align-items: center;
 }
 .chart-legend .swatch {
-  width: 14px; height: 14px; border-radius: 4px;
-  box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
 }
 
 /* ===================== */
@@ -179,8 +227,14 @@ body {
 }
 
 @keyframes btn-bloom {
-  0%   { opacity: .55; transform: scale(.55); }
-  100% { opacity: 0;   transform: scale(1.55); }
+  0% {
+    opacity: 0.55;
+    transform: scale(0.55);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
 }
 
 /* Variant for destructive actions (Stop) while staying on brand */
@@ -209,7 +263,8 @@ body {
 .table-dark tbody tr {
   @apply border-t border-white/10;
 }
-.table-dark td, .table-dark th {
+.table-dark td,
+.table-dark th {
   @apply py-3;
 }
 .table-dark tbody tr:hover {
