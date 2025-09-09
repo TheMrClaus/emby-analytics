@@ -134,9 +134,9 @@ export default function PlaybackMethodsCard() {
   );
 
   useEffect(() => {
-  useEffect(() => {
     fetchPage(1, true);
   }, [fetchPage]);
+
   useEffect(() => {
     if (showDetailed && currentPage > 1) {
       void fetchPage(currentPage, false);

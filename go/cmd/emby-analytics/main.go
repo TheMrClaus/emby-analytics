@@ -257,10 +257,12 @@ func main() {
 	// Backfill series linkage for episodes
 	app.Get("/admin/backfill/series", adminAuth, admin.BackfillSeries(sqlDB, em))
 	app.Post("/admin/backfill/series", adminAuth, admin.BackfillSeries(sqlDB, em))
-	app.Post("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
-	app.Get("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
-	app.Post("/admin/cleanup/intervals/superset", adminAuth, admin.CleanupSupersetIntervals(sqlDB))
-	app.Get("/admin/cleanup/intervals/superset", adminAuth, admin.CleanupSupersetIntervals(sqlDB))
+    app.Post("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
+    app.Get("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
+    app.Post("/admin/cleanup/intervals/superset", adminAuth, admin.CleanupSupersetIntervals(sqlDB))
+    app.Get("/admin/cleanup/intervals/superset", adminAuth, admin.CleanupSupersetIntervals(sqlDB))
+    // Fix legacy fallback intervals that over-count paused time
+    app.Post("/admin/cleanup/intervals/fix-fallback", adminAuth, admin.FixFallbackIntervals(sqlDB))
 	// Cleanup missing items: scan library_item against Emby and delete safe orphans
 	app.Get("/admin/cleanup/missing-items", adminAuth, admin.CleanupMissingItems(sqlDB, em))
 	app.Post("/admin/cleanup/missing-items", adminAuth, admin.CleanupMissingItems(sqlDB, em))
