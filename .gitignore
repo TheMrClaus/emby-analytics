@@ -10,6 +10,12 @@ compose.yml
 .claude/
 sessions/
 
+# Local-only docs (untracked)
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+CLAUDE.sessions.md
+
 # SQLite DB and runtime data
 data/
 
