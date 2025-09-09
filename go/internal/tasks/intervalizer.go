@@ -224,7 +224,7 @@ func (iz *Intervalizer) onStop(d emby.PlaybackProgressData) {
         // and anchor the interval to the last activity timestamp to avoid counting
         // long paused/disconnected wall-clock time as watched.
         const ticksPerSecond = 10000000
-        watchedSeconds := time.Duration(d.PlayState.PositionTicks/ticksPerSecond) * time.Second
+        watchedSeconds := int(d.PlayState.PositionTicks / ticksPerSecond)
 
         // Use the last event timestamp if available; it represents the last
         // moment we observed activity (progress/pause). This avoids dragging
@@ -233,7 +233,26 @@ func (iz *Intervalizer) onStop(d emby.PlaybackProgressData) {
         if endTS.IsZero() {
             endTS = now
         }
-        startTS := endTS.Add(-watchedSeconds)
+
+        // Optional cap: do not let a single session's total intervals exceed item runtime
+        // Fetch item runtime (in ticks) -> seconds
+        var runTimeTicks sql.NullInt64
+        _ = iz.DB.QueryRow(`SELECT run_time_ticks FROM library_item WHERE id = ?`, d.NowPlaying.ID).Scan(&runTimeTicks)
+        if runTimeTicks.Valid && runTimeTicks.Int64 > 0 {
+            runtimeSec := int(runTimeTicks.Int64 / ticksPerSecond)
+            var alreadySec sql.NullInt64
+            _ = iz.DB.QueryRow(`SELECT COALESCE(SUM(duration_seconds),0) FROM play_intervals WHERE session_fk = ?`, s.SessionFK).Scan(&alreadySec)
+            remaining := runtimeSec - int(alreadySec.Int64)
+            if remaining < watchedSeconds {
+                if remaining <= 0 {
+                    // Nothing left to attribute within this session; skip creating interval
+                    return
+                }
+                watchedSeconds = remaining
+            }
+        }
+
+        startTS := endTS.Add(-time.Duration(watchedSeconds) * time.Second)
         if startTS.Before(s.SessionStartTS) {
             startTS = s.SessionStartTS
         }
