@@ -264,6 +264,9 @@ func main() {
 	// Cleanup missing items: scan library_item against Emby and delete safe orphans
 	app.Get("/admin/cleanup/missing-items", adminAuth, admin.CleanupMissingItems(sqlDB, em))
 	app.Post("/admin/cleanup/missing-items", adminAuth, admin.CleanupMissingItems(sqlDB, em))
+	// Remap stale item_id to a valid destination id
+	app.Get("/admin/remap-item", adminAuth, admin.RemapItem(sqlDB, em))
+	app.Post("/admin/remap-item", adminAuth, admin.RemapItem(sqlDB, em))
 	app.Get("/admin/debug/item-intervals/:id", adminAuth, admin.DebugItemIntervals(sqlDB))
 
 	// Debug: inspect recent play_sessions
