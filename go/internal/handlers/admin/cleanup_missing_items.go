@@ -6,6 +6,7 @@ import (
     "strings"
 
     "emby-analytics/internal/audit"
+    "emby-analytics/internal/cleanup"
     "emby-analytics/internal/emby"
     "github.com/gofiber/fiber/v3"
 )
@@ -118,16 +119,19 @@ func CleanupMissingItems(db *sql.DB, em *emby.Client) fiber.Handler {
             
             // Process items with watch history - try to merge
             missingWithIntervals := []itemInfo{}
+            safeToDeleteIDs := make(map[string]struct{}, len(missingNoIntervals))
+            for _, item := range missingNoIntervals {
+                safeToDeleteIDs[item.ID] = struct{}{}
+            }
+
             for _, item := range missingItems {
-                hasIt := false
-                for _, safe := range missingNoIntervals {
-                    if safe.ID == item.ID { hasIt = true; break }
+                if _, isSafe := safeToDeleteIDs[item.ID]; !isSafe {
+                    missingWithIntervals = append(missingWithIntervals, item)
                 }
-                if !hasIt { missingWithIntervals = append(missingWithIntervals, item) }
             }
             
             for _, item := range missingWithIntervals {
-                targetID, err := findMatchingItem(db, item)
+                targetID, err := cleanup.FindMatchingItem(db, cleanup.ItemInfo(item))
                 if err != nil || targetID == "" {
                     skipped++
                     logger.LogItemAction("skipped", item.ID, item.Name, item.MediaType, "", 
@@ -136,7 +140,7 @@ func CleanupMissingItems(db *sql.DB, em *emby.Client) fiber.Handler {
                 }
                 
                 // Merge watch data using transaction
-                if err := mergeItemData(db, item.ID, targetID); err != nil {
+                if err := cleanup.MergeItemData(db, item.ID, targetID); err != nil {
                     skipped++
                     logger.LogItemAction("skipped", item.ID, item.Name, item.MediaType, targetID, 
                         map[string]interface{}{"reason": "merge_failed", "error": err.Error()})
@@ -183,44 +187,7 @@ func parseInt(s string) int {
 
 // findMatchingItem searches for an existing item that matches the missing item
 // Uses series name + episode name for episodes, or just name for movies
-func findMatchingItem(db *sql.DB, missingItem itemInfo) (string, error) {
-    var targetID string
-    
-    if missingItem.MediaType == "Episode" && missingItem.SeriesName != "" {
-        // For episodes with series name, match by series name and episode name
-        err := db.QueryRow(`
-            SELECT id FROM library_item 
-            WHERE series_name = ? AND name = ? AND media_type = 'Episode' AND id != ?
-            LIMIT 1
-        `, missingItem.SeriesName, missingItem.Name, missingItem.ID).Scan(&targetID)
-        if err == sql.ErrNoRows {
-            return "", nil
-        }
-        return targetID, err
-    } else if missingItem.MediaType == "Episode" {
-        // For episodes without series name (NULL), fall back to matching just by episode name
-        err := db.QueryRow(`
-            SELECT id FROM library_item 
-            WHERE name = ? AND media_type = 'Episode' AND id != ?
-            LIMIT 1
-        `, missingItem.Name, missingItem.ID).Scan(&targetID)
-        if err == sql.ErrNoRows {
-            return "", nil
-        }
-        return targetID, err
-    } else {
-        // For movies and other types, match by name and type
-        err := db.QueryRow(`
-            SELECT id FROM library_item 
-            WHERE name = ? AND media_type = ? AND id != ?
-            LIMIT 1
-        `, missingItem.Name, missingItem.MediaType, missingItem.ID).Scan(&targetID)
-        if err == sql.ErrNoRows {
-            return "", nil
-        }
-        return targetID, err
-    }
-}
+
 
 // mergeItemData merges watch data from fromID to toID using transaction
 // Handles UNIQUE constraint on play_sessions(session_id, item_id)

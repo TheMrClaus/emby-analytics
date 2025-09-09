@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"emby-analytics/internal/audit"
+	"emby-analytics/internal/cleanup"
 	"emby-analytics/internal/emby"
 	"emby-analytics/internal/logging"
 )
@@ -167,7 +168,7 @@ func (s *CleanupScheduler) runWeeklyCleanup() {
 			}
 		} else {
 			// Try to merge with existing item
-			targetID, err := s.findMatchingItem(item)
+			targetID, err := cleanup.FindMatchingItem(s.db, cleanup.ItemInfo(item))
 			if err != nil || targetID == "" {
 				skipped++
 				logger.LogItemAction("skipped", item.ID, item.Name, item.MediaType, "", 
@@ -176,7 +177,7 @@ func (s *CleanupScheduler) runWeeklyCleanup() {
 			}
 			
 			// Attempt merge
-			if err := s.mergeItemData(item.ID, targetID); err != nil {
+			if err := cleanup.MergeItemData(s.db, item.ID, targetID); err != nil {
 				skipped++
 				logger.LogItemAction("skipped", item.ID, item.Name, item.MediaType, targetID,
 					map[string]interface{}{"reason": "merge_failed", "error": err.Error()})
@@ -217,32 +218,27 @@ func (s *CleanupScheduler) shouldRunWeeklyCleanup() bool {
 	}
 
 	// Check if we already ran cleanup this week
-	var lastRun sql.NullString
+	var lastRunUnix sql.NullInt64
 	err := s.db.QueryRow(`
 		SELECT MAX(started_at) 
 		FROM cleanup_jobs 
 		WHERE operation_type = 'scheduled-cleanup' 
 		AND created_by = 'scheduler'
 		AND started_at > ?
-	`, time.Now().AddDate(0, 0, -7).Unix()).Scan(&lastRun)
+	`, time.Now().AddDate(0, 0, -7).Unix()).Scan(&lastRunUnix)
 	
 	if err != nil {
 		// If we can't check, assume we should run
 		return true
 	}
 	
-	if !lastRun.Valid {
+	if !lastRunUnix.Valid {
 		// No recent runs, should run
 		return true
 	}
 
-	// Parse and check if last run was this week
-	lastTime, err := time.Parse("2006-01-02T15:04:05Z", lastRun.String)
-	if err != nil {
-		return true
-	}
-
 	// If last run was within the last 6 days, don't run again
+	lastTime := time.Unix(lastRunUnix.Int64, 0)
 	return time.Since(lastTime) >= 6*24*time.Hour
 }
 
@@ -254,92 +250,14 @@ type itemInfo struct {
 	SeriesName string
 }
 
-// findMatchingItem finds duplicate items (same logic as admin handler)
-func (s *CleanupScheduler) findMatchingItem(missingItem itemInfo) (string, error) {
-	var targetID string
-	
-	if missingItem.MediaType == "Episode" && missingItem.SeriesName != "" {
-		// For episodes with series name, match by series name and episode name
-		err := s.db.QueryRow(`
-			SELECT id FROM library_item 
-			WHERE series_name = ? AND name = ? AND media_type = 'Episode' AND id != ?
-			LIMIT 1
-		`, missingItem.SeriesName, missingItem.Name, missingItem.ID).Scan(&targetID)
-		if err == sql.ErrNoRows {
-			return "", nil
-		}
-		return targetID, err
-	} else if missingItem.MediaType == "Episode" {
-		// For episodes without series name (NULL), fall back to matching just by episode name
-		err := s.db.QueryRow(`
-			SELECT id FROM library_item 
-			WHERE name = ? AND media_type = 'Episode' AND id != ?
-			LIMIT 1
-		`, missingItem.Name, missingItem.ID).Scan(&targetID)
-		if err == sql.ErrNoRows {
-			return "", nil
-		}
-		return targetID, err
-	} else {
-		// For movies and other types, match by name and type
-		err := s.db.QueryRow(`
-			SELECT id FROM library_item 
-			WHERE name = ? AND media_type = ? AND id != ?
-			LIMIT 1
-		`, missingItem.Name, missingItem.MediaType, missingItem.ID).Scan(&targetID)
-		if err == sql.ErrNoRows {
-			return "", nil
-		}
-		return targetID, err
-	}
-}
 
-// mergeItemData safely merges watch data (same logic as admin handler)
-func (s *CleanupScheduler) mergeItemData(fromID, toID string) error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	
-	// Repoint intervals
-	if _, err := tx.Exec(`UPDATE play_intervals SET item_id = ? WHERE item_id = ?`, toID, fromID); err != nil {
-		tx.Rollback()
-		return err
-	}
-	
-	// Handle duplicate sessions: delete conflicting sessions from fromID before updating
-	if _, err := tx.Exec(`
-		DELETE FROM play_sessions 
-		WHERE item_id = ? 
-		AND session_id IN (
-			SELECT session_id FROM play_sessions WHERE item_id = ?
-		)
-	`, fromID, toID); err != nil {
-		tx.Rollback()
-		return err
-	}
-	
-	// Now safely repoint remaining sessions
-	if _, err := tx.Exec(`UPDATE play_sessions SET item_id = ? WHERE item_id = ?`, toID, fromID); err != nil {
-		tx.Rollback()
-		return err
-	}
-	
-	// Delete old library_item
-	if _, err := tx.Exec(`DELETE FROM library_item WHERE id = ?`, fromID); err != nil {
-		tx.Rollback()
-		return err
-	}
-	
-	return tx.Commit()
-}
 
 // GetCleanupStats returns statistics about scheduled cleanup operations  
 func GetCleanupStats(db *sql.DB) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 	
 	// Get last scheduled cleanup
-	var lastRun sql.NullString
+	var lastRunUnix sql.NullInt64
 	var itemsProcessed sql.NullInt64
 	err := db.QueryRow(`
 		SELECT started_at, items_processed
@@ -349,15 +267,14 @@ func GetCleanupStats(db *sql.DB) (map[string]interface{}, error) {
 		AND status = 'completed'
 		ORDER BY started_at DESC 
 		LIMIT 1
-	`).Scan(&lastRun, &itemsProcessed)
+	`).Scan(&lastRunUnix, &itemsProcessed)
 	
-	if err == nil && lastRun.Valid {
-		if lastTime, parseErr := time.Parse("2006-01-02T15:04:05Z", lastRun.String); parseErr == nil {
-			stats["last_cleanup"] = lastTime.Format("2006-01-02 15:04:05")
-			stats["cleanup_age_hours"] = int(time.Since(lastTime).Hours())
-			if itemsProcessed.Valid {
-				stats["items_processed"] = itemsProcessed.Int64
-			}
+	if err == nil && lastRunUnix.Valid {
+		lastTime := time.Unix(lastRunUnix.Int64, 0)
+		stats["last_cleanup"] = lastTime.Format("2006-01-02 15:04:05")
+		stats["cleanup_age_hours"] = int(time.Since(lastTime).Hours())
+		if itemsProcessed.Valid {
+			stats["items_processed"] = itemsProcessed.Int64
 		}
 	}
 	

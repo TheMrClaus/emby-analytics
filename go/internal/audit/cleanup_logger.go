@@ -60,9 +60,11 @@ func NewCleanupLogger(db *sql.DB, operationType string, createdBy string) (*Clea
 func (cl *CleanupLogger) LogItemAction(actionType, itemID, itemName, itemType, targetItemID string, metadata map[string]interface{}) error {
 	var metadataJSON string
 	if metadata != nil {
-		if b, err := json.Marshal(metadata); err == nil {
-			metadataJSON = string(b)
+		b, err := json.Marshal(metadata)
+		if err != nil {
+			return fmt.Errorf("failed to marshal audit metadata: %w", err)
 		}
+		metadataJSON = string(b)
 	}
 	
 	_, err := cl.db.Exec(`
