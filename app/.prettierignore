@@ -1,0 +1,9 @@
+# Build outputs
+.next
+out
+
+# Dependencies
+node_modules
+
+# TS incremental build info
+tsconfig.tsbuildinfo
