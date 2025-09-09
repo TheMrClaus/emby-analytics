@@ -222,7 +222,7 @@ export default function NowPlaying() {
                         alt={s.title || "Unknown"}
                         width={80}
                         height={112}
-                        className="w-20 h-28 object-cover rounded shadow-sm"
+                        className="object-cover rounded shadow-sm"
                         unoptimized
                         priority={false}
                       />
