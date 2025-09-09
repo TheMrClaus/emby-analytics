@@ -155,15 +155,15 @@ export default function SettingsPage() {
                       )}
                     </div>
                     <p className="text-gray-400 text-sm mb-3">
-                      When enabled, items marked as "played" through Trakt sync will count toward
+                      When enabled, items marked as &quot;played&quot; through Trakt sync will count toward
                       your total watch time. When disabled, only items actually watched through Emby
                       will be counted.
                     </p>
                     <div className="flex items-start gap-2 text-xs text-blue-300 bg-blue-900/20 border border-blue-500/30 rounded p-3">
                       <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-400" />
                       <div>
-                        <strong>How it works:</strong> Trakt-synced items have "Played=true" but
-                        "PlayCount=0" in Emby, while actually watched items have "PlayCount &gt; 0".
+                        <strong>How it works:</strong> Trakt-synced items have &quot;Played=true&quot; but
+                        &quot;PlayCount=0&quot; in Emby, while actually watched items have &quot;PlayCount &gt; 0&quot;.
                         This setting lets you choose whether to include the full runtime of
                         Trakt-synced items in your lifetime watch statistics.
                       </div>

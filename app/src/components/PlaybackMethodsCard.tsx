@@ -62,7 +62,7 @@ export default function PlaybackMethodsCard() {
   const [userFilter, setUserFilter] = useState("");
   const [showTranscodeOnly, setShowTranscodeOnly] = useState(false);
   const [allSessions, setAllSessions] = useState<SessionDetail[]>([]);
-  const [totalSessions, setTotalSessions] = useState(0);
+  // const [totalSessions, setTotalSessions] = useState(0); // not currently displayed
   const [allUniqueUsers, setAllUniqueUsers] = useState<Array<{ id: string; name: string }>>([]);
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
 
@@ -123,8 +123,8 @@ export default function PlaybackMethodsCard() {
           });
         }
 
-        // Estimate total sessions (this is a rough estimate)
-        setTotalSessions(sessionDetails.length + offset);
+        // Estimate total sessions (was used for display; retained for potential future use)
+        // setTotalSessions(sessionDetails.length + offset);
       } catch (e: unknown) {
         setError((e as Error)?.message || "Failed to load playback methods");
       } finally {

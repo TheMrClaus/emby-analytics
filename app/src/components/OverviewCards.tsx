@@ -1,7 +1,6 @@
 // app/src/components/OverviewCards.tsx
 import { useOverview } from "../hooks/useData";
 import { DataState, useDataState } from "./DataState";
-import type { OverviewData } from "../types";
 import { fmtInt } from "../lib/format";
 
 export default function OverviewCards() {
