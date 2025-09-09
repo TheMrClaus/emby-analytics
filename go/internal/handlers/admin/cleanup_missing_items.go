@@ -183,12 +183,7 @@ func parseInt(s string) int {
 
 // findMatchingItem searches for an existing item that matches the missing item
 // Uses series name + episode name for episodes, or just name for movies
-func findMatchingItem(db *sql.DB, missingItem struct {
-    ID         string
-    Name       string
-    MediaType  string
-    SeriesName string
-}) (string, error) {
+func findMatchingItem(db *sql.DB, missingItem itemInfo) (string, error) {
     var targetID string
     
     if missingItem.MediaType == "Episode" && missingItem.SeriesName != "" {
