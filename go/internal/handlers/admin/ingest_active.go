@@ -34,11 +34,11 @@ func IngestActiveSessions(db *sql.DB, em *emby.Client) fiber.Handler {
                 _, _ = db.Exec(`
                     UPDATE play_sessions 
                     SET user_id=?, device_id=?, client_name=?, item_name=?, item_type=?, play_method=?,
-                        started_at=?, ended_at=NULL, is_active=true, transcode_reasons=?, remote_address=?,
+                        ended_at=NULL, is_active=true, transcode_reasons=?, remote_address=?,
                         video_method=?, audio_method=?, video_codec_from=?, video_codec_to=?,
                         audio_codec_from=?, audio_codec_to=?
                     WHERE id=?
-                `, s.UserID, s.Device, s.App, s.ItemName, s.ItemType, s.PlayMethod, now,
+                `, s.UserID, s.Device, s.App, s.ItemName, s.ItemType, s.PlayMethod,
                    joinReasons(s.TransReasons), s.RemoteAddress,
                    s.VideoMethod, s.AudioMethod, s.TransVideoFrom, s.TransVideoTo, s.TransAudioFrom, s.TransAudioTo, existingID)
                 res.Updated++
@@ -64,4 +64,3 @@ func joinReasons(rs []string) string {
     for i := 1; i < len(rs); i++ { out += "," + rs[i] }
     return out
 }
-

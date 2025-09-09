@@ -222,10 +222,9 @@ func (sp *SessionProcessor) createPlaySession(session emby.EmbySession, startTim
 	if err == nil {
 		// Reactivate existing row and refresh transcode details (best effort)
 		transcodeReasons := strings.Join(session.TransReasons, ",")
-		_, _ = sp.DB.Exec(`
+        _, _ = sp.DB.Exec(`
             UPDATE play_sessions 
             SET is_active = true, ended_at = NULL,
-                started_at = ?,
                 play_method = ?,
                 transcode_reasons = COALESCE(NULLIF(?, ''), transcode_reasons),
                 video_method = COALESCE(NULLIF(?, ''), video_method),
@@ -235,9 +234,9 @@ func (sp *SessionProcessor) createPlaySession(session emby.EmbySession, startTim
                 audio_codec_from = COALESCE(NULLIF(?, ''), audio_codec_from),
                 audio_codec_to   = COALESCE(NULLIF(?, ''), audio_codec_to)
             WHERE id = ?
-        `, startTime.Unix(), session.PlayMethod, transcodeReasons, session.VideoMethod, session.AudioMethod,
-			session.TransVideoFrom, session.TransVideoTo, session.TransAudioFrom, session.TransAudioTo, existingID)
-		return existingID, nil
+        `, session.PlayMethod, transcodeReasons, session.VideoMethod, session.AudioMethod,
+            session.TransVideoFrom, session.TransVideoTo, session.TransAudioFrom, session.TransAudioTo, existingID)
+        return existingID, nil
 	}
 
 	transcodeReasons := strings.Join(session.TransReasons, ",")

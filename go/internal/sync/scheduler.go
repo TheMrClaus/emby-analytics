@@ -135,16 +135,16 @@ func (s *Scheduler) runActiveSessionIngest() {
 		selErr := s.db.QueryRow(`SELECT id FROM play_sessions WHERE session_id=? AND item_id=?`, es.SessionID, es.ItemID).Scan(&id)
 		if selErr == nil {
 			// Update existing row to active and refresh details
-			_, _ = s.db.Exec(`
+            _, _ = s.db.Exec(`
                 UPDATE play_sessions 
                 SET user_id=?, device_id=?, client_name=?, item_name=?, item_type=?, play_method=?,
-                    started_at=?, ended_at=NULL, is_active=true, transcode_reasons=?, remote_address=?,
+                    ended_at=NULL, is_active=true, transcode_reasons=?, remote_address=?,
                     video_method=?, audio_method=?, video_codec_from=?, video_codec_to=?,
                     audio_codec_from=?, audio_codec_to=?
                 WHERE id=?
-            `, es.UserID, es.Device, es.App, es.ItemName, es.ItemType, es.PlayMethod, now,
-				joinReasons(es.TransReasons), es.RemoteAddress,
-				es.VideoMethod, es.AudioMethod, es.TransVideoFrom, es.TransVideoTo, es.TransAudioFrom, es.TransAudioTo, id)
+            `, es.UserID, es.Device, es.App, es.ItemName, es.ItemType, es.PlayMethod,
+                joinReasons(es.TransReasons), es.RemoteAddress,
+                es.VideoMethod, es.AudioMethod, es.TransVideoFrom, es.TransVideoTo, es.TransAudioFrom, es.TransAudioTo, id)
 			updated++
 			continue
 		}

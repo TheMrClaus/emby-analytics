@@ -327,7 +327,6 @@ func upsertSession(db *sql.DB, d emby.PlaybackProgressData) (int64, error) {
 	err := db.QueryRow(`SELECT id FROM play_sessions WHERE session_id=? AND item_id=?`, d.SessionID, d.NowPlaying.ID).Scan(&id)
 	if err == nil {
 		// Found existing session, reactivate it
-		now := time.Now().UTC().Unix()
 
 		// Convert TranscodeReasons slice to comma-separated string
 		var transcodeReasonsStr string
@@ -338,14 +337,14 @@ func upsertSession(db *sql.DB, d emby.PlaybackProgressData) (int64, error) {
 		// Determine detailed playback methods from available data
 		videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo := determineDetailedMethods(d)
 
-		_, updateErr := db.Exec(`
+        _, updateErr := db.Exec(`
 			UPDATE play_sessions 
 			SET user_id=?, device_id=?, client_name=?, item_name=?, item_type=?, play_method=?, 
-				started_at=?, ended_at=NULL, is_active=true, transcode_reasons=?, remote_address=?,
+				ended_at=NULL, is_active=true, transcode_reasons=?, remote_address=?,
 				video_method=?, audio_method=?, video_codec_from=?, video_codec_to=?, 
 				audio_codec_from=?, audio_codec_to=?
 			WHERE id=?
-		`, d.UserID, d.DeviceID, d.Client, d.NowPlaying.Name, d.NowPlaying.Type, d.PlayMethod, now, transcodeReasonsStr, d.RemoteEndPoint, videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo, id)
+		`, d.UserID, d.DeviceID, d.Client, d.NowPlaying.Name, d.NowPlaying.Type, d.PlayMethod, transcodeReasonsStr, d.RemoteEndPoint, videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo, id)
 		if updateErr != nil {
 			return 0, updateErr
 		}
