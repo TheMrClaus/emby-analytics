@@ -264,6 +264,9 @@ func main() {
 	// Cleanup missing items: scan library_item against Emby and delete safe orphans
 	app.Get("/admin/cleanup/missing-items", adminAuth, admin.CleanupMissingItems(sqlDB, em))
 	app.Post("/admin/cleanup/missing-items", adminAuth, admin.CleanupMissingItems(sqlDB, em))
+	// Cleanup audit logs: view job history and details
+	app.Get("/admin/cleanup/jobs", adminAuth, admin.GetCleanupJobs(sqlDB))
+	app.Get("/admin/cleanup/jobs/:jobId", adminAuth, admin.GetCleanupJobDetails(sqlDB))
 	// Remap stale item_id to a valid destination id
 	app.Get("/admin/remap-item", adminAuth, admin.RemapItem(sqlDB, em))
 	app.Post("/admin/remap-item", adminAuth, admin.RemapItem(sqlDB, em))
@@ -319,9 +322,23 @@ func main() {
 	scheduler := sync.NewScheduler(sqlDB, em, rm)
 	scheduler.Start()
 
+	// Start cleanup scheduler
+	logger.Info("Starting cleanup scheduler")
+	cleanupScheduler := tasks.NewCleanupScheduler(sqlDB, em)
+	cleanupScheduler.Start()
+
 	// Add scheduler stats endpoint (protected)
 	app.Get("/admin/scheduler/stats", adminAuth, func(c fiber.Ctx) error {
 		stats, err := sync.GetSchedulerStats(sqlDB)
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(stats)
+	})
+
+	// Add cleanup scheduler stats endpoint (protected)
+	app.Get("/admin/cleanup/scheduler/stats", adminAuth, func(c fiber.Ctx) error {
+		stats, err := tasks.GetCleanupStats(sqlDB)
 		if err != nil {
 			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
