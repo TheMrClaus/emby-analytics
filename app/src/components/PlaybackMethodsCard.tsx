@@ -62,7 +62,6 @@ export default function PlaybackMethodsCard() {
   const [userFilter, setUserFilter] = useState("");
   const [showTranscodeOnly, setShowTranscodeOnly] = useState(false);
   const [allSessions, setAllSessions] = useState<SessionDetail[]>([]);
-  // const [totalSessions, setTotalSessions] = useState(0); // not currently displayed
   const [allUniqueUsers, setAllUniqueUsers] = useState<Array<{ id: string; name: string }>>([]);
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
 
