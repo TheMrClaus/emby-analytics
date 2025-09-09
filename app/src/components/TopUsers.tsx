@@ -47,6 +47,22 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
 
   const selectedOption = timeframeOptions.find((opt) => opt.value === timeframe);
 
+  // Get all users for filter dropdown
+  const allUsers = useMemo(() => {
+    return rows
+      .filter((user) => user.user_id)
+      .map((user) => ({
+        id: user.user_id!,
+        name: user.name,
+      }));
+  }, [rows]);
+
+  // Current user for display
+  const currentUser = useMemo(() => {
+    const userId = userFilter || selectedUser?.user_id;
+    return allUsers.find((user) => user.id === userId) || selectedUser;
+  }, [allUsers, userFilter, selectedUser]);
+
   if (topUsersError) {
     return (
       <Card title="Top Users">
@@ -69,21 +85,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
     setUserFilter("");
   };
 
-  // Get all users for filter dropdown
-  const allUsers = useMemo(() => {
-    return rows
-      .filter((user) => user.user_id)
-      .map((user) => ({
-        id: user.user_id!,
-        name: user.name,
-      }));
-  }, [rows]);
-
-  // Current user for display
-  const currentUser = useMemo(() => {
-    const userId = userFilter || selectedUser?.user_id;
-    return allUsers.find((user) => user.id === userId) || selectedUser;
-  }, [allUsers, userFilter, selectedUser]);
+  
 
   return (
     <Card
