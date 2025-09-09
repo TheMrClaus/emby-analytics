@@ -2,18 +2,12 @@ import React from "react";
 import Head from "next/head";
 import Header from "../components/Header";
 import OverviewCards from "../components/OverviewCards";
-import TopUsers from "../components/TopUsers";
-import TopItems from "../components/TopItems";
 import QualitiesTable from "../components/QualitiesTable";
 import CodecsTable from "../components/CodecsTable";
 import ActiveUsersLifetime from "../components/ActiveUsersLifetime";
 import NowPlaying from "../components/NowPlaying";
-import Masonry from "../components/ui/Masonry";
 import { ErrorBoundary } from "../components/ErrorBoundary";
-
-import PlaybackMethodsCard from "../components/PlaybackMethodsCard";
-import MovieStatsCard from "../components/MovieStatsCard";
-import SeriesStatsCard from "../components/SeriesStatsCard";
+import DragDropDashboard from "../components/DragDropDashboard";
 
 export default function Dashboard() {
   return (
@@ -34,28 +28,8 @@ export default function Dashboard() {
             <NowPlaying />
           </ErrorBoundary>
 
-          {/* Dashboard cards in masonry (Tetris) layout */}
-          <Masonry className="">
-            <ErrorBoundary>
-              <PlaybackMethodsCard />
-            </ErrorBoundary>
-
-            <ErrorBoundary>
-              <MovieStatsCard />
-            </ErrorBoundary>
-
-            <ErrorBoundary>
-              <SeriesStatsCard />
-            </ErrorBoundary>
-
-            <ErrorBoundary>
-              <TopUsers />
-            </ErrorBoundary>
-
-            <ErrorBoundary>
-              <TopItems />
-            </ErrorBoundary>
-          </Masonry>
+          {/* Dashboard cards with drag and drop functionality */}
+          <DragDropDashboard />
 
           {/* Pin Media Qualities & Media Codecs just above Most Active */}
           <div className="space-y-4">
