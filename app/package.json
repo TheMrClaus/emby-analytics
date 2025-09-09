@@ -1,12 +1,13 @@
 {
   "name": "emby-analytics-web",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
     "preview": "npx serve out -l 3000",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "next lint && prettier --check ."
+    "lint": "eslint . && prettier --check ."
   },
   "dependencies": {
     "lucide-react": "^0.543.0",
