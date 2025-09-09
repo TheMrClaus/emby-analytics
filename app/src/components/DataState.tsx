@@ -101,15 +101,18 @@ export function DataState({
 }
 
 // Hook for consistent error/loading patterns with SWR
-export function useDataState(swrResponse: { data?: unknown; error?: Error; isLoading?: boolean }) {
+export function useDataState<T>(
+  swrResponse: { data?: T; error?: Error; isLoading?: boolean }
+) {
   const { data, error } = swrResponse;
+  const val = data as unknown;
 
   return {
     ...swrResponse,
     isEmpty:
-      data !== undefined &&
-      ((Array.isArray(data) && data.length === 0) ||
-        (typeof data === "object" && data !== null && Object.keys(data).length === 0)),
+      val !== undefined &&
+      ((Array.isArray(val) && val.length === 0) ||
+        (typeof val === "object" && val !== null && Object.keys(val as object).length === 0)),
     hasData: data !== undefined && !error,
     isError: !!error,
   };
