@@ -576,6 +576,21 @@ const endpoints: Endpoint[] = [
     dangerous: true,
   },
   {
+    id: "admin-fix-fallback-intervals",
+    category: "Admin",
+    method: "POST",
+    path: "/admin/cleanup/intervals/fix-fallback",
+    description:
+      "Clamp legacy fallback intervals that over-count paused time using position ticks and item runtime.",
+    usage:
+      "Dry-run by default. To apply, set dry_run=false. Optionally tune slack_seconds (default 120).",
+    params: [
+      { key: "dry_run", kind: "query", placeholder: "true|false" },
+      { key: "slack_seconds", kind: "query", placeholder: "120" },
+    ],
+    dangerous: true,
+  },
+  {
     id: "admin-backfill-playmethods",
     category: "Admin",
     method: "POST",
