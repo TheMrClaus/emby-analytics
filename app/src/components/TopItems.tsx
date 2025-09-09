@@ -92,7 +92,7 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
                       alt={displayName}
                       width={32}
                       height={48}
-                      className="w-8 h-12 object-cover rounded"
+                      className="object-cover rounded"
                     />
                     <span
                       className="cursor-pointer hover:text-blue-400 transition-colors"
