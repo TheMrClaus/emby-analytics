@@ -17,16 +17,18 @@ type CleanupScheduler struct {
 	em     *emby.Client
 	ctx    context.Context
 	cancel context.CancelFunc
+	intervalizer *Intervalizer
 }
 
 // NewCleanupScheduler creates a new cleanup scheduler
-func NewCleanupScheduler(db *sql.DB, em *emby.Client) *CleanupScheduler {
+func NewCleanupScheduler(db *sql.DB, em *emby.Client, intervalizer *Intervalizer) *CleanupScheduler {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &CleanupScheduler{
 		db:     db,
 		em:     em,
 		ctx:    ctx,
 		cancel: cancel,
+		intervalizer: intervalizer,
 	}
 }
 
@@ -36,9 +38,12 @@ func (s *CleanupScheduler) Start() {
 
 	// Start weekly cleanup ticker (check every 6 hours for Sunday 2 AM)
 	weeklyTicker := time.NewTicker(6 * time.Hour)
+	// Start session timeout sweeper
+	timeoutTicker := time.NewTicker(1 * time.Minute)
 
 	go func() {
 		defer weeklyTicker.Stop()
+		defer timeoutTicker.Stop()
 
 		// Run initial cleanup check after 5 minutes (let system stabilize)
 		initialTimer := time.NewTimer(5 * time.Minute)
@@ -60,6 +65,8 @@ func (s *CleanupScheduler) Start() {
 					logging.Info("Running scheduled weekly cleanup")
 					s.runWeeklyCleanup()
 				}
+			case <-timeoutTicker.C:
+				s.intervalizer.TickTimeoutSweep()
 			}
 		}
 	}()

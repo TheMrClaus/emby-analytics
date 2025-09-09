@@ -278,6 +278,9 @@ func main() {
 	// Backfill playback methods for historical sessions (reason/codec-based)
 	app.Post("/admin/cleanup/backfill-playmethods", adminAuth, admin.BackfillPlayMethods(sqlDB))
 
+	// Admin: backfill started_at from events/intervals
+	app.Post("/admin/cleanup/backfill-started-at", adminAuth, admin.BackfillStartedAt(sqlDB))
+
 	// Debug: expose current active sessions from Emby
 	app.Get("/admin/debug/emby-sessions", adminAuth, admin.DebugEmbySessions(em))
 	// Debug: force-ingest current active Emby sessions into play_sessions
@@ -324,7 +327,7 @@ func main() {
 
 	// Start cleanup scheduler
 	logger.Info("Starting cleanup scheduler")
-	cleanupScheduler := tasks.NewCleanupScheduler(sqlDB, em)
+	cleanupScheduler := tasks.NewCleanupScheduler(sqlDB, em, sessionProcessor.Intervalizer)
 	cleanupScheduler.Start()
 
 	// Add scheduler stats endpoint (protected)
