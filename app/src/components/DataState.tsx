@@ -101,9 +101,7 @@ export function DataState({
 }
 
 // Hook for consistent error/loading patterns with SWR
-export function useDataState<T>(
-  swrResponse: { data?: T; error?: Error; isLoading?: boolean }
-) {
+export function useDataState<T>(swrResponse: { data?: T; error?: Error; isLoading?: boolean }) {
   const { data, error } = swrResponse;
   const val = data as unknown;
 

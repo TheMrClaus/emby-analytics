@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useTopItems } from "../hooks/useData";
 import { imgPrimary, fetchConfig } from "../lib/api";
 import { fmtTooltipTime, fmtHours } from "../lib/format";
@@ -86,14 +87,12 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
               <tr key={i} className="border-b border-neutral-800 last:border-0">
                 <td className="py-3">
                   <div className="flex items-center gap-3">
-                    <img
+                    <Image
                       src={imgPrimary(r.item_id)}
-                      alt=""
+                      alt={displayName}
+                      width={32}
+                      height={48}
                       className="w-8 h-12 object-cover rounded"
-                      onError={(e) => {
-                        const t = e.target as HTMLImageElement;
-                        t.style.display = "none";
-                      }}
                     />
                     <span
                       className="cursor-pointer hover:text-blue-400 transition-colors"

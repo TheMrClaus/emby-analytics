@@ -85,8 +85,6 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
     setUserFilter("");
   };
 
-  
-
   return (
     <Card
       title={

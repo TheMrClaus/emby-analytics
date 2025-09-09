@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import Link from "next/link";
 import Head from "next/head";
 import Header from "../components/Header";
 import { useSettings } from "../hooks/useSettings";
@@ -43,13 +44,13 @@ export default function SettingsPage() {
           <main className="p-4 md:p-6 border-t border-neutral-800">
             <div className="max-w-4xl mx-auto">
               <div className="flex items-center gap-3 mb-6">
-                <a
+                <Link
                   href="/"
                   className="flex items-center justify-center w-10 h-10 rounded-lg bg-neutral-700 hover:bg-neutral-600 transition-colors text-gray-300 hover:text-white"
                   title="Back to Dashboard"
                 >
                   <ArrowLeft className="w-5 h-5" />
-                </a>
+                </Link>
                 <Settings className="w-6 h-6 text-gray-400" />
                 <h1 className="text-2xl font-bold">Settings</h1>
               </div>
@@ -79,13 +80,13 @@ export default function SettingsPage() {
           <main className="p-4 md:p-6 border-t border-neutral-800">
             <div className="max-w-4xl mx-auto">
               <div className="flex items-center gap-3 mb-6">
-                <a
+                <Link
                   href="/"
                   className="flex items-center justify-center w-10 h-10 rounded-lg bg-neutral-700 hover:bg-neutral-600 transition-colors text-gray-300 hover:text-white"
                   title="Back to Dashboard"
                 >
                   <ArrowLeft className="w-5 h-5" />
-                </a>
+                </Link>
                 <Settings className="w-6 h-6 text-gray-400" />
                 <h1 className="text-2xl font-bold">Settings</h1>
               </div>
@@ -113,13 +114,13 @@ export default function SettingsPage() {
         <main className="p-4 md:p-6 border-t border-neutral-800">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center gap-3 mb-6">
-              <a
+              <Link
                 href="/"
                 className="flex items-center justify-center w-10 h-10 rounded-lg bg-neutral-700 hover:bg-neutral-600 transition-colors text-gray-300 hover:text-white"
                 title="Back to Dashboard"
               >
                 <ArrowLeft className="w-5 h-5" />
-              </a>
+              </Link>
               <Settings className="w-6 h-6 text-gray-400" />
               <h1 className="text-2xl font-bold">Settings</h1>
             </div>
@@ -155,17 +156,18 @@ export default function SettingsPage() {
                       )}
                     </div>
                     <p className="text-gray-400 text-sm mb-3">
-                      When enabled, items marked as &quot;played&quot; through Trakt sync will count toward
-                      your total watch time. When disabled, only items actually watched through Emby
-                      will be counted.
+                      When enabled, items marked as &quot;played&quot; through Trakt sync will count
+                      toward your total watch time. When disabled, only items actually watched
+                      through Emby will be counted.
                     </p>
                     <div className="flex items-start gap-2 text-xs text-blue-300 bg-blue-900/20 border border-blue-500/30 rounded p-3">
                       <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-400" />
                       <div>
-                        <strong>How it works:</strong> Trakt-synced items have &quot;Played=true&quot; but
-                        &quot;PlayCount=0&quot; in Emby, while actually watched items have &quot;PlayCount &gt; 0&quot;.
-                        This setting lets you choose whether to include the full runtime of
-                        Trakt-synced items in your lifetime watch statistics.
+                        <strong>How it works:</strong> Trakt-synced items have
+                        &quot;Played=true&quot; but &quot;PlayCount=0&quot; in Emby, while actually
+                        watched items have &quot;PlayCount &gt; 0&quot;. This setting lets you
+                        choose whether to include the full runtime of Trakt-synced items in your
+                        lifetime watch statistics.
                       </div>
                     </div>
                   </div>

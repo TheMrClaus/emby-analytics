@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import Link from "next/link";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
@@ -822,12 +823,12 @@ export default function APIExplorerPage() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <a
+          <Link
             href="/"
             className="text-xs px-2 py-1 rounded bg-neutral-700 text-gray-200 hover:bg-neutral-600"
           >
             ← Back
-          </a>
+          </Link>
           <h2 className="text-xl font-semibold text-white">API Explorer</h2>
         </div>
         <input

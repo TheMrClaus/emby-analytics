@@ -1,5 +1,6 @@
 // app/src/components/Header.tsx
 import { useRef } from "react";
+import Link from "next/link";
 import { useUsage, useNowSnapshot, useRefreshStatus } from "../hooks/useData";
 import { startRefresh, setAdminToken, clearAdminToken } from "../lib/api";
 import { fmtHours } from "../lib/format";
@@ -69,12 +70,12 @@ export default function Header() {
       <div className="flex items-center justify-between">
         {/* Title + Clock */}
         <div className="flex items-center gap-8">
-          <a
+          <Link
             href="/"
             className="text-2xl font-bold text-white hover:text-amber-300 transition-colors cursor-pointer"
           >
             Emby Analytics
-          </a>
+          </Link>
         </div>
 
         {/* Stats + Refresh */}
@@ -156,19 +157,19 @@ export default function Header() {
 
           {/* Admin token quick actions + API Explorer */}
           <div className="flex items-center gap-3 text-sm">
-            <a
+            <Link
               href="/settings"
               className="text-blue-300 hover:text-white underline decoration-dotted"
             >
               Settings
-            </a>
+            </Link>
             <span className="text-gray-500">|</span>
-            <a
+            <Link
               href="/api-explorer"
               className="text-blue-300 hover:text-white underline decoration-dotted"
             >
               API Explorer
-            </a>
+            </Link>
             <span className="text-gray-500">|</span>
             <button
               className="text-gray-300 hover:text-white underline decoration-dotted"

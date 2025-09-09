@@ -1,9 +1,11 @@
 // app/src/components/NowPlaying.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNowPlaying, type NowEntry } from "../contexts/NowPlayingContext";
+import Image from "next/image";
 
 const apiBase =
-  (typeof window !== "undefined" && (window as unknown as { NEXT_PUBLIC_API_BASE?: string }).NEXT_PUBLIC_API_BASE) ||
+  (typeof window !== "undefined" &&
+    (window as unknown as { NEXT_PUBLIC_API_BASE?: string }).NEXT_PUBLIC_API_BASE) ||
   process.env.NEXT_PUBLIC_API_BASE ||
   "";
 
@@ -211,14 +213,18 @@ export default function NowPlaying() {
                   <div className="flex gap-5">
                     {/* Poster column - fixed size to align all cards */}
                     <div className="shrink-0">
-                      <img
+                      <Image
                         src={
                           s.poster?.startsWith("/img/")
                             ? `${apiBase}${s.poster}`
                             : s.poster || "/placeholder-poster.jpg"
                         }
                         alt={s.title || "Unknown"}
+                        width={80}
+                        height={112}
                         className="w-20 h-28 object-cover rounded shadow-sm"
+                        unoptimized
+                        priority={false}
                       />
                     </div>
 

@@ -36,7 +36,6 @@ const config = {
   dedupingInterval: 2000, // Prevent duplicate requests within 2 seconds
 };
 
-
 // Overview data hook
 export function useOverview() {
   return useSWR<OverviewData>("overview", () => fetchOverview(), config);

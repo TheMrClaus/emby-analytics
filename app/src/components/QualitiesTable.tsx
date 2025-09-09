@@ -5,13 +5,14 @@ import { useQualities } from "../hooks/useData";
 import { fmtInt } from "../lib/format";
 import Card from "./ui/Card";
 
+const ORDER = ["8K", "4K", "1080p", "720p", "SD", "Resolution Not Available"] as const;
+
 export default function QualitiesTable() {
   const { data, isLoading } = useQualities();
 
-  const order = ["8K", "4K", "1080p", "720p", "SD", "Resolution Not Available"];
   const rows = useMemo(() => {
     if (!data?.buckets || isLoading) return [];
-    return order.map((label) => ({
+    return ORDER.map((label) => ({
       label,
       movies: data.buckets[label]?.Movie || 0,
       episodes: data.buckets[label]?.Episode || 0,

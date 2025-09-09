@@ -66,41 +66,36 @@ export default function PlaybackMethodsCard() {
   const [allUniqueUsers, setAllUniqueUsers] = useState<Array<{ id: string; name: string }>>([]);
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
 
-  const loadData = useCallback(
-    async (resetPagination = false) => {
+  // Fetch a specific page; stable across currentPage changes
+  const fetchPage = useCallback(
+    async (page: number, resetPagination: boolean) => {
       setLoading(true);
       setError(null);
 
       try {
         const days = timeframe === "all-time" ? 0 : parseInt(timeframe.replace("d", "")) || 30;
-        const page = resetPagination ? 1 : currentPage;
         const offset = (page - 1) * SESSIONS_PER_PAGE;
 
         const result = await fetchPlayMethods(days, {
           limit: SESSIONS_PER_PAGE,
-          offset: offset,
+          offset,
           show_all: !showTranscodeOnly,
           user_id: userFilter || undefined,
         });
 
         setData(result);
 
-        // Defensive check for sessionDetails
         const sessionDetails = Array.isArray(result.sessionDetails) ? result.sessionDetails : [];
 
         if (resetPagination) {
           setCurrentPage(1);
           setAllSessions(sessionDetails);
+        } else if (page === 1) {
+          setAllSessions(sessionDetails);
         } else {
-          // For pagination, we need to accumulate sessions
-          if (page === 1) {
-            setAllSessions(sessionDetails);
-          } else {
-            setAllSessions((prev) => [...prev, ...sessionDetails]);
-          }
+          setAllSessions((prev) => [...prev, ...sessionDetails]);
         }
 
-        // Track unique users from all sessions ever fetched - with null check
         if (sessionDetails.length > 0) {
           const newUsers = sessionDetails.reduce(
             (acc, session) => {
@@ -122,27 +117,32 @@ export default function PlaybackMethodsCard() {
             return combined.sort((a, b) => a.name.localeCompare(b.name));
           });
         }
-
-        // Estimate total sessions (was used for display; retained for potential future use)
-        // setTotalSessions(sessionDetails.length + offset);
       } catch (e: unknown) {
         setError((e as Error)?.message || "Failed to load playback methods");
       } finally {
         setLoading(false);
       }
     },
-    [timeframe, currentPage, userFilter, showTranscodeOnly]
+    [timeframe, userFilter, showTranscodeOnly]
+  );
+
+  const loadData = useCallback(
+    async (resetPagination = false) => {
+      const page = resetPagination ? 1 : currentPage;
+      await fetchPage(page, resetPagination);
+    },
+    [currentPage, fetchPage]
   );
 
   useEffect(() => {
-    loadData(true);
-  }, [timeframe, userFilter, showTranscodeOnly]);
+    fetchPage(1, true);
+  }, [fetchPage, timeframe, userFilter, showTranscodeOnly]);
 
   useEffect(() => {
     if (showDetailed && currentPage > 1) {
-      loadData(false);
+      void fetchPage(currentPage, false);
     }
-  }, [currentPage]);
+  }, [currentPage, showDetailed, fetchPage]);
 
   // Fetch config once on component mount to get Emby external URL
   useEffect(() => {

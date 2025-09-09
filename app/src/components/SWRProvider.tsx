@@ -39,9 +39,9 @@ export default function SWRProvider({ children }: SWRProviderProps) {
 
           // Store error details for debugging
           if (typeof window !== "undefined") {
-            const errors = (JSON.parse(
-              localStorage.getItem("swr_errors") || "[]"
-            ) as StoredError[]).slice(-9);
+            const errors = (
+              JSON.parse(localStorage.getItem("swr_errors") || "[]") as StoredError[]
+            ).slice(-9);
             errors.push({
               timestamp,
               key,
@@ -66,9 +66,9 @@ export default function SWRProvider({ children }: SWRProviderProps) {
 
           // Clear any previous errors for this key
           if (typeof window !== "undefined") {
-            const errors = (JSON.parse(
-              localStorage.getItem("swr_errors") || "[]"
-            ) as StoredError[]).filter((e) => e.key !== key);
+            const errors = (
+              JSON.parse(localStorage.getItem("swr_errors") || "[]") as StoredError[]
+            ).filter((e) => e.key !== key);
             localStorage.setItem("swr_errors", JSON.stringify(errors));
           }
         },
