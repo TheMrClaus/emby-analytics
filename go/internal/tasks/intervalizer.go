@@ -14,6 +14,7 @@ import (
 type Intervalizer struct {
 	DB                *sql.DB
 	NoProgressTimeout time.Duration
+	PausedTimeout     time.Duration // NEW: Timeout for paused sessions
 	SeekThreshold     time.Duration
 }
 
@@ -30,6 +31,7 @@ type liveState struct {
     IsIntervalOpen   bool
     IntervalStartTS  time.Time
 	IntervalStartPos int64
+	IsPaused         bool // NEW: Track if the session is currently paused
 	// Tracks whether we have recorded any interval for this session
 	HadAnyInterval bool
 }
@@ -125,6 +127,10 @@ func (iz *Intervalizer) Handle(evt emby.EmbyEvent) {
 		iz.onProgress(data)
 	case "PlaybackStopped":
 		iz.onStop(data)
+	case "PlaybackPaused":
+		iz.onPause(data)
+	case "PlaybackUnpaused":
+		iz.onUnpause(data)
 	default:
 		logging.Debug("Unhandled event type: %s", evt.MessageType)
 	}
@@ -221,6 +227,51 @@ func (iz *Intervalizer) onStop(d emby.PlaybackProgressData) {
 	delete(LiveSessions, k)
 }
 
+func (iz *Intervalizer) onPause(d emby.PlaybackProgressData) {
+	k := sessionKey(d.SessionID, d.NowPlaying.ID)
+	s, ok := LiveSessions[k]
+	if !ok {
+		// If we didn't track it, try to start it (e.g., if we missed the PlaybackStart)
+		iz.onStart(d)
+		s, ok = LiveSessions[k]
+		if !ok {
+			return
+		}
+	}
+	now := time.Now().UTC()
+	insertEvent(iz.DB, s.SessionFK, "pause", true, d.PlayState.PositionTicks)
+	if s.IsIntervalOpen {
+		iz.closeInterval(s, s.IntervalStartTS, now, s.IntervalStartPos, d.PlayState.PositionTicks, false)
+	}
+	s.IsPaused = true
+	s.LastEventTS = now
+	s.LastPosTicks = d.PlayState.PositionTicks
+}
+
+func (iz *Intervalizer) onUnpause(d emby.PlaybackProgressData) {
+	k := sessionKey(d.SessionID, d.NowPlaying.ID)
+	s, ok := LiveSessions[k]
+	if !ok {
+		// If we didn't track it, try to start it (e.g., if we missed the PlaybackStart)
+		iz.onStart(d)
+		s, ok = LiveSessions[k]
+		if !ok {
+			return
+		}
+	}
+	now := time.Now().UTC()
+	insertEvent(iz.DB, s.SessionFK, "unpause", false, d.PlayState.PositionTicks)
+	s.IsPaused = false
+	s.LastEventTS = now
+	s.LastPosTicks = d.PlayState.PositionTicks
+	// If not paused, and interval is not open, start a new one
+	if !s.IsIntervalOpen {
+		s.IsIntervalOpen = true
+		s.IntervalStartTS = now
+		s.IntervalStartPos = d.PlayState.PositionTicks
+	}
+}
+
 // DetectStoppedSessions identifies sessions that are no longer active and creates PlaybackStopped events
 func (iz *Intervalizer) DetectStoppedSessions(activeSessionKeys map[string]bool) {
 	LiveMutex.Lock()
@@ -290,8 +341,15 @@ func (iz *Intervalizer) TickTimeoutSweep() {
 	defer LiveMutex.Unlock()
 	now := time.Now().UTC()
 	for k, s := range LiveSessions {
-		if now.Sub(s.LastEventTS) >= iz.NoProgressTimeout {
-			logging.Debug("timing out session %s", k)
+		var timeout time.Duration
+		if s.IsPaused {
+			timeout = iz.PausedTimeout
+		} else {
+			timeout = iz.NoProgressTimeout
+		}
+
+		if now.Sub(s.LastEventTS) >= timeout {
+			logging.Debug("timing out session %s (paused: %t)", k, s.IsPaused)
 			if s.IsIntervalOpen {
 				iz.closeInterval(s, s.IntervalStartTS, s.LastEventTS, s.IntervalStartPos, s.LastPosTicks, false)
 			}

@@ -16,6 +16,7 @@ type SessionProcessor struct {
 	DB              *sql.DB
 	trackedSessions map[string]*TrackedSession // Internal "live list"
 	mu              sync.Mutex
+	Intervalizer    *Intervalizer
 }
 
 // TrackedSession represents a session we're tracking internally
@@ -36,6 +37,12 @@ func NewSessionProcessor(db *sql.DB) *SessionProcessor {
 	return &SessionProcessor{
 		DB:              db,
 		trackedSessions: make(map[string]*TrackedSession),
+		Intervalizer: &Intervalizer{
+			DB: db,
+			NoProgressTimeout: 15 * time.Minute,
+			PausedTimeout: 24 * time.Hour, // Default to 24 hours for paused sessions
+			SeekThreshold: 2 * time.Minute,
+		},
 	}
 }
 

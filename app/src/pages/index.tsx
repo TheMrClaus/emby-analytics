@@ -55,19 +55,23 @@ export default function Dashboard() {
             <ErrorBoundary>
               <TopItems />
             </ErrorBoundary>
-            
-            <ErrorBoundary>
-              <QualitiesTable />
-            </ErrorBoundary>
-            
-            <ErrorBoundary>
-              <CodecsTable />
-            </ErrorBoundary>
           </Masonry>
 
-          <ErrorBoundary>
-            <ActiveUsersLifetime limit={10} />
-          </ErrorBoundary>
+          {/* Pin Media Qualities & Media Codecs just above Most Active */}
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <ErrorBoundary>
+                <QualitiesTable />
+              </ErrorBoundary>
+              <ErrorBoundary>
+                <CodecsTable />
+              </ErrorBoundary>
+            </div>
+
+            <ErrorBoundary>
+              <ActiveUsersLifetime limit={10} />
+            </ErrorBoundary>
+          </div>
         </main>
       </div>
     </>
