@@ -26,7 +26,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
   // Convert timeframe to days for the API (backwards compatibility)
   const days = timeframe === "all-time" ? 0 : parseInt(timeframe.replace("d", "")) || 14;
 
-  const { data: rows = [], error, isLoading } = useTopUsers(days, limit, timeframe);
+  const { data: rows = [], error: topUsersError, isLoading } = useTopUsers(days, limit, timeframe);
   const {
     data: userDetail,
     error: userDetailError,
@@ -305,7 +305,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
     </Card>
   );
 }
-  if (error) {
+  if (topUsersError) {
     return (
       <Card title="Top Users">
         <div className="text-red-400">Failed to load users data</div>
