@@ -1,6 +1,6 @@
 import { useSeriesStats } from "../hooks/useData";
 import { DataState, useDataState } from "./DataState";
-import { fmtInt, fmtHours, fmtLongSpanFromMinutes, fmtLongSpanFromHours } from "../lib/format";
+import { fmtInt, fmtLongSpanFromMinutes, fmtLongSpanFromHours } from "../lib/format";
 import Card from "./ui/Card";
 
 export default function SeriesStatsCard() {

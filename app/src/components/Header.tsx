@@ -45,8 +45,8 @@ export default function Header() {
 
     try {
       await startRefresh(); // Fiber v3: kicks off the job; progress read via useRefreshStatus
-    } catch (err: any) {
-      const msg = String(err?.message || err || "");
+    } catch (err: unknown) {
+      const msg = String((err as Error)?.message || err || "");
       // If unauthorized, prompt for admin token and retry once
       if (typeof window !== "undefined" && msg.startsWith("401")) {
         const t = window.prompt("Enter admin token to use for admin actions:");

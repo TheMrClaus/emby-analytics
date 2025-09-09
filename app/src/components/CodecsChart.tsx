@@ -11,7 +11,6 @@ import {
   Legend,
 } from "recharts";
 import { useCodecs } from "../hooks/useData";
-import type { CodecBuckets } from "../types";
 import { fmtInt } from "../lib/format";
 
 import { colors } from "../theme/colors";
@@ -76,7 +75,7 @@ export default function CodecsChart() {
               }}
               labelStyle={{ color: colors.gold500 }}
               itemStyle={{ color: "#fff" }}
-              formatter={(value: any) => [fmtInt(Number(value)), ""]}
+              formatter={(value: number | string) => [fmtInt(Number(value)), ""]}
             />
 
             <Bar

@@ -3,7 +3,7 @@ import { ReactNode } from "react";
 interface DataStateProps {
   isLoading?: boolean;
   error?: Error;
-  data?: any;
+  data?: unknown;
   children?: ReactNode;
   fallback?: ReactNode;
   errorFallback?: ReactNode;
@@ -101,8 +101,8 @@ export function DataState({
 }
 
 // Hook for consistent error/loading patterns with SWR
-export function useDataState(swrResponse: { data?: any; error?: Error; isLoading?: boolean }) {
-  const { data, error, isLoading } = swrResponse;
+export function useDataState(swrResponse: { data?: unknown; error?: Error; isLoading?: boolean }) {
+  const { data, error } = swrResponse;
 
   return {
     ...swrResponse,

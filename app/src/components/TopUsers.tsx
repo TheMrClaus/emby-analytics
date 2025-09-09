@@ -45,14 +45,6 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
       });
   }, []);
 
-  if (error) {
-    return (
-      <Card title="Top Users">
-        <div className="text-red-400">Failed to load users data</div>
-      </Card>
-    );
-  }
-
   const selectedOption = timeframeOptions.find((opt) => opt.value === timeframe);
 
   const handleUserClick = (user: TopUser) => {
@@ -313,3 +305,10 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
     </Card>
   );
 }
+  if (error) {
+    return (
+      <Card title="Top Users">
+        <div className="text-red-400">Failed to load users data</div>
+      </Card>
+    );
+  }

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNowPlaying, type NowEntry } from "../contexts/NowPlayingContext";
 
 const apiBase =
-  (typeof window !== "undefined" && (window as any).NEXT_PUBLIC_API_BASE) ||
+  (typeof window !== "undefined" && (window as unknown as { NEXT_PUBLIC_API_BASE?: string }).NEXT_PUBLIC_API_BASE) ||
   process.env.NEXT_PUBLIC_API_BASE ||
   "";
 
@@ -50,7 +50,7 @@ export default function NowPlaying() {
   }, []);
 
   // Local ticking state to update time display every second without burdening server
-  const [clockTick, setClockTick] = useState(0);
+  const [_clockTick, setClockTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setClockTick((t) => (t + 1) % 1_000_000), 1000);
     return () => clearInterval(id);

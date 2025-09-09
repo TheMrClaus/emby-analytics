@@ -2,7 +2,6 @@
 import { useMemo } from "react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
 import { useUsage } from "../hooks/useData";
-import type { UsageRow } from "../types";
 import { fmtAxisTime, fmtTooltipTime } from "../lib/format";
 import { colors } from "../theme/colors";
 
@@ -66,7 +65,7 @@ export default function UsageChart({ days = 14 }: { days?: number }) {
           <BarChart data={data}>
             <XAxis dataKey="day" />
             <YAxis tickFormatter={(v) => fmtAxisTime(Number(v))} />
-            <Tooltip formatter={(v: any) => fmtTooltipTime(Number(v))} />
+            <Tooltip formatter={(v: number | string) => fmtTooltipTime(Number(v))} />
             <Legend />
             {users.map((u, i) => (
               <Bar

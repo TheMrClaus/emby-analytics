@@ -52,7 +52,7 @@ interface NowPlayingContextType {
 const NowPlayingContext = createContext<NowPlayingContextType | undefined>(undefined);
 
 const apiBase =
-  (typeof window !== "undefined" && (window as any).NEXT_PUBLIC_API_BASE) ||
+  (typeof window !== "undefined" && (window as unknown as { NEXT_PUBLIC_API_BASE?: string }).NEXT_PUBLIC_API_BASE) ||
   process.env.NEXT_PUBLIC_API_BASE ||
   "";
 
@@ -74,8 +74,9 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
       const data: NowEntry[] = await res.json();
       setSessions(data || []);
       setError(null);
-    } catch (e: any) {
-      setError(`Failed to load now playing: ${e.message ?? e}`);
+    } catch (e: unknown) {
+      const msg = (e as Error)?.message || String(e);
+      setError(`Failed to load now playing: ${msg}`);
     }
   };
 

@@ -36,8 +36,6 @@ const config = {
   dedupingInterval: 2000, // Prevent duplicate requests within 2 seconds
 };
 
-// Generic fetcher that matches SWR's expected signature
-const fetcher = (fn: () => Promise<any>) => fn();
 
 // Overview data hook
 export function useOverview() {

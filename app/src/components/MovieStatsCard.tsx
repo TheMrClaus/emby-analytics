@@ -1,6 +1,6 @@
 import { useMovieStats } from "../hooks/useData";
 import { DataState, useDataState } from "./DataState";
-import { fmtInt, fmtHours } from "../lib/format";
+import { fmtInt } from "../lib/format";
 import { fmtLongSpanFromMinutes, fmtLongSpanFromHours } from "../lib/format";
 import Card from "./ui/Card";
 

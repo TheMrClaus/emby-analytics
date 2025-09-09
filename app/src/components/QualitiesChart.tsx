@@ -11,7 +11,6 @@ import {
   Legend,
 } from "recharts";
 import { useQualities } from "../hooks/useData";
-import type { QualityBuckets } from "../types";
 import { fmtInt } from "../lib/format";
 
 import { colors } from "../theme/colors";
@@ -77,7 +76,7 @@ export default function QualitiesChart() {
               }}
               labelStyle={{ color: colors.gold500 }}
               itemStyle={{ color: "#fff" }}
-              formatter={(value: any) => [fmtInt(Number(value)), ""]}
+              formatter={(value: number | string) => [fmtInt(Number(value)), ""]}
             />
             <Legend />
 

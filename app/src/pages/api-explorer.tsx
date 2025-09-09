@@ -706,7 +706,14 @@ function substitutePath(path: string, values: Record<string, string>) {
 
 export default function APIExplorerPage() {
   const [filter, setFilter] = useState("");
-  const [state, setState] = useState<Record<string, any>>({});
+  type EndpointState = {
+    inputs?: Record<string, string>;
+    request?: { method: string; url: string; body?: Record<string, string> };
+    status?: string;
+    ms?: number;
+    output?: unknown;
+  };
+  const [state, setState] = useState<Record<string, EndpointState>>({});
   const [busy, setBusy] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
@@ -720,7 +727,7 @@ export default function APIExplorerPage() {
   async function run(ep: Endpoint) {
     // Build path with path params
     const inputs = (state[ep.id]?.inputs ?? {}) as Record<string, string>;
-    let path = substitutePath(ep.path, inputs);
+    const path = substitutePath(ep.path, inputs);
     // Build query string
     const qs = new URLSearchParams();
     ep.params?.forEach((p) => {
@@ -776,7 +783,7 @@ export default function APIExplorerPage() {
       });
       const dt = Math.round(performance.now() - t0);
       const text = await res.text();
-      let body: any = null;
+      let body: unknown = null;
       try {
         body = JSON.parse(text);
       } catch {
@@ -796,14 +803,14 @@ export default function APIExplorerPage() {
           output: body,
         },
       }));
-    } catch (e: any) {
+    } catch (e: unknown) {
       setState((s) => ({
         ...s,
         [ep.id]: {
           ...(s[ep.id] || {}),
           status: "error",
           ms: 0,
-          output: String(e?.message || e),
+          output: String((e as Error)?.message || e),
         },
       }));
     } finally {

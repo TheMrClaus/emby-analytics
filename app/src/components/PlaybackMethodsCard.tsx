@@ -125,8 +125,8 @@ export default function PlaybackMethodsCard() {
 
         // Estimate total sessions (this is a rough estimate)
         setTotalSessions(sessionDetails.length + offset);
-      } catch (e: any) {
-        setError(e?.message || "Failed to load playback methods");
+      } catch (e: unknown) {
+        setError((e as Error)?.message || "Failed to load playback methods");
       } finally {
         setLoading(false);
       }
@@ -402,7 +402,7 @@ export default function PlaybackMethodsCard() {
                     border: `1px solid ${colors.tooltipBorder}`,
                     borderRadius: 12,
                   }}
-                  formatter={(val: any) => [`${val} sessions`, ""]}
+                  formatter={(val: number | string) => [`${val} sessions`, ""]}
                 />
                 <Bar dataKey="value" name="Sessions">
                   {summaryChartData.map((entry, idx) => (

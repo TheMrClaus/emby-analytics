@@ -9,6 +9,7 @@ interface SWRProviderProps {
 }
 
 export default function SWRProvider({ children }: SWRProviderProps) {
+  type StoredError = { timestamp: string; key: string; error: string };
   return (
     <SWRConfig
       value={{
@@ -38,14 +39,16 @@ export default function SWRProvider({ children }: SWRProviderProps) {
 
           // Store error details for debugging
           if (typeof window !== "undefined") {
-            const errors = JSON.parse(localStorage.getItem("swr_errors") || "[]");
+            const errors = (JSON.parse(
+              localStorage.getItem("swr_errors") || "[]"
+            ) as StoredError[]).slice(-9);
             errors.push({
               timestamp,
               key,
               error: errorMsg,
             });
             // Keep only last 10 errors
-            localStorage.setItem("swr_errors", JSON.stringify(errors.slice(-10)));
+            localStorage.setItem("swr_errors", JSON.stringify(errors));
           }
         },
 
@@ -63,11 +66,10 @@ export default function SWRProvider({ children }: SWRProviderProps) {
 
           // Clear any previous errors for this key
           if (typeof window !== "undefined") {
-            const errors = JSON.parse(localStorage.getItem("swr_errors") || "[]");
-            const filteredErrors = errors.filter((e: any) => e.key !== key);
-            if (filteredErrors.length !== errors.length) {
-              localStorage.setItem("swr_errors", JSON.stringify(filteredErrors));
-            }
+            const errors = (JSON.parse(
+              localStorage.getItem("swr_errors") || "[]"
+            ) as StoredError[]).filter((e) => e.key !== key);
+            localStorage.setItem("swr_errors", JSON.stringify(errors));
           }
         },
       }}
