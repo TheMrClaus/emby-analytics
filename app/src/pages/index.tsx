@@ -35,7 +35,7 @@ export default function Dashboard() {
           </ErrorBoundary>
 
           {/* Dashboard cards in masonry (Tetris) layout */}
-          <Masonry className="mt-4">
+          <Masonry className="">
             <ErrorBoundary>
               <PlaybackMethodsCard />
             </ErrorBoundary>
@@ -58,7 +58,7 @@ export default function Dashboard() {
           </Masonry>
 
           {/* Pin Media Qualities & Media Codecs just above Most Active */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <ErrorBoundary>
                 <QualitiesTable />
