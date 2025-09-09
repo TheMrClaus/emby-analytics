@@ -30,17 +30,16 @@ export default [
       ...hooksPlugin.configs.recommended.rules,
       // React 17+ and Next.js use the new JSX transform; no need to import React in scope
       "react/react-in-jsx-scope": "off",
-      // Temporary rule relaxations during React 19 migration
-      "@typescript-eslint/no-explicit-any": "warn",
+      // Tighten critical rules after migration
+      "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-unused-vars": [
-        "warn",
+        "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
       "@typescript-eslint/no-empty-object-type": "warn",
-      "@typescript-eslint/triple-slash-reference": "off",
-      "react/no-unescaped-entities": "warn",
-      "react-hooks/rules-of-hooks": "warn",
-      "prefer-const": "warn",
+      "react/no-unescaped-entities": "error",
+      "react-hooks/rules-of-hooks": "error",
+      "prefer-const": "error",
       "import/no-anonymous-default-export": "off",
     },
   },
