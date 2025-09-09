@@ -9,6 +9,10 @@ const compat = new FlatCompat({
 });
 
 export default [
+  {
+    // Ignore build outputs and deps
+    ignores: ['.next/**', 'out/**', 'node_modules/**'],
+  },
   ...compat.config({
     extends: [
       'next/core-web-vitals',
