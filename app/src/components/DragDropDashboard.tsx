@@ -23,7 +23,9 @@ function DraggableCardWrapper({ card, index, isEditMode, onRemove }: DraggableCa
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
-          className={`break-inside-avoid mb-4 transition-all duration-200 ${
+          className={`${
+            isEditMode ? '' : 'break-inside-avoid mb-4'
+          } transition-all duration-200 ${
             snapshot.isDragging ? 'opacity-75 scale-105 z-50' : ''
           } ${isEditMode ? 'ring-2 ring-blue-500/30 ring-offset-2 ring-offset-neutral-900' : ''}`}
         >
@@ -184,12 +186,14 @@ export default function DragDropDashboard() {
             <div
               ref={provided.innerRef}
               {...provided.droppableProps}
-              className={`columns-1 lg:columns-2 gap-4 transition-all duration-200 ${
+              className={`${
+                isEditMode 
+                  ? 'grid gap-6 lg:grid-cols-2' 
+                  : 'columns-1 lg:columns-2 gap-4'
+              } transition-all duration-200 ${
                 snapshot.isDraggingOver ? 'bg-neutral-800/30 rounded-lg p-4' : ''
               }`}
-              style={{
-                columnGap: '1rem',
-              }}
+              style={!isEditMode ? { columnGap: '1rem' } : undefined}
             >
               {cards.map((card, index) => (
                 <DraggableCardWrapper
