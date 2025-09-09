@@ -1,26 +1,28 @@
 {
   "name": "emby-analytics-web",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
     "preview": "npx serve out -l 3000",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "next lint && prettier --check ."
+    "lint": "eslint ."
   },
   "dependencies": {
-    "lucide-react": "^0.263.1",
-    "next": "^14.2.31",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "recharts": "2.12.7",
+    "lucide-react": "^0.543.0",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^3.2.0",
     "swr": "^2.3.6"
   },
   "devDependencies": {
     "@next/eslint-plugin-next": "^15.5.2",
     "@tailwindcss/postcss": "^4.1.12",
     "@types/node": "^24.2.1",
-    "@types/react": "19.1.9",
+    "@types/react": "^19.1.9",
+    "@types/react-dom": "^19.0.2",
     "@typescript-eslint/eslint-plugin": "^8.42.0",
     "@typescript-eslint/parser": "^8.42.0",
     "eslint": "^9.34.0",

@@ -1,5 +1,5 @@
-// CommonJS so Next's postcss-loader can load it in this repo
-module.exports = {
+// ESM export for Node ESM package type
+export default {
   plugins: {
     "@tailwindcss/postcss": {},
   },
