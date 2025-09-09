@@ -1,5 +1,13 @@
 // app/src/contexts/NowPlayingContext.tsx
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  ReactNode,
+  useCallback,
+} from "react";
 
 export type NowEntry = {
   timestamp: number;
@@ -51,8 +59,9 @@ interface NowPlayingContextType {
 
 const NowPlayingContext = createContext<NowPlayingContextType | undefined>(undefined);
 
-const apiBase = 
-  (typeof window !== "undefined" && (window as any).NEXT_PUBLIC_API_BASE) ||
+const apiBase =
+  (typeof window !== "undefined" &&
+    (window as unknown as { NEXT_PUBLIC_API_BASE?: string }).NEXT_PUBLIC_API_BASE) ||
   process.env.NEXT_PUBLIC_API_BASE ||
   "";
 
@@ -66,22 +75,29 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
   const [isConnected, setIsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const sessionsLenRef = useRef(0);
 
-  const loadSnapshot = async () => {
+  // Keep a ref of the latest sessions length for use in stable callbacks
+  useEffect(() => {
+    sessionsLenRef.current = sessions.length;
+  }, [sessions.length]);
+
+  const loadSnapshot = useCallback(async () => {
     try {
       const res = await fetch(`${apiBase}/now/snapshot`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: NowEntry[] = await res.json();
       setSessions(data || []);
       setError(null);
-    } catch (e: any) {
-      setError(`Failed to load now playing: ${e.message ?? e}`);
+    } catch (e: unknown) {
+      const msg = (e as Error)?.message || String(e);
+      setError(`Failed to load now playing: ${msg}`);
     }
-  };
+  }, []);
 
-  const connectWS = () => {
+  const connectWS = useCallback(() => {
     if (typeof window === "undefined") return;
-    
+
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
     const wsURL = `${proto}://${window.location.host}/now/ws`;
 
@@ -111,8 +127,8 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
       ws.onerror = () => {
         setIsConnected(false);
         // Load snapshot as fallback if we have no sessions
-        if (sessions.length === 0) {
-          loadSnapshot();
+        if (sessionsLenRef.current === 0) {
+          void loadSnapshot();
         }
       };
 
@@ -136,7 +152,7 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
         }, 2000);
       }
     }
-  };
+  }, [loadSnapshot]);
 
   useEffect(() => {
     // Load initial snapshot
@@ -153,7 +169,7 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, []);
+  }, [connectWS, loadSnapshot]);
 
   const value: NowPlayingContextType = {
     sessions,
@@ -161,17 +177,13 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
     isConnected,
   };
 
-  return (
-    <NowPlayingContext.Provider value={value}>
-      {children}
-    </NowPlayingContext.Provider>
-  );
+  return <NowPlayingContext.Provider value={value}>{children}</NowPlayingContext.Provider>;
 }
 
 export function useNowPlaying(): NowPlayingContextType {
   const context = useContext(NowPlayingContext);
   if (context === undefined) {
-    throw new Error('useNowPlaying must be used within a NowPlayingProvider');
+    throw new Error("useNowPlaying must be used within a NowPlayingProvider");
   }
   return context;
 }

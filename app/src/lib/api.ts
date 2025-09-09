@@ -19,37 +19,39 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
 // --- Admin token handling ---
 // Source order: localStorage (runtime) -> NEXT_PUBLIC_ADMIN_TOKEN (build time)
-const ADMIN_TOKEN_STORAGE_KEY = 'emby_admin_token';
+const ADMIN_TOKEN_STORAGE_KEY = "emby_admin_token";
 
 function readAdminToken(): string | null {
   try {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const t = window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
       if (t) return t;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return process.env.NEXT_PUBLIC_ADMIN_TOKEN ?? null;
 }
 
 export function setAdminToken(token: string) {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
   }
 }
 
 export function clearAdminToken() {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     window.localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
   }
 }
 
 // Generic JSON fetch helper
 async function j<T>(path: string, init?: RequestInit): Promise<T> {
-  const isAdmin = path.startsWith('/admin');
+  const isAdmin = path.startsWith("/admin");
   const maybeToken = isAdmin ? readAdminToken() : null;
   const authHeaders: Record<string, string> = {};
   if (maybeToken) {
-    authHeaders['Authorization'] = `Bearer ${maybeToken}`;
+    authHeaders["Authorization"] = `Bearer ${maybeToken}`;
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
@@ -69,8 +71,7 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
 
 // GET helpers
 export const fetchOverview = () => j<OverviewData>("/stats/overview");
-export const fetchUsage = (days = 14) =>
-  j<UsageRow[]>(`/stats/usage?days=${days}`);
+export const fetchUsage = (days = 14) => j<UsageRow[]>(`/stats/usage?days=${days}`);
 export const fetchTopUsers = (days = 14, limit = 10, timeframe?: string) => {
   if (timeframe) {
     return j<TopUser[]>(`/stats/top/users?timeframe=${timeframe}&limit=${limit}`);
@@ -112,24 +113,27 @@ type SessionDetail = {
   play_method: string;
 };
 
-export const fetchPlayMethods = (days = 30, options?: {
-  limit?: number;
-  offset?: number;
-  show_all?: boolean;
-  user_id?: string;
-  media_type?: string;
-}) => {
+export const fetchPlayMethods = (
+  days = 30,
+  options?: {
+    limit?: number;
+    offset?: number;
+    show_all?: boolean;
+    user_id?: string;
+    media_type?: string;
+  }
+) => {
   const params = new URLSearchParams({
     days: days.toString(),
   });
-  
-  if (options?.limit) params.append('limit', options.limit.toString());
-  if (options?.offset) params.append('offset', options.offset.toString());
-  if (options?.show_all) params.append('show_all', options.show_all.toString());
-  if (options?.user_id) params.append('user_id', options.user_id);
-  if (options?.media_type) params.append('media_type', options.media_type);
-  
-  return j<{ 
+
+  if (options?.limit) params.append("limit", options.limit.toString());
+  if (options?.offset) params.append("offset", options.offset.toString());
+  if (options?.show_all) params.append("show_all", options.show_all.toString());
+  if (options?.user_id) params.append("user_id", options.user_id);
+  if (options?.media_type) params.append("media_type", options.media_type);
+
+  return j<{
     methods: Record<string, number>;
     detailed: Record<string, number>;
     transcodeDetails: Record<string, number>;
@@ -174,8 +178,8 @@ export interface ItemsByCodecResponse {
 }
 
 export async function fetchItemsByCodec(
-  codec: string, 
-  page: number = 1, 
+  codec: string,
+  page: number = 1,
   pageSize: number = 50,
   mediaType?: string
 ): Promise<ItemsByCodecResponse> {
@@ -183,11 +187,11 @@ export async function fetchItemsByCodec(
     page: page.toString(),
     page_size: pageSize.toString(),
   });
-  
+
   if (mediaType) {
-    params.append('media_type', mediaType);
+    params.append("media_type", mediaType);
   }
-  
+
   const response = await fetch(`/stats/items/by-codec/${encodeURIComponent(codec)}?${params}`);
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
@@ -205,8 +209,8 @@ export interface ItemsByQualityResponse {
 }
 
 export async function fetchItemsByQuality(
-  quality: string, 
-  page: number = 1, 
+  quality: string,
+  page: number = 1,
   pageSize: number = 50,
   mediaType?: string
 ): Promise<ItemsByQualityResponse> {
@@ -214,11 +218,11 @@ export async function fetchItemsByQuality(
     page: page.toString(),
     page_size: pageSize.toString(),
   });
-  
+
   if (mediaType) {
-    params.append('media_type', mediaType);
+    params.append("media_type", mediaType);
   }
-  
+
   const response = await fetch(`/stats/items/by-quality/${encodeURIComponent(quality)}?${params}`);
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
@@ -234,7 +238,7 @@ export interface ConfigResponse {
 export const fetchConfig = async (): Promise<ConfigResponse> => {
   const response = await fetch(`${API_BASE}/config`);
   if (!response.ok) {
-    throw new Error('Failed to fetch config');
+    throw new Error("Failed to fetch config");
   }
   return response.json();
 };

@@ -1,11 +1,19 @@
 // app/src/components/QualitiesChart.tsx
 import { useMemo } from "react";
-import { ResponsiveContainer, CartesianGrid, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from "recharts";
+import {
+  ResponsiveContainer,
+  CartesianGrid,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+} from "recharts";
 import { useQualities } from "../hooks/useData";
-import type { QualityBuckets } from "../types";
 import { fmtInt } from "../lib/format";
 
-import { colors } from '../theme/colors';
+import { colors } from "../theme/colors";
 
 type QualityRow = { label: string; Movie: number; Episode: number };
 
@@ -49,17 +57,29 @@ export default function QualitiesChart() {
             </defs>
 
             <CartesianGrid vertical={false} stroke={colors.grid} />
-            <XAxis dataKey="label" tick={{ fill: colors.axis }} axisLine={{ stroke: colors.grid }} tickLine={{ stroke: colors.grid }} />
-            <YAxis tick={{ fill: colors.axis }} axisLine={{ stroke: colors.grid }} tickLine={{ stroke: colors.grid }} />
+            <XAxis
+              dataKey="label"
+              tick={{ fill: colors.axis }}
+              axisLine={{ stroke: colors.grid }}
+              tickLine={{ stroke: colors.grid }}
+            />
+            <YAxis
+              tick={{ fill: colors.axis }}
+              axisLine={{ stroke: colors.grid }}
+              tickLine={{ stroke: colors.grid }}
+            />
             <Tooltip
-              wrapperStyle={{ borderRadius: 12, overflow: 'hidden' }}
-              contentStyle={{ background: colors.tooltipBg, border: `1px solid ${colors.tooltipBorder}` }}
+              wrapperStyle={{ borderRadius: 12, overflow: "hidden" }}
+              contentStyle={{
+                background: colors.tooltipBg,
+                border: `1px solid ${colors.tooltipBorder}`,
+              }}
               labelStyle={{ color: colors.gold500 }}
-              itemStyle={{ color: '#fff' }}
-              formatter={(value: any) => [fmtInt(Number(value)), '']}
+              itemStyle={{ color: "#fff" }}
+              formatter={(value: number | string) => [fmtInt(Number(value)), ""]}
             />
             <Legend />
-            
+
             <Bar
               dataKey="Movie"
               fill="url(#barGold)"

@@ -4,8 +4,13 @@ import Head from "next/head";
 import Link from "next/link";
 import Header from "../../components/Header";
 import Card from "../../components/ui/Card";
-import { fetchItemsByCodec, ItemsByCodecResponse, LibraryItemResponse, fetchConfig } from "../../lib/api";
-import { openInEmby } from "../../lib/emby"; 
+import {
+  fetchItemsByCodec,
+  ItemsByCodecResponse,
+  LibraryItemResponse,
+  fetchConfig,
+} from "../../lib/api";
+import { openInEmby } from "../../lib/emby";
 import { fmtInt } from "../../lib/format";
 
 export default function CodecDetailPage() {
@@ -15,8 +20,8 @@ export default function CodecDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [embyExternalUrl, setEmbyExternalUrl] = useState<string>('');
-  const [embyServerId, setEmbyServerId] = useState<string>('');
+  const [embyExternalUrl, setEmbyExternalUrl] = useState<string>("");
+  const [embyServerId, setEmbyServerId] = useState<string>("");
 
   useEffect(() => {
     if (!codec || typeof codec !== "string") return;
@@ -24,16 +29,11 @@ export default function CodecDetailPage() {
     setLoading(true);
     setError(null);
 
-    fetchItemsByCodec(
-      codec,
-      page,
-      50,
-      typeof media_type === "string" ? media_type : undefined
-    )
+    fetchItemsByCodec(codec, page, 50, typeof media_type === "string" ? media_type : undefined)
       .then(setData)
       .catch((err) => {
-        console.error('Failed to fetch items:', err);
-        setError('Failed to load items');
+        console.error("Failed to fetch items:", err);
+        setError("Failed to load items");
       })
       .finally(() => setLoading(false));
   }, [codec, media_type, page]);
@@ -41,18 +41,18 @@ export default function CodecDetailPage() {
   // Fetch config once on component mount to get Emby external URL
   useEffect(() => {
     fetchConfig()
-      .then(config => {
+      .then((config) => {
         setEmbyExternalUrl(config.emby_external_url);
         setEmbyServerId(config.emby_server_id);
       })
-      .catch(err => console.error('Failed to fetch config:', err));
+      .catch((err) => console.error("Failed to fetch config:", err));
   }, []);
 
   const formatResolution = (item: LibraryItemResponse) => {
     if (item.height && item.width) {
       return `${item.width}×${item.height}`;
     } else if (item.height) {
-      const width = Math.round(item.height * 16 / 9);
+      const width = Math.round((item.height * 16) / 9);
       return `${width}×${item.height}`;
     }
     return "Unknown";
@@ -107,9 +107,7 @@ export default function CodecDetailPage() {
     );
   }
 
-  const title = media_type 
-    ? `${codec} Codec - ${media_type} Items` 
-    : `${codec} Codec - All Items`;
+  const title = media_type ? `${codec} Codec - ${media_type} Items` : `${codec} Codec - All Items`;
 
   const totalPages = Math.ceil(data.total / data.page_size);
 
@@ -135,9 +133,7 @@ export default function CodecDetailPage() {
           {/* Items Table */}
           <Card title={`Items using ${codec} codec`}>
             {data.items.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
-                No items found for this codec
-              </div>
+              <div className="text-center py-8 text-gray-400">No items found for this codec</div>
             ) : (
               <>
                 <div className="overflow-x-auto">
@@ -154,10 +150,10 @@ export default function CodecDetailPage() {
                     <tbody>
                       {data.items.map((item) => (
                         <tr
-                        key={item.id}
-                        className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 cursor-pointer transition-colors"
-                        onClick={() => openInEmby(item.id, embyExternalUrl, embyServerId)}
-                        title="Click to open in Emby"
+                          key={item.id}
+                          className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 cursor-pointer transition-colors"
+                          onClick={() => openInEmby(item.id, embyExternalUrl, embyServerId)}
+                          title="Click to open in Emby"
                         >
                           <td className="py-3 font-medium">{item.name}</td>
                           <td className="py-3">
@@ -186,14 +182,14 @@ export default function CodecDetailPage() {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
                         disabled={page <= 1}
                         className="px-3 py-1 bg-neutral-700 hover:bg-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors"
                       >
                         Previous
                       </button>
                       <button
-                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                         disabled={page >= totalPages}
                         className="px-3 py-1 bg-neutral-700 hover:bg-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors"
                       >

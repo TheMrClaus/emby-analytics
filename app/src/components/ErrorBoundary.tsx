@@ -1,4 +1,4 @@
-import { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, ErrorInfo, ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
@@ -22,12 +22,12 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
-    
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
+
     // Store error details for debugging
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const timestamp = new Date().toISOString();
-      const errors = JSON.parse(localStorage.getItem('react_errors') || '[]');
+      const errors = JSON.parse(localStorage.getItem("react_errors") || "[]");
       errors.push({
         timestamp,
         error: error.message,
@@ -35,7 +35,7 @@ export class ErrorBoundary extends Component<Props, State> {
         componentStack: errorInfo.componentStack,
       });
       // Keep only last 5 errors
-      localStorage.setItem('react_errors', JSON.stringify(errors.slice(-5)));
+      localStorage.setItem("react_errors", JSON.stringify(errors.slice(-5)));
     }
 
     this.props.onError?.(error, errorInfo);
@@ -50,11 +50,9 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex items-center justify-center p-8 bg-red-50 border border-red-200 rounded-lg">
           <div className="text-center">
-            <h3 className="text-lg font-semibold text-red-800 mb-2">
-              Something went wrong
-            </h3>
+            <h3 className="text-lg font-semibold text-red-800 mb-2">Something went wrong</h3>
             <p className="text-red-600 mb-4">
-              This component encountered an error and couldn't render properly.
+              This component encountered an error and could not render properly.
             </p>
             <button
               className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"

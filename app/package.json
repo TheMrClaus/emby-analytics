@@ -7,7 +7,7 @@
     "build": "next build",
     "preview": "npx serve out -l 3000",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "lint": "eslint ."
+    "lint": "eslint . && prettier --check ."
   },
   "dependencies": {
     "lucide-react": "^0.543.0",

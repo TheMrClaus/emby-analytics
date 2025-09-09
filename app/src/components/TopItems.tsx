@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useTopItems } from "../hooks/useData";
 import { imgPrimary, fetchConfig } from "../lib/api";
 import { fmtTooltipTime, fmtHours } from "../lib/format";
@@ -27,11 +28,13 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
   // Fetch Emby config once for deep-linking to items
   useEffect(() => {
     fetchConfig()
-      .then(cfg => {
+      .then((cfg) => {
         setEmbyExternalUrl(cfg.emby_external_url);
         setEmbyServerId(cfg.emby_server_id);
       })
-      .catch(() => {/* best-effort; keep links disabled if it fails */});
+      .catch(() => {
+        /* best-effort; keep links disabled if it fails */
+      });
   }, []);
 
   if (error) {
@@ -84,14 +87,12 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
               <tr key={i} className="border-b border-neutral-800 last:border-0">
                 <td className="py-3">
                   <div className="flex items-center gap-3">
-                    <img
+                    <Image
                       src={imgPrimary(r.item_id)}
-                      alt=""
-                      className="w-8 h-12 object-cover rounded"
-                      onError={(e) => {
-                        const t = e.target as HTMLImageElement;
-                        t.style.display = "none";
-                      }}
+                      alt={displayName}
+                      width={32}
+                      height={48}
+                      className="object-cover rounded"
                     />
                     <span
                       className="cursor-pointer hover:text-blue-400 transition-colors"
