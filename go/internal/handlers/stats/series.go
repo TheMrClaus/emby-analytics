@@ -211,7 +211,7 @@ func Series(db *sql.DB) fiber.Handler {
             row := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('library_item') WHERE name = 'genres'`)
             if err := row.Scan(&cnt); err == nil && cnt > 0 {
                 q := `
-                WITH base AS (
+                WITH RECURSIVE base AS (
                   SELECT id, REPLACE(genres, ', ', ',') AS g
                   FROM library_item
                   WHERE media_type = 'Episode' AND ` + excludeLiveTvFilter() + ` AND genres IS NOT NULL AND genres != ''

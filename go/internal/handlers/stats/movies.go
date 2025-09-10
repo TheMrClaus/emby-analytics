@@ -172,13 +172,13 @@ func Movies(db *sql.DB) fiber.Handler {
 			var cnt int
 			row := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('library_item') WHERE name = 'genres'`)
 			if err := row.Scan(&cnt); err == nil && cnt > 0 {
-				q := `
-				WITH base AS (
-				  SELECT id, REPLACE(genres, ', ', ',') AS g
-				  FROM library_item
-				  WHERE media_type = 'Movie' AND ` + excludeLiveTvFilter() + ` AND genres IS NOT NULL AND genres != ''
-				),
-				split(id, token, rest) AS (
+                q := `
+                WITH RECURSIVE base AS (
+                  SELECT id, REPLACE(genres, ', ', ',') AS g
+                  FROM library_item
+                  WHERE media_type = 'Movie' AND ` + excludeLiveTvFilter() + ` AND genres IS NOT NULL AND genres != ''
+                ),
+                split(id, token, rest) AS (
 				  SELECT id,
 				         TRIM(CASE WHEN INSTR(g, ',') = 0 THEN g ELSE SUBSTR(g, 1, INSTR(g, ',') - 1) END),
 				         TRIM(CASE WHEN INSTR(g, ',') = 0 THEN '' ELSE SUBSTR(g, INSTR(g, ',') + 1) END)
