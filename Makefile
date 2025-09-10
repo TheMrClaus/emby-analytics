@@ -12,7 +12,7 @@ backend-build:
 	BUILD_DATE=$$(date -u +%Y-%m-%dT%H:%M:%SZ); \
 	GIT_REPO=$${GIT_REPO:-$$(git config --get remote.origin.url | sed -E 's#(git@|https?://)([^/:]+)[:/](.+)\.git#\3#' | sed -E 's#^([^/]*)/(.*github.com/)?##' )}; \
 	cd go && \
-	GOCACHE=$(PWD)/.gocache CGO_ENABLED=0 go build \
+	GOCACHE=$(PWD)/go/.gocache CGO_ENABLED=0 go build \
 	 -ldflags "-X emby-analytics/internal/version.Version=$$GIT_TAG -X emby-analytics/internal/version.Commit=$$GIT_COMMIT -X emby-analytics/internal/version.Date=$$BUILD_DATE -X emby-analytics/internal/version.Repo=$$GIT_REPO" \
 	 -o emby-analytics ./cmd/emby-analytics
 
