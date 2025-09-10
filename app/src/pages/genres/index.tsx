@@ -132,18 +132,34 @@ export default function GenrePage() {
                       </thead>
                       <tbody>
                         {data.items.map((item) => (
-                          <tr
-                            key={item.id}
-                            className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 cursor-pointer transition-colors"
-                            onClick={() => openInEmby(item.id, embyExternalUrl, embyServerId)}
-                            title="Click to open in Emby"
-                          >
-                            <td className="py-3 font-medium">{item.name}</td>
-                            <td className="py-3">
-                              <span className="px-2 py-1 bg-neutral-700 rounded text-xs">
-                                {item.media_type}
-                              </span>
-                            </td>
+                        <tr
+                          key={item.id}
+                          className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 cursor-pointer transition-colors"
+                          onClick={() => openInEmby(item.id, embyExternalUrl, embyServerId)}
+                          title="Click to open in Emby"
+                        >
+                          <td className="py-3 font-medium">
+                            <div>{item.name}</div>
+                            {Array.isArray((item as any).genres) && (item as any).genres.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {(item as any).genres.map((g: string) => (
+                                  <a
+                                    key={g}
+                                    href={`/genres?genre=${encodeURIComponent(g)}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-xs px-2 py-0.5 rounded-full bg-neutral-700 hover:bg-neutral-600 text-gray-200 border border-neutral-600"
+                                  >
+                                    {g}
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3">
+                            <span className="px-2 py-1 bg-neutral-700 rounded text-xs">
+                              {item.media_type}
+                            </span>
+                          </td>
                             <td className="py-3">{getQualityLabel(item.height)}</td>
                             <td className="py-3">{formatResolution(item)}</td>
                             <td className="py-3">
@@ -188,4 +204,3 @@ export default function GenrePage() {
     </>
   );
 }
-

@@ -200,8 +200,12 @@ export async function fetchItemsByCodec(
   return response.json();
 }
 
+export interface GenreListItem extends LibraryItemResponse {
+  genres?: string[];
+}
+
 export interface ItemsByGenreResponse {
-  items: LibraryItemResponse[];
+  items: GenreListItem[];
   total: number;
   genre: string;
   page: number;

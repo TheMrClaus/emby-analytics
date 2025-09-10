@@ -2,16 +2,27 @@ package stats
 
 import (
     "database/sql"
+    "strings"
 
     "github.com/gofiber/fiber/v3"
 )
 
+type ItemWithGenresResponse struct {
+    ID        string   `json:"id"`
+    Name      string   `json:"name"`
+    MediaType string   `json:"media_type"`
+    Height    *int     `json:"height"`
+    Width     *int     `json:"width"`
+    Codec     string   `json:"codec"`
+    Genres    []string `json:"genres"`
+}
+
 type ItemsByGenreResponse struct {
-    Items    []LibraryItemResponse `json:"items"`
-    Total    int                   `json:"total"`
-    Genre    string                `json:"genre"`
-    Page     int                   `json:"page"`
-    PageSize int                   `json:"page_size"`
+    Items    []ItemWithGenresResponse `json:"items"`
+    Total    int                      `json:"total"`
+    Genre    string                   `json:"genre"`
+    Page     int                      `json:"page"`
+    PageSize int                      `json:"page_size"`
 }
 
 // ItemsByGenre returns library items that contain the given genre token.
@@ -52,7 +63,7 @@ func ItemsByGenre(db *sql.DB) fiber.Handler {
         // Fetch page
         offset := (page - 1) * pageSize
         q := `
-            SELECT id, COALESCE(name,'Unknown') AS name, COALESCE(media_type,'Unknown') AS media_type, height, width, COALESCE(video_codec,'Unknown') as codec
+            SELECT id, COALESCE(name,'Unknown') AS name, COALESCE(media_type,'Unknown') AS media_type, height, width, COALESCE(video_codec,'Unknown') as codec, genres
             FROM library_item
         ` + where + `
             ORDER BY name ASC
@@ -65,15 +76,31 @@ func ItemsByGenre(db *sql.DB) fiber.Handler {
         }
         defer rows.Close()
 
-        items := []LibraryItemResponse{}
+        items := []ItemWithGenresResponse{}
         for rows.Next() {
-            var item LibraryItemResponse
+            var item ItemWithGenresResponse
             var h, w sql.NullInt64
-            if err := rows.Scan(&item.ID, &item.Name, &item.MediaType, &h, &w, &item.Codec); err != nil {
+            var genres sql.NullString
+            if err := rows.Scan(&item.ID, &item.Name, &item.MediaType, &h, &w, &item.Codec, &genres); err != nil {
                 return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
             }
             if h.Valid { hv := int(h.Int64); item.Height = &hv }
             if w.Valid { wv := int(w.Int64); item.Width = &wv }
+            if genres.Valid {
+                g := strings.ReplaceAll(genres.String, ", ", ",")
+                parts := strings.Split(g, ",")
+                out := make([]string, 0, len(parts))
+                seen := map[string]struct{}{}
+                for _, p := range parts {
+                    t := strings.TrimSpace(p)
+                    if t == "" { continue }
+                    lt := strings.ToLower(t)
+                    if _, ok := seen[lt]; ok { continue }
+                    seen[lt] = struct{}{}
+                    out = append(out, t)
+                }
+                item.Genres = out
+            }
             items = append(items, item)
         }
         if err := rows.Err(); err != nil {
