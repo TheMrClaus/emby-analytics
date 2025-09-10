@@ -31,8 +31,9 @@ func ItemsByGenre(db *sql.DB) fiber.Handler {
         if pageSize < 1 || pageSize > 500 { pageSize = 50 }
         mediaType := c.Query("media_type", "")
 
-        // Build WHERE clause for genre token match
-        where := "WHERE genres IS NOT NULL AND genres != '' AND (',' || REPLACE(genres, ', ', ',') || ',') LIKE (',' || ? || ',')"
+        // Build WHERE clause for genre token match (case-insensitive, token boundary)
+        // Normalize to comma-separated without spaces and wrap with commas, then search token with INSTR
+        where := "WHERE genres IS NOT NULL AND genres != '' AND INSTR(LOWER(',' || REPLACE(genres, ', ', ',') || ','), LOWER(',' || ? || ',')) > 0"
         args := []interface{}{genre}
 
         if mediaType != "" {
@@ -89,4 +90,3 @@ func ItemsByGenre(db *sql.DB) fiber.Handler {
         })
     }
 }
-
