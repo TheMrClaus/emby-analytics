@@ -112,9 +112,6 @@ Use the published GHCR image and a `.env` file for configuration.
 ```bash
 EMBY_BASE_URL=http://your-emby:8096
 EMBY_API_KEY=your_api_key_here
-# Optional hardening
-# ADMIN_TOKEN=your_secure_admin_token
-# WEBHOOK_SECRET=your_secure_webhook_secret
 ```
 
 2) Use this compose (also see docker-compose-example.yml):
