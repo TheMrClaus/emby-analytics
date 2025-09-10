@@ -43,26 +43,27 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=tag
-            type=raw,value=latest,enable={{is_tag}}
-            type=raw,value=edge,enable={{is_default_branch}}
-            type=ref,event=branch,enable={{is_default_branch}}
+            type=ref,event=branch
             type=sha
 
-      - name: Compute build vars
+      - name: Compute build vars and extra tags
         id: vars
         run: |
           sha_short=${GITHUB_SHA::7}
           date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             version="${GITHUB_REF_NAME}"
+            extra_tags="${IMAGE_NAME}:latest"
           elif [ "${GITHUB_REF_NAME}" = "main" ]; then
             version="main-${sha_short}"
+            extra_tags="${IMAGE_NAME}:edge"
           else
             version="${GITHUB_REF_NAME}-${sha_short}"
           fi
           echo "sha_short=${sha_short}" >> "$GITHUB_OUTPUT"
           echo "date=${date}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "extra_tags=${extra_tags}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -70,11 +71,12 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}
+            ${{ steps.vars.outputs.extra_tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ github.ref_type == 'tag' && github.ref_name || steps.vars.outputs.version }}
             COMMIT=${{ steps.vars.outputs.sha_short }}
             DATE=${{ steps.vars.outputs.date }}
             REPO=TheMrClaus/emby-analytics
-
