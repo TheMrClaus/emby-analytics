@@ -2,8 +2,8 @@ name: Docker Publish
 
 on:
   push:
-    branches: [ main ]
-    tags: [ 'v*' ]
+    branches: [ main, '**' ]
+    tags: [ 'v*', 'v*-*' ]
   release:
     types: [ published ]
   workflow_dispatch: {}
@@ -53,12 +53,20 @@ jobs:
           date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             version="${GITHUB_REF_NAME}"
-            extra_tags="${IMAGE_NAME}:latest"
+            if echo "$version" | grep -q -- '-'; then
+              # pre-release tag (e.g., v1.2.3-beta.1)
+              extra_tags="${IMAGE_NAME}:beta"
+            else
+              # stable tag
+              extra_tags="${IMAGE_NAME}:latest"
+            fi
           elif [ "${GITHUB_REF_NAME}" = "main" ]; then
             version="main-${sha_short}"
-            extra_tags="${IMAGE_NAME}:edge"
+            extra_tags="${IMAGE_NAME}:beta
+${IMAGE_NAME}:dev"
           else
             version="${GITHUB_REF_NAME}-${sha_short}"
+            extra_tags="${IMAGE_NAME}:dev"
           fi
           echo "sha_short=${sha_short}" >> "$GITHUB_OUTPUT"
           echo "date=${date}" >> "$GITHUB_OUTPUT"
