@@ -7,7 +7,7 @@ import Card from "../../components/ui/Card";
 import {
   fetchItemsByGenre,
   ItemsByGenreResponse,
-  LibraryItemResponse,
+  GenreListItem,
   fetchConfig,
 } from "../../lib/api";
 import { openInEmby } from "../../lib/emby";
@@ -55,7 +55,7 @@ export default function GenrePage() {
       .catch((err) => console.error("Failed to fetch config:", err));
   }, []);
 
-  const formatResolution = (item: LibraryItemResponse) => {
+  const formatResolution = (item: GenreListItem) => {
     if (item.height && item.width) return `${item.width}×${item.height}`;
     if (item.height) {
       const width = Math.round((item.height * 16) / 9);
@@ -140,9 +140,9 @@ export default function GenrePage() {
                         >
                           <td className="py-3 font-medium">
                             <div>{item.name}</div>
-                            {Array.isArray((item as any).genres) && (item as any).genres.length > 0 && (
+                            {Array.isArray(item.genres) && item.genres.length > 0 && (
                               <div className="mt-1 flex flex-wrap gap-1">
-                                {(item as any).genres.map((g: string) => (
+                                {item.genres!.map((g) => (
                                   <a
                                     key={g}
                                     href={`/genres?genre=${encodeURIComponent(g)}`}
