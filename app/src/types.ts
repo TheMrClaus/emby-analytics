@@ -151,4 +151,5 @@ export type SeriesStats = {
   total_episode_runtime_hours: number;
   newest_series: { name: string; date: string };
   episodes_added_this_month: number;
+  popular_genres: GenreStats[];
 };

@@ -12,8 +12,8 @@ import (
 
 // SeriesData holds aggregated stats across TV series/episodes.
 type SeriesData struct {
-	TotalSeries   int `json:"total_series"`
-	TotalEpisodes int `json:"total_episodes"`
+    TotalSeries   int `json:"total_series"`
+    TotalEpisodes int `json:"total_episodes"`
 
 	LargestSeriesName string  `json:"largest_series_name"`
 	LargestSeriesGB   float64 `json:"largest_series_total_gb"`
@@ -29,14 +29,15 @@ type SeriesData struct {
 		Hours float64 `json:"hours"`
 	} `json:"most_watched_series"`
 
-	TotalEpisodeRuntimeHours float64 `json:"total_episode_runtime_hours"`
+    TotalEpisodeRuntimeHours float64 `json:"total_episode_runtime_hours"`
 
-	NewestSeries struct {
-		Name string `json:"name"`
-		Date string `json:"date"`
-	} `json:"newest_series"`
+    NewestSeries struct {
+        Name string `json:"name"`
+        Date string `json:"date"`
+    } `json:"newest_series"`
 
-	EpisodesAddedThisMonth int `json:"episodes_added_this_month"`
+    EpisodesAddedThisMonth int `json:"episodes_added_this_month"`
+    PopularGenres          []GenreStats `json:"popular_genres"`
 }
 
 // helper SQL fragment to derive a series name from the episode's display name convention
@@ -194,15 +195,50 @@ func Series(db *sql.DB) fiber.Handler {
 			log.Printf("[series] Error finding newest series: %v", err)
 		}
 
-		// Episodes added this month
-		err = db.QueryRow(`
+        // Episodes added this month
+        err = db.QueryRow(`
             SELECT COUNT(*)
             FROM library_item
             WHERE media_type = 'Episode' AND ` + excludeLiveTvFilter() + ` AND created_at >= date('now', 'start of month')
         `).Scan(&data.EpisodesAddedThisMonth)
-		if err != nil {
-			log.Printf("[series] Error counting episodes added this month: %v", err)
-		}
+        if err != nil {
+            log.Printf("[series] Error counting episodes added this month: %v", err)
+        }
+
+        // Popular genres for series (based on episodes' genres; top 5)
+        {
+            var cnt int
+            row := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('library_item') WHERE name = 'genres'`)
+            if err := row.Scan(&cnt); err == nil && cnt > 0 {
+                genreRows, err := db.Query(`
+                    SELECT 
+                        CASE 
+                            WHEN INSTR(genres, ',') > 0 THEN TRIM(SUBSTR(genres, 1, INSTR(genres, ',') - 1))
+                            ELSE TRIM(genres)
+                        END as primary_genre,
+                        COUNT(*) as count
+                    FROM library_item 
+                    WHERE media_type = 'Episode' AND ` + excludeLiveTvFilter() + `
+                      AND genres IS NOT NULL AND genres != ''
+                    GROUP BY primary_genre
+                    HAVING primary_genre != ''
+                    ORDER BY count DESC
+                    LIMIT 5`)
+                if err == nil {
+                    defer genreRows.Close()
+                    for genreRows.Next() {
+                        var g GenreStats
+                        if err := genreRows.Scan(&g.Genre, &g.Count); err == nil {
+                            data.PopularGenres = append(data.PopularGenres, g)
+                        }
+                    }
+                } else {
+                    log.Printf("[series] Error fetching popular genres: %v", err)
+                }
+            } else {
+                log.Printf("[series] 'genres' column not found; skipping popular genres")
+            }
+        }
 
 		duration := time.Since(start)
 		isSlowQuery := duration > 1*time.Second

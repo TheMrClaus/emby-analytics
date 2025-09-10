@@ -92,13 +92,15 @@ export default function MovieStatsCard() {
               <h3 className="text-sm font-medium text-gray-400 mb-3">Popular Genres</h3>
               <div className="flex flex-wrap gap-2">
                 {data.popular_genres.map((genre) => (
-                  <div
+                  <a
                     key={genre.genre}
-                    className="bg-blue-900/30 border border-blue-500/30 rounded-lg px-3 py-1 text-sm"
+                    href={`/genres/${encodeURIComponent(genre.genre)}?media_type=Movie`}
+                    className="bg-blue-900/30 border border-blue-500/30 rounded-lg px-3 py-1 text-sm hover:bg-blue-900/50"
+                    title={`View movies in ${genre.genre}`}
                   >
                     <span className="text-blue-200">{genre.genre}</span>
                     <span className="text-blue-300 ml-1">({fmtInt(genre.count)})</span>
-                  </div>
+                  </a>
                 ))}
               </div>
             </div>

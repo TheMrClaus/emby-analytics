@@ -200,6 +200,36 @@ export async function fetchItemsByCodec(
   return response.json();
 }
 
+export interface ItemsByGenreResponse {
+  items: LibraryItemResponse[];
+  total: number;
+  genre: string;
+  page: number;
+  page_size: number;
+}
+
+export async function fetchItemsByGenre(
+  genre: string,
+  page: number = 1,
+  pageSize: number = 50,
+  mediaType?: string
+): Promise<ItemsByGenreResponse> {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    page_size: pageSize.toString(),
+  });
+
+  if (mediaType) {
+    params.append("media_type", mediaType);
+  }
+
+  const response = await fetch(`/stats/items/by-genre/${encodeURIComponent(genre)}?${params}`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+}
+
 export interface ItemsByQualityResponse {
   items: LibraryItemResponse[];
   total: number;

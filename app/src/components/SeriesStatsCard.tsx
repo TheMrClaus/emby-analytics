@@ -79,6 +79,26 @@ export default function SeriesStatsCard() {
               value={fmtInt(data.episodes_added_this_month)}
             />
           </div>
+
+          {/* Popular Genres */}
+          {data.popular_genres && data.popular_genres.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-medium text-gray-400 mb-3">Popular Genres</h3>
+              <div className="flex flex-wrap gap-2">
+                {data.popular_genres.map((genre: { genre: string; count: number }) => (
+                  <a
+                    key={genre.genre}
+                    href={`/genres/${encodeURIComponent(genre.genre)}?media_type=Episode`}
+                    className="bg-purple-900/30 border border-purple-500/30 rounded-lg px-3 py-1 text-sm hover:bg-purple-900/50"
+                    title={`View episodes in ${genre.genre}`}
+                  >
+                    <span className="text-purple-200">{genre.genre}</span>
+                    <span className="text-purple-300 ml-1">({fmtInt(genre.count)})</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </Card>
       )}
     </DataState>
