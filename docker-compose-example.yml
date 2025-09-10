@@ -1,8 +1,10 @@
 services:
   emby-analytics:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Use the published image from GHCR. Pin a version for reproducible deploys.
+    # Options:
+    #   - ghcr.io/themrclaus/emby-analytics:v0.1.0 (recommended)
+    #   - ghcr.io/themrclaus/emby-analytics:latest
+    image: ghcr.io/themrclaus/emby-analytics:latest
       args:
         VERSION: ${VERSION:-}
         COMMIT: ${COMMIT:-}
