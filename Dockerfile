@@ -13,7 +13,17 @@ FROM golang:1.25 AS builder
 WORKDIR /src/go
 COPY go/ .
 RUN go mod tidy
-RUN CGO_ENABLED=0 go build -o /emby-analytics ./cmd/emby-analytics
+# Build args for versioning (can be passed via docker build)
+ARG VERSION=dev
+ARG COMMIT=none
+ARG DATE
+ARG REPO
+
+# Default DATE if not provided
+RUN if [ -z "$DATE" ]; then export DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ); fi; \
+    CGO_ENABLED=0 go build \
+    -ldflags "-X emby-analytics/internal/version.Version=$VERSION -X emby-analytics/internal/version.Commit=$COMMIT -X emby-analytics/internal/version.Date=$DATE -X emby-analytics/internal/version.Repo=$REPO" \
+    -o /emby-analytics ./cmd/emby-analytics
 
 # ---------- Stage 2: Final rootless distroless (UID:GID 1000:1000) ----------
 FROM gcr.io/distroless/static-debian12

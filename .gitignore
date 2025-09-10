@@ -24,6 +24,9 @@ go/web/
 go/emby-analytics
 go/.gocache/
 
+# Root go build cache
+/.gocache/
+
 # Secrets
 .env
 

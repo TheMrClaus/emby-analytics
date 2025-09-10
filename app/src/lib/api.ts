@@ -308,3 +308,17 @@ export const fetchConfig = async (): Promise<ConfigResponse> => {
   }
   return response.json();
 };
+
+// Version info
+export interface VersionInfo {
+  version: string;
+  commit: string;
+  date: string;
+  repo?: string;
+  url?: string;
+  latest_tag?: string;
+  latest_url?: string;
+  update_available?: boolean;
+}
+
+export const fetchVersion = () => j<VersionInfo>("/version");

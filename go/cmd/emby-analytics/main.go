@@ -14,6 +14,7 @@ import (
 	emby "emby-analytics/internal/emby"
 	admin "emby-analytics/internal/handlers/admin"
 	configHandler "emby-analytics/internal/handlers/config"
+	verhandler "emby-analytics/internal/handlers/version"
 	health "emby-analytics/internal/handlers/health"
 	images "emby-analytics/internal/handlers/images"
 	items "emby-analytics/internal/handlers/items"
@@ -219,6 +220,8 @@ func main() {
 	app.Get("/health", health.Health(sqlDB))
 	app.Get("/health/emby", health.Emby(em))
 	app.Get("/health/frontend", health.FrontendHealth(sqlDB))
+	// Version Route
+	app.Get("/version", verhandler.GetVersion())
 	// Stats API Routes
 	app.Get("/stats/overview", stats.Overview(sqlDB))
 	app.Get("/stats/usage", stats.Usage(sqlDB))
