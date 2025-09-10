@@ -235,6 +235,7 @@ func main() {
 	app.Get("/stats/play-methods", stats.PlayMethods(sqlDB, em))
     app.Get("/stats/items/by-codec/:codec", stats.ItemsByCodec(sqlDB))
     app.Get("/stats/items/by-genre/:genre", stats.ItemsByGenre(sqlDB))
+    app.Get("/stats/series/by-genre/:genre", stats.SeriesByGenre(sqlDB))
 	app.Get("/stats/items/by-quality/:quality", stats.ItemsByQuality(sqlDB))
 	app.Get("/stats/movies", stats.Movies(sqlDB))
 	app.Get("/stats/series", stats.Series(sqlDB))

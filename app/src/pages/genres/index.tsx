@@ -8,6 +8,8 @@ import {
   fetchItemsByGenre,
   ItemsByGenreResponse,
   GenreListItem,
+  fetchSeriesByGenre,
+  SeriesByGenreResponse,
   fetchConfig,
 } from "../../lib/api";
 import { openInEmby } from "../../lib/emby";
@@ -16,7 +18,7 @@ import { fmtInt } from "../../lib/format";
 export default function GenrePage() {
   const router = useRouter();
   const { genre, media_type } = router.query;
-  const [data, setData] = useState<ItemsByGenreResponse | null>(null);
+  const [data, setData] = useState<ItemsByGenreResponse | SeriesByGenreResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -32,13 +34,13 @@ export default function GenrePage() {
     setLoading(true);
     setError(null);
 
-    fetchItemsByGenre(
-      genre,
-      page,
-      50,
-      typeof media_type === "string" ? media_type : undefined
-    )
-      .then(setData)
+    const mt = typeof media_type === "string" ? media_type : undefined;
+    const fetcher = mt === "Series"
+      ? fetchSeriesByGenre(genre, page, 50)
+      : fetchItemsByGenre(genre, page, 50, mt);
+
+    Promise.resolve(fetcher)
+      .then((resp) => setData(resp as any))
       .catch((err) => {
         console.error("Failed to fetch items:", err);
         setError("Failed to load items");
@@ -114,7 +116,7 @@ export default function GenrePage() {
               <div className="text-red-400">{error || "Failed to load data"}</div>
             </Card>
           ) : (
-            <Card title={`Items in ${data.genre}`}>
+          <Card title={`Items in ${data.genre}`}>
               {data.items.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">No items found for this genre</div>
               ) : (
@@ -122,51 +124,68 @@ export default function GenrePage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left text-gray-300">
                       <thead className="text-gray-400 border-b border-neutral-700">
-                        <tr>
-                          <th className="py-3">Name</th>
-                          <th className="py-3">Type</th>
-                          <th className="py-3">Quality</th>
-                          <th className="py-3">Resolution</th>
-                          <th className="py-3">Codec</th>
-                        </tr>
+                        {media_type === "Series" ? (
+                          <tr>
+                            <th className="py-3">Series</th>
+                          </tr>
+                        ) : (
+                          <tr>
+                            <th className="py-3">Name</th>
+                            <th className="py-3">Type</th>
+                            <th className="py-3">Quality</th>
+                            <th className="py-3">Resolution</th>
+                            <th className="py-3">Codec</th>
+                          </tr>
+                        )}
                       </thead>
                       <tbody>
-                        {data.items.map((item) => (
-                        <tr
-                          key={item.id}
-                          className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 cursor-pointer transition-colors"
-                          onClick={() => openInEmby(item.id, embyExternalUrl, embyServerId)}
-                          title="Click to open in Emby"
-                        >
-                          <td className="py-3 font-medium">
-                            <div>{item.name}</div>
-                            {Array.isArray(item.genres) && item.genres.length > 0 && (
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {item.genres!.map((g) => (
-                                  <a
-                                    key={g}
-                                    href={`/genres?genre=${encodeURIComponent(g)}${typeof media_type === "string" ? `&media_type=${encodeURIComponent(media_type)}` : ""}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-xs px-2 py-0.5 rounded-full bg-neutral-700 hover:bg-neutral-600 text-gray-200 border border-neutral-600"
-                                  >
-                                    {g}
-                                  </a>
-                                ))}
-                              </div>
-                            )}
-                          </td>
-                          <td className="py-3">
-                            <span className="px-2 py-1 bg-neutral-700 rounded text-xs">
-                              {item.media_type}
-                            </span>
-                          </td>
-                            <td className="py-3">{getQualityLabel(item.height)}</td>
-                            <td className="py-3">{formatResolution(item)}</td>
-                            <td className="py-3">
-                              <code className="bg-neutral-800 px-2 py-1 rounded text-xs">{item.codec}</code>
-                            </td>
-                          </tr>
-                        ))}
+                        {media_type === "Series"
+                          ? (data.items as SeriesByGenreResponse["items"]).map((s) => (
+                              <tr
+                                key={(s as any).id}
+                                className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 cursor-pointer transition-colors"
+                                onClick={() => openInEmby((s as any).id, embyExternalUrl, embyServerId)}
+                                title="Click to open in Emby"
+                              >
+                                <td className="py-3 font-medium">{(s as any).name}</td>
+                              </tr>
+                            ))
+                          : (data.items as ItemsByGenreResponse["items"]).map((item) => (
+                              <tr
+                                key={item.id}
+                                className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 cursor-pointer transition-colors"
+                                onClick={() => openInEmby(item.id, embyExternalUrl, embyServerId)}
+                                title="Click to open in Emby"
+                              >
+                                <td className="py-3 font-medium">
+                                  <div>{item.name}</div>
+                                  {Array.isArray(item.genres) && item.genres.length > 0 && (
+                                    <div className="mt-1 flex flex-wrap gap-1">
+                                      {item.genres!.map((g) => (
+                                        <a
+                                          key={g}
+                                          href={`/genres?genre=${encodeURIComponent(g)}${typeof media_type === "string" ? `&media_type=${encodeURIComponent(media_type)}` : ""}`}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-xs px-2 py-0.5 rounded-full bg-neutral-700 hover:bg-neutral-600 text-gray-200 border border-neutral-600"
+                                        >
+                                          {g}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-3">
+                                  <span className="px-2 py-1 bg-neutral-700 rounded text-xs">
+                                    {item.media_type}
+                                  </span>
+                                </td>
+                                <td className="py-3">{getQualityLabel(item.height)}</td>
+                                <td className="py-3">{formatResolution(item)}</td>
+                                <td className="py-3">
+                                  <code className="bg-neutral-800 px-2 py-1 rounded text-xs">{item.codec}</code>
+                                </td>
+                              </tr>
+                            ))}
                       </tbody>
                     </table>
                   </div>

@@ -234,6 +234,33 @@ export async function fetchItemsByGenre(
   return response.json();
 }
 
+export interface SeriesRow {
+  id: string;
+  name: string;
+}
+
+export interface SeriesByGenreResponse {
+  items: SeriesRow[];
+  total: number;
+  genre: string;
+  page: number;
+  page_size: number;
+}
+
+export async function fetchSeriesByGenre(
+  genre: string,
+  page: number = 1,
+  pageSize: number = 50
+): Promise<SeriesByGenreResponse> {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    page_size: pageSize.toString(),
+  });
+  const res = await fetch(`/stats/series/by-genre/${encodeURIComponent(genre)}?${params}`);
+  if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+  return res.json();
+}
+
 export interface ItemsByQualityResponse {
   items: LibraryItemResponse[];
   total: number;

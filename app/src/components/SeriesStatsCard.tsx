@@ -89,7 +89,7 @@ export default function SeriesStatsCard() {
                 {data.popular_genres.map((genre: { genre: string; count: number }) => (
                   <Link
                     key={genre.genre}
-                    href={`/genres?genre=${encodeURIComponent(genre.genre)}&media_type=Episode`}
+                    href={`/genres?genre=${encodeURIComponent(genre.genre)}&media_type=Series`}
                     className="bg-purple-900/30 border border-purple-500/30 rounded-lg px-3 py-1 text-sm hover:bg-purple-900/50"
                     title={`View episodes in ${genre.genre}`}
                   >

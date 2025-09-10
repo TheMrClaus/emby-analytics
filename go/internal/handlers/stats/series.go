@@ -212,23 +212,23 @@ func Series(db *sql.DB) fiber.Handler {
             if err := row.Scan(&cnt); err == nil && cnt > 0 {
                 q := `
                 WITH RECURSIVE base AS (
-                  SELECT id, REPLACE(genres, ', ', ',') AS g
+                  SELECT id, series_id, REPLACE(genres, ', ', ',') AS g
                   FROM library_item
-                  WHERE media_type = 'Episode' AND ` + excludeLiveTvFilter() + ` AND genres IS NOT NULL AND genres != ''
+                  WHERE media_type = 'Episode' AND ` + excludeLiveTvFilter() + ` AND genres IS NOT NULL AND genres != '' AND series_id IS NOT NULL AND TRIM(series_id) != ''
                 ),
-                split(id, token, rest) AS (
-                  SELECT id,
+                split(series_id, token, rest) AS (
+                  SELECT series_id,
                          TRIM(CASE WHEN INSTR(g, ',') = 0 THEN g ELSE SUBSTR(g, 1, INSTR(g, ',') - 1) END),
                          TRIM(CASE WHEN INSTR(g, ',') = 0 THEN '' ELSE SUBSTR(g, INSTR(g, ',') + 1) END)
                   FROM base
                   UNION ALL
-                  SELECT id,
+                  SELECT series_id,
                          TRIM(CASE WHEN INSTR(rest, ',') = 0 THEN rest ELSE SUBSTR(rest, 1, INSTR(rest, ',') - 1) END),
                          TRIM(CASE WHEN INSTR(rest, ',') = 0 THEN '' ELSE SUBSTR(rest, INSTR(rest, ',') + 1) END)
                   FROM split
                   WHERE rest <> ''
                 )
-                SELECT token AS genre, COUNT(DISTINCT id) AS count
+                SELECT token AS genre, COUNT(DISTINCT series_id) AS count
                 FROM split
                 WHERE token IS NOT NULL AND token != ''
                 GROUP BY token
