@@ -242,6 +242,8 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 // processLibraryEntries handles the insertion and enrichment of library items
 func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, libraryEntries []emby.LibraryItem) int {
     dbEntriesInserted := 0
+    // Cache SeriesID -> CSV genres to avoid repeated Emby lookups
+    seriesGenresCache := map[string]*string{}
     for _, entry := range libraryEntries {
         // Handle Series directly: upsert into series table and continue
         if entry.Type == "Series" {
@@ -265,7 +267,7 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
 		}
 
         // Include runtime ticks and container when available
-        // Prepare genres as CSV if present
+        // Prepare genres as CSV if present (Movies usually have; Episodes often don't)
         var genresCSV *string
         if len(entry.Genres) > 0 {
             g := strings.Join(entry.Genres, ", ")
@@ -319,6 +321,28 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
                                 name = COALESCE(excluded.name, series.name),
                                 updated_at = CURRENT_TIMESTAMP
                         `, ep.SeriesId, ep.SeriesName)
+
+                        // If this episode didn't have genres, try to populate from its Series genres
+                        if genresCSV == nil && em != nil {
+                            if cached, ok := seriesGenresCache[ep.SeriesId]; ok {
+                                if cached != nil {
+                                    db.Exec(`UPDATE library_item SET genres = COALESCE(genres, ?) WHERE id = ?`, *cached, entry.Id)
+                                }
+                            } else {
+                                if seriesItems, err := em.ItemsByIDs([]string{ep.SeriesId}); err == nil && len(seriesItems) > 0 {
+                                    s := seriesItems[0]
+                                    if len(s.Genres) > 0 {
+                                        csv := strings.Join(s.Genres, ", ")
+                                        seriesGenresCache[ep.SeriesId] = &csv
+                                        db.Exec(`UPDATE library_item SET genres = COALESCE(genres, ?) WHERE id = ?`, csv, entry.Id)
+                                    } else {
+                                        seriesGenresCache[ep.SeriesId] = nil
+                                    }
+                                } else {
+                                    seriesGenresCache[ep.SeriesId] = nil
+                                }
+                            }
+                        }
                     }
                 }
             }
