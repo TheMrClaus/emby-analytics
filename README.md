@@ -104,18 +104,48 @@ The frontend dev server will proxy API requests to the Go backend.
 
 
 ### Option 1: Docker Compose (Recommended)
+
+Use the published GHCR image and a `.env` file for configuration.
+
+1) Create `.env` with your settings:
+
 ```bash
-# Copy docker-compose-example.yml to docker-compose.yml
-cp docker-compose-example.yml docker-compose.yml
-
-# Edit docker-compose.yml with your Emby server details and data path
-# EMBY_BASE_URL=http://your-emby:8096
-# EMBY_API_KEY=your_api_key_here
-# - /path/to/data:/var/lib/emby-analytics
-
-# Build and run with Docker Compose
-docker compose up -d --build
+EMBY_BASE_URL=http://your-emby:8096
+EMBY_API_KEY=your_api_key_here
+# Optional hardening
+# ADMIN_TOKEN=your_secure_admin_token
+# WEBHOOK_SECRET=your_secure_webhook_secret
 ```
+
+2) Use this compose (also see docker-compose-example.yml):
+
+```yaml
+services:
+  emby-analytics:
+    image: ghcr.io/themrclaus/emby-analytics:latest
+    container_name: emby-analytics
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - emby_analytics_data:/var/lib/emby-analytics
+    env_file:
+      - .env
+
+volumes:
+  emby_analytics_data:
+```
+
+3) Start
+
+```bash
+docker compose up -d
+```
+
+Notes:
+- Prefer pinning an explicit version for production (e.g., `ghcr.io/themrclaus/emby-analytics:v0.1.0`).
+- If you see a warning about an existing volume, it is safe to ignore; or declare it `external: true` if you intentionally reuse it.
+- If you get a 403/denied pull error from GHCR, run `docker logout ghcr.io` and try again. Ensure the package is Public.
 
 ### Option 2: Manual Build
 ```bash
@@ -176,6 +206,30 @@ docker build \
 Notes:
 - If `REPO` (owner/repo) isn’t provided, the server attempts to derive it during `make backend-build`; otherwise, the `/version` endpoint will omit repo URLs.
 - The update indicator relies on public GitHub APIs (subject to rate limits). It gracefully degrades if unreachable.
+
+### Docker Image
+
+- Registry: `ghcr.io/themrclaus/emby-analytics`
+- Recommended tags:
+  - Stable: `vX.Y.Z` (e.g., `v0.1.0`)
+  - Latest stable: `latest`
+  - Pre-release/preview: `beta`
+  - Development/branch builds: `dev`
+
+Examples:
+
+```bash
+# Pull a stable version
+docker pull ghcr.io/themrclaus/emby-analytics:v0.1.0
+
+# Quick run
+docker run -d --name emby-analytics \
+  -p 8080:8080 \
+  -v emby_analytics_data:/var/lib/emby-analytics \
+  -e EMBY_BASE_URL=http://emby:8096 \
+  -e EMBY_API_KEY=your_api_key \
+  ghcr.io/themrclaus/emby-analytics:latest
+```
 
 #### Recommended workflow: tag-driven versions
 
