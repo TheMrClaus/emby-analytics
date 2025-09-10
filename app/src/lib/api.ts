@@ -55,6 +55,7 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
+    credentials: isAdmin ? "include" : "same-origin",
     ...init,
     headers: {
       "Content-Type": "application/json",

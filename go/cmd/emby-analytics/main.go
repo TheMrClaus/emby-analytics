@@ -180,26 +180,44 @@ func main() {
 		EnableIPValidation: true,
 		ProxyHeader:        fiber.HeaderXForwardedFor,
 	})
-	app.Use(recover.New())
+    app.Use(recover.New())
+
+    // CORS with credentials support (echo Origin)
+    app.Use(func(c fiber.Ctx) error {
+        origin := c.Get("Origin")
+        if origin != "" {
+            c.Set("Access-Control-Allow-Origin", origin)
+            c.Set("Vary", "Origin")
+            c.Set("Access-Control-Allow-Credentials", "true")
+            c.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Token")
+            c.Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+            if c.Method() == fiber.MethodOptions {
+                return c.SendStatus(fiber.StatusNoContent)
+            }
+        }
+        return c.Next()
+    })
 
 	// Add structured logging middleware
 	app.Use(logging.FiberMiddleware(logger))
 
 	// Health Routes
 	// Optional: auto-auth cookie for UI
-	if cfg.AdminAutoCookie && cfg.AdminToken != "" {
-		app.Use(func(c fiber.Ctx) error {
-			if c.Cookies("admin_token") == "" {
-				c.Cookie(&fiber.Cookie{
-					Name:     "admin_token",
-					Value:    cfg.AdminToken,
-					HTTPOnly: true,
-					Path:     "/",
-				})
-			}
-			return c.Next()
-		})
-	}
+    if cfg.AdminAutoCookie && cfg.AdminToken != "" {
+        app.Use(func(c fiber.Ctx) error {
+            if c.Cookies("admin_token") == "" {
+                c.Cookie(&fiber.Cookie{
+                    Name:     "admin_token",
+                    Value:    cfg.AdminToken,
+                    HTTPOnly: true,
+                    Path:     "/",
+                    Secure:   true,
+                    SameSite: "None",
+                })
+            }
+            return c.Next()
+        })
+    }
 
 	// Health Routes
 	app.Get("/health", health.Health(sqlDB))

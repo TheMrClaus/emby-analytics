@@ -155,7 +155,7 @@ export default function Header() {
             </button>
           </div>
 
-          {/* Admin token quick actions + API Explorer */}
+          {/* Quick nav links */}
           <div className="flex items-center gap-3 text-sm">
             <Link
               href="/settings"
@@ -170,24 +170,6 @@ export default function Header() {
             >
               API Explorer
             </Link>
-            <span className="text-gray-500">|</span>
-            <button
-              className="text-gray-300 hover:text-white underline decoration-dotted"
-              onClick={() => {
-                if (typeof window === "undefined") return;
-                const t = window.prompt("Set admin token");
-                if (t && t.trim()) setAdminToken(t.trim());
-              }}
-            >
-              Admin Token
-            </button>
-            <span className="text-gray-500">|</span>
-            <button
-              className="text-gray-400 hover:text-white underline decoration-dotted"
-              onClick={() => clearAdminToken()}
-            >
-              Clear
-            </button>
           </div>
         </div>
       </div>

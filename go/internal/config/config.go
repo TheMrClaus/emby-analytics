@@ -120,6 +120,12 @@ func Load() Config {
 		}
 	}
 
+    // Default WEBHOOK_SECRET to AdminToken if not provided
+    if cfg.WebhookSecret == "" && cfg.AdminToken != "" {
+        cfg.WebhookSecret = cfg.AdminToken
+        fmt.Println("[INFO] WEBHOOK_SECRET not set; defaulting to ADMIN_TOKEN.")
+    }
+
 	fmt.Printf("[INFO] Using SQLite DB at: %s\n", dbPath)
 	fmt.Printf("[INFO] Serving static UI from: %s\n", webPath)
 	fmt.Printf("[INFO] Emby Base URL: %s\n", embyBase)
