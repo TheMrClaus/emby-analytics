@@ -145,7 +145,7 @@ export default function GenrePage() {
                                 {item.genres!.map((g) => (
                                   <a
                                     key={g}
-                                    href={`/genres?genre=${encodeURIComponent(g)}`}
+                                    href={`/genres?genre=${encodeURIComponent(g)}${typeof media_type === "string" ? `&media_type=${encodeURIComponent(media_type)}` : ""}`}
                                     onClick={(e) => e.stopPropagation()}
                                     className="text-xs px-2 py-0.5 rounded-full bg-neutral-700 hover:bg-neutral-600 text-gray-200 border border-neutral-600"
                                   >
