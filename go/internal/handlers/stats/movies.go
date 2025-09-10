@@ -166,33 +166,46 @@ func Movies(db *sql.DB) fiber.Handler {
 			log.Printf("[movies] Error calculating total runtime: %v", err)
 		}
 
-		// Get popular genres (top 5) - simplified approach
+		// Get popular genres (top 5) - only if a 'genres' column exists
 		// Note: This assumes genres are stored as comma-separated values
-		genreRows, err := db.Query(`
-			SELECT 
-				CASE 
-					WHEN INSTR(genres, ',') > 0 THEN TRIM(SUBSTR(genres, 1, INSTR(genres, ',') - 1))
-					ELSE TRIM(genres)
-				END as primary_genre,
-				COUNT(*) as count
-			FROM library_item 
-			WHERE media_type = 'Movie' AND ` + excludeLiveTvFilter() + ` 
-			  AND genres IS NOT NULL AND genres != ''
-			GROUP BY primary_genre
-			HAVING primary_genre != ''
-			ORDER BY count DESC
-			LIMIT 5`)
-
-		if err == nil {
-			defer genreRows.Close()
-			for genreRows.Next() {
-				var genre GenreStats
-				if err := genreRows.Scan(&genre.Genre, &genre.Count); err == nil {
-					data.PopularGenres = append(data.PopularGenres, genre)
-				}
+		{
+			var hasGenres bool
+			var cnt int
+			row := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('library_item') WHERE name = 'genres'`)
+			if err := row.Scan(&cnt); err == nil && cnt > 0 {
+				hasGenres = true
 			}
-		} else {
-			log.Printf("[movies] Error fetching popular genres: %v", err)
+
+			if hasGenres {
+				genreRows, err := db.Query(`
+					SELECT 
+						CASE 
+							WHEN INSTR(genres, ',') > 0 THEN TRIM(SUBSTR(genres, 1, INSTR(genres, ',') - 1))
+							ELSE TRIM(genres)
+						END as primary_genre,
+						COUNT(*) as count
+					FROM library_item 
+					WHERE media_type = 'Movie' AND ` + excludeLiveTvFilter() + ` 
+					  AND genres IS NOT NULL AND genres != ''
+					GROUP BY primary_genre
+					HAVING primary_genre != ''
+					ORDER BY count DESC
+					LIMIT 5`)
+
+				if err == nil {
+					defer genreRows.Close()
+					for genreRows.Next() {
+						var genre GenreStats
+						if err := genreRows.Scan(&genre.Genre, &genre.Count); err == nil {
+							data.PopularGenres = append(data.PopularGenres, genre)
+						}
+					}
+				} else {
+					log.Printf("[movies] Error fetching popular genres: %v", err)
+				}
+			} else {
+				log.Printf("[movies] 'genres' column not found; skipping popular genres")
+			}
 		}
 
 		// Get movies added this month

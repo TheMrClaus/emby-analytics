@@ -22,6 +22,9 @@ COPY --from=builder /emby-analytics /app/emby-analytics
 # Copy the statically-exported UI to be served by the Go app
 COPY --from=ui /ui/app/out /app/web
 
+# Seed data directory with correct ownership so named volumes inherit 1000:1000
+COPY --chown=1000:1000 docker/varlib/ /var/lib/emby-analytics/
+
 VOLUME ["/var/lib/emby-analytics"]
 EXPOSE 8080
 USER 1000:1000

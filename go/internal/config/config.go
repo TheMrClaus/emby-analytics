@@ -1,13 +1,13 @@
 package config
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
+    "crypto/rand"
+    "encoding/hex"
+    "fmt"
+    "os"
+    "path/filepath"
+    "strconv"
+    "strings"
 )
 
 type Config struct {
@@ -52,11 +52,12 @@ type Config struct {
 }
 
 func Load() Config {
-	dbPath := env("SQLITE_PATH", "/var/lib/emby-analytics/emby.db")
-	webPath := env("WEB_PATH", "/app/web")
+    dbPath := env("SQLITE_PATH", "/var/lib/emby-analytics/emby.db")
+    webPath := env("WEB_PATH", "/app/web")
 
-	_ = os.MkdirAll(filepath.Dir(dbPath), 0755)
-	_ = os.MkdirAll(webPath, 0755)
+    // Ensure directories exist; actual DB file creation happens in main preflight
+    _ = os.MkdirAll(filepath.Dir(dbPath), 0755)
+    _ = os.MkdirAll(webPath, 0755)
 
 	embyBase := env("EMBY_BASE_URL", "http://emby:8096")
 	embyKey := env("EMBY_API_KEY", "")

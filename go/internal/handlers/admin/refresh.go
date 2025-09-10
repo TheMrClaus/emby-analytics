@@ -265,9 +265,15 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
 		}
 
         // Include runtime ticks and container when available
+        // Prepare genres as CSV if present
+        var genresCSV *string
+        if len(entry.Genres) > 0 {
+            g := strings.Join(entry.Genres, ", ")
+            genresCSV = &g
+        }
         result, err := db.Exec(`
-            INSERT INTO library_item (id, server_id, item_id, name, media_type, height, width, run_time_ticks, container, video_codec, file_size_bytes, bitrate_bps, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            INSERT INTO library_item (id, server_id, item_id, name, media_type, height, width, run_time_ticks, container, video_codec, file_size_bytes, bitrate_bps, genres, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
                 server_id = COALESCE(excluded.server_id, library_item.server_id),
                 item_id = COALESCE(excluded.item_id, library_item.item_id),
@@ -280,8 +286,9 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
                 video_codec = COALESCE(excluded.video_codec, library_item.video_codec),
                 file_size_bytes = COALESCE(excluded.file_size_bytes, library_item.file_size_bytes),
                 bitrate_bps = COALESCE(excluded.bitrate_bps, library_item.bitrate_bps),
+                genres = COALESCE(excluded.genres, library_item.genres),
                 updated_at = CURRENT_TIMESTAMP
-        `, entry.Id, entry.Id, entry.Id, entry.Name, entry.Type, entry.Height, width, entry.RunTimeTicks, entry.Container, entry.Codec, entry.FileSizeBytes, entry.BitrateBps)
+        `, entry.Id, entry.Id, entry.Id, entry.Name, entry.Type, entry.Height, width, entry.RunTimeTicks, entry.Container, entry.Codec, entry.FileSizeBytes, entry.BitrateBps, genresCSV)
 
 		// For episodes, ensure we have proper series info
 		if entry.Type == "Episode" && em != nil {

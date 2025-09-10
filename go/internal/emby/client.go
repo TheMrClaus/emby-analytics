@@ -268,25 +268,27 @@ type LibraryItem struct {
     BitrateBps    *int64 `json:"Bitrate,omitempty"`
     FileSizeBytes *int64 `json:"Size,omitempty"`
     ProductionYear *int  `json:"ProductionYear,omitempty"`
+    Genres        []string `json:"Genres,omitempty"`
 }
 
 // Detailed struct for fetching media info with codec data
 type DetailedLibraryItem struct {
-	Id           string `json:"Id"`
-	Name         string `json:"Name"`
-	Type         string `json:"Type"`
-	Container    string `json:"Container"`
-	RunTimeTicks int64  `json:"RunTimeTicks"`
-	MediaSources []struct {
-		Bitrate      int64 `json:"Bitrate"`
-		Size         int64 `json:"Size"`
-		MediaStreams []struct {
-			Type   string `json:"Type"`
-			Codec  string `json:"Codec"`
-			Height *int   `json:"Height"`
-			Width  *int   `json:"Width"`
-		} `json:"MediaStreams"`
-	} `json:"MediaSources"`
+    Id           string `json:"Id"`
+    Name         string `json:"Name"`
+    Type         string `json:"Type"`
+    Container    string `json:"Container"`
+    RunTimeTicks int64  `json:"RunTimeTicks"`
+    Genres       []string `json:"Genres"`
+    MediaSources []struct {
+        Bitrate      int64 `json:"Bitrate"`
+        Size         int64 `json:"Size"`
+        MediaStreams []struct {
+            Type   string `json:"Type"`
+            Codec  string `json:"Codec"`
+            Height *int   `json:"Height"`
+            Width  *int   `json:"Width"`
+        } `json:"MediaStreams"`
+    } `json:"MediaSources"`
 }
 
 // FindSeriesIDByName looks up a Series by name and returns its Id, if found.
@@ -370,7 +372,7 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-    q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container,ProductionYear")
+    q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container,ProductionYear,Genres")
     q.Set("Recursive", "true")
     q.Set("Limit", fmt.Sprintf("%d", limit))
     q.Set("IncludeItemTypes", "Series,Movie,Episode")
@@ -440,18 +442,19 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 		if firstSize > 0 {
 			szPtr = &firstSize
 		}
-		result = append(result, LibraryItem{
-			Id:            item.Id, // Use original ID without suffix
-			Name:          item.Name,
-			Type:          item.Type,
-			Height:        firstVideoHeight,
-			Width:         firstVideoWidth,
-			Codec:         firstVideoCodec,
-			Container:     item.Container,
-			RunTimeTicks:  &rt,
-			BitrateBps:    brPtr,
-			FileSizeBytes: szPtr,
-		})
+        result = append(result, LibraryItem{
+            Id:            item.Id, // Use original ID without suffix
+            Name:          item.Name,
+            Type:          item.Type,
+            Height:        firstVideoHeight,
+            Width:         firstVideoWidth,
+            Codec:         firstVideoCodec,
+            Container:     item.Container,
+            RunTimeTicks:  &rt,
+            BitrateBps:    brPtr,
+            FileSizeBytes: szPtr,
+            Genres:        item.Genres,
+        })
 	}
 
 	return result, out.TotalRecordCount, nil
@@ -462,7 +465,7 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-    q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container,ProductionYear")
+    q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container,ProductionYear,Genres")
     q.Set("Recursive", "true")
     q.Set("StartIndex", fmt.Sprintf("%d", page*limit))
     q.Set("Limit", fmt.Sprintf("%d", limit))
@@ -527,18 +530,19 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 		if firstSize > 0 {
 			szPtr = &firstSize
 		}
-		result = append(result, LibraryItem{
-			Id:            item.Id, // Use original ID without suffix
-			Name:          item.Name,
-			Type:          item.Type,
-			Height:        firstVideoHeight,
-			Width:         firstVideoWidth,
-			Codec:         firstVideoCodec,
-			Container:     item.Container,
-			RunTimeTicks:  &rt,
-			BitrateBps:    brPtr,
-			FileSizeBytes: szPtr,
-		})
+        result = append(result, LibraryItem{
+            Id:            item.Id, // Use original ID without suffix
+            Name:          item.Name,
+            Type:          item.Type,
+            Height:        firstVideoHeight,
+            Width:         firstVideoWidth,
+            Codec:         firstVideoCodec,
+            Container:     item.Container,
+            RunTimeTicks:  &rt,
+            BitrateBps:    brPtr,
+            FileSizeBytes: szPtr,
+            Genres:        item.Genres,
+        })
 	}
 
 	return result, nil

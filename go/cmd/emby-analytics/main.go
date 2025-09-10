@@ -94,13 +94,28 @@ func main() {
 	logger.Info("=====================================================")
 	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
 
-	// ---- Database Initialization & Migration ----
-	absPath, err := filepath.Abs(cfg.SQLitePath)
-	if err != nil {
-		logger.Error("Failed to resolve SQLite path", "error", err, "path", cfg.SQLitePath)
-		os.Exit(1)
-	}
-	dbURL := fmt.Sprintf("sqlite://file:%s?cache=shared&mode=rwc", filepath.ToSlash(absPath))
+    // ---- Database Initialization & Migration ----
+    absPath, err := filepath.Abs(cfg.SQLitePath)
+    if err != nil {
+        logger.Error("Failed to resolve SQLite path", "error", err, "path", cfg.SQLitePath)
+        os.Exit(1)
+    }
+    // Ensure DB directory exists and DB file is present (created as current docker user 1000:1000)
+    dbDir := filepath.Dir(absPath)
+    if err := os.MkdirAll(dbDir, 0755); err != nil {
+        logger.Error("Failed to create database directory", "error", err, "dir", dbDir)
+        os.Exit(1)
+    }
+    // Create DB file if missing, and verify read-write access
+    if f, err := os.OpenFile(absPath, os.O_RDWR|os.O_CREATE, 0644); err != nil {
+        logger.Error("Failed to create/open SQLite file", "error", err, "path", absPath)
+        logger.Error("Check that the directory is writable by UID:GID 1000:1000 or adjust host bind mount permissions")
+        os.Exit(1)
+    } else {
+        _ = f.Close()
+    }
+
+    dbURL := fmt.Sprintf("sqlite://file:%s?cache=shared&mode=rwc", filepath.ToSlash(absPath))
 
 	if err := db.MigrateUp(dbURL); err != nil {
 		logger.Error("Database migrations failed", "error", err, "url", dbURL)
