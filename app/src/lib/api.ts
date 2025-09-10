@@ -237,6 +237,7 @@ export async function fetchItemsByGenre(
 export interface SeriesRow {
   id: string;
   name: string;
+  genres?: string[];
 }
 
 export interface SeriesByGenreResponse {

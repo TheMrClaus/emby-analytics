@@ -2,13 +2,15 @@ package stats
 
 import (
     "database/sql"
+    "strings"
 
     "github.com/gofiber/fiber/v3"
 )
 
 type SeriesRow struct {
-    ID   string `json:"id"`
-    Name string `json:"name"`
+    ID     string   `json:"id"`
+    Name   string   `json:"name"`
+    Genres []string `json:"genres,omitempty"`
 }
 
 type SeriesByGenreResponse struct {
@@ -57,15 +59,69 @@ func SeriesByGenre(db *sql.DB) fiber.Handler {
         defer rows.Close()
 
         out := []SeriesRow{}
+        ids := []string{}
         for rows.Next() {
             var r SeriesRow
             if err := rows.Scan(&r.ID, &r.Name); err != nil {
                 return c.Status(500).JSON(fiber.Map{"error": err.Error()})
             }
             out = append(out, r)
+            ids = append(ids, r.ID)
         }
         if err := rows.Err(); err != nil {
             return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+        }
+
+        // Fetch all genres for the listed series (deduped tokens per series)
+        if len(ids) > 0 {
+            // Build IN clause placeholders
+            placeholders := make([]string, len(ids))
+            args := make([]interface{}, 0, len(ids))
+            for i, id := range ids {
+                placeholders[i] = "?"
+                args = append(args, id)
+            }
+            tokenQuery := `
+                WITH RECURSIVE base AS (
+                  SELECT series_id, REPLACE(genres, ', ', ',') AS g
+                  FROM library_item
+                  WHERE media_type = 'Episode' AND ` + excludeLiveTvFilter() + ` AND genres IS NOT NULL AND genres != '' AND series_id IN (` + strings.Join(placeholders, ",") + `)
+                ),
+                split(series_id, token, rest) AS (
+                  SELECT series_id,
+                         TRIM(CASE WHEN INSTR(g, ',') = 0 THEN g ELSE SUBSTR(g, 1, INSTR(g, ',') - 1) END),
+                         TRIM(CASE WHEN INSTR(g, ',') = 0 THEN '' ELSE SUBSTR(g, INSTR(g, ',') + 1) END)
+                  FROM base
+                  UNION ALL
+                  SELECT series_id,
+                         TRIM(CASE WHEN INSTR(rest, ',') = 0 THEN rest ELSE SUBSTR(rest, 1, INSTR(rest, ',') - 1) END),
+                         TRIM(CASE WHEN INSTR(rest, ',') = 0 THEN '' ELSE SUBSTR(rest, INSTR(rest, ',') + 1) END)
+                  FROM split
+                  WHERE rest <> ''
+                )
+                SELECT series_id, token
+                FROM split
+                WHERE token IS NOT NULL AND token != ''
+                GROUP BY series_id, LOWER(token)
+            `
+            tr, err := db.Query(tokenQuery, args...)
+            if err == nil {
+                defer tr.Close()
+                // Map series_id -> []genres
+                m := map[string][]string{}
+                for tr.Next() {
+                    var sid, tok string
+                    if err := tr.Scan(&sid, &tok); err == nil {
+                        m[sid] = append(m[sid], tok)
+                    }
+                }
+                // Attach back to rows
+                for i := range out {
+                    if g, ok := m[out[i].ID]; ok {
+                        out[i].Genres = g
+                    }
+                }
+            }
         }
 
         return c.JSON(SeriesByGenreResponse{
@@ -77,4 +133,3 @@ func SeriesByGenre(db *sql.DB) fiber.Handler {
         })
     }
 }
-

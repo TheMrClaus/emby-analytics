@@ -125,19 +125,13 @@ export default function GenrePage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left text-gray-300">
                       <thead className="text-gray-400 border-b border-neutral-700">
-                        {media_type === "Series" ? (
-                          <tr>
-                            <th className="py-3">Series</th>
-                          </tr>
-                        ) : (
-                          <tr>
-                            <th className="py-3">Name</th>
-                            <th className="py-3">Type</th>
-                            <th className="py-3">Quality</th>
-                            <th className="py-3">Resolution</th>
-                            <th className="py-3">Codec</th>
-                          </tr>
-                        )}
+                        <tr>
+                          <th className="py-3">Name</th>
+                          <th className="py-3">Type</th>
+                          <th className="py-3">Quality</th>
+                          <th className="py-3">Resolution</th>
+                          <th className="py-3">Codec</th>
+                        </tr>
                       </thead>
                       <tbody>
                         {media_type === "Series"
@@ -148,7 +142,29 @@ export default function GenrePage() {
                                 onClick={() => openInEmby(s.id, embyExternalUrl, embyServerId)}
                                 title="Click to open in Emby"
                               >
-                                <td className="py-3 font-medium">{s.name}</td>
+                                <td className="py-3 font-medium">
+                                  <div>{s.name}</div>
+                                  {Array.isArray(s.genres) && s.genres.length > 0 && (
+                                    <div className="mt-1 flex flex-wrap gap-1">
+                                      {s.genres.map((g) => (
+                                        <a
+                                          key={g}
+                                          href={`/genres?genre=${encodeURIComponent(g)}&media_type=Series`}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-xs px-2 py-0.5 rounded-full bg-neutral-700 hover:bg-neutral-600 text-gray-200 border border-neutral-600"
+                                        >
+                                          {g}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-3">
+                                  <span className="px-2 py-1 bg-neutral-700 rounded text-xs">Series</span>
+                                </td>
+                                <td className="py-3">—</td>
+                                <td className="py-3">—</td>
+                                <td className="py-3">—</td>
                               </tr>
                             ))
                           : (data as ItemsByGenreResponse).items.map((item) => (
