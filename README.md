@@ -139,11 +139,6 @@ volumes:
 docker compose up -d
 ```
 
-Notes:
-- Prefer pinning an explicit version for production (e.g., `ghcr.io/themrclaus/emby-analytics:v0.1.0`).
-- If you see a warning about an existing volume, it is safe to ignore; or declare it `external: true` if you intentionally reuse it.
-- If you get a 403/denied pull error from GHCR, run `docker logout ghcr.io` and try again. Ensure the package is Public.
-
 ### Option 2: Manual Build
 ```bash
 # Build frontend
