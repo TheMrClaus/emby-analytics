@@ -166,38 +166,42 @@ func Movies(db *sql.DB) fiber.Handler {
 			log.Printf("[movies] Error calculating total runtime: %v", err)
 		}
 
-		// Get popular genres (top 5) - only if a 'genres' column exists
-		// Note: This assumes genres are stored as comma-separated values
+		// Popular genres (top 5) by any-genre token.
+		// Split comma-separated genres per item and count distinct items per token.
 		{
-			var hasGenres bool
 			var cnt int
 			row := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('library_item') WHERE name = 'genres'`)
 			if err := row.Scan(&cnt); err == nil && cnt > 0 {
-				hasGenres = true
-			}
-
-			if hasGenres {
-				genreRows, err := db.Query(`
-					SELECT 
-						CASE 
-							WHEN INSTR(genres, ',') > 0 THEN TRIM(SUBSTR(genres, 1, INSTR(genres, ',') - 1))
-							ELSE TRIM(genres)
-						END as primary_genre,
-						COUNT(*) as count
-					FROM library_item 
-					WHERE media_type = 'Movie' AND ` + excludeLiveTvFilter() + ` 
-					  AND genres IS NOT NULL AND genres != ''
-					GROUP BY primary_genre
-					HAVING primary_genre != ''
-					ORDER BY count DESC
-					LIMIT 5`)
-
-				if err == nil {
-					defer genreRows.Close()
-					for genreRows.Next() {
-						var genre GenreStats
-						if err := genreRows.Scan(&genre.Genre, &genre.Count); err == nil {
-							data.PopularGenres = append(data.PopularGenres, genre)
+				q := `
+				WITH base AS (
+				  SELECT id, REPLACE(genres, ', ', ',') AS g
+				  FROM library_item
+				  WHERE media_type = 'Movie' AND ` + excludeLiveTvFilter() + ` AND genres IS NOT NULL AND genres != ''
+				),
+				split(id, token, rest) AS (
+				  SELECT id,
+				         TRIM(CASE WHEN INSTR(g, ',') = 0 THEN g ELSE SUBSTR(g, 1, INSTR(g, ',') - 1) END),
+				         TRIM(CASE WHEN INSTR(g, ',') = 0 THEN '' ELSE SUBSTR(g, INSTR(g, ',') + 1) END)
+				  FROM base
+				  UNION ALL
+				  SELECT id,
+				         TRIM(CASE WHEN INSTR(rest, ',') = 0 THEN rest ELSE SUBSTR(rest, 1, INSTR(rest, ',') - 1) END),
+				         TRIM(CASE WHEN INSTR(rest, ',') = 0 THEN '' ELSE SUBSTR(rest, INSTR(rest, ',') + 1) END)
+				  FROM split
+				  WHERE rest <> ''
+				)
+				SELECT token AS genre, COUNT(DISTINCT id) AS count
+				FROM split
+				WHERE token IS NOT NULL AND token != ''
+				GROUP BY token
+				ORDER BY count DESC
+				LIMIT 5`
+				if rows, err := db.Query(q); err == nil {
+					defer rows.Close()
+					for rows.Next() {
+						var g GenreStats
+						if err := rows.Scan(&g.Genre, &g.Count); err == nil {
+							data.PopularGenres = append(data.PopularGenres, g)
 						}
 					}
 				} else {

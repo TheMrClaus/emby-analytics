@@ -205,30 +205,40 @@ func Series(db *sql.DB) fiber.Handler {
             log.Printf("[series] Error counting episodes added this month: %v", err)
         }
 
-        // Popular genres for series (based on episodes' genres; top 5)
+        // Popular genres for series (based on episodes' any-genre tokens; top 5)
         {
             var cnt int
             row := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('library_item') WHERE name = 'genres'`)
             if err := row.Scan(&cnt); err == nil && cnt > 0 {
-                genreRows, err := db.Query(`
-                    SELECT 
-                        CASE 
-                            WHEN INSTR(genres, ',') > 0 THEN TRIM(SUBSTR(genres, 1, INSTR(genres, ',') - 1))
-                            ELSE TRIM(genres)
-                        END as primary_genre,
-                        COUNT(*) as count
-                    FROM library_item 
-                    WHERE media_type = 'Episode' AND ` + excludeLiveTvFilter() + `
-                      AND genres IS NOT NULL AND genres != ''
-                    GROUP BY primary_genre
-                    HAVING primary_genre != ''
-                    ORDER BY count DESC
-                    LIMIT 5`)
-                if err == nil {
-                    defer genreRows.Close()
-                    for genreRows.Next() {
+                q := `
+                WITH base AS (
+                  SELECT id, REPLACE(genres, ', ', ',') AS g
+                  FROM library_item
+                  WHERE media_type = 'Episode' AND ` + excludeLiveTvFilter() + ` AND genres IS NOT NULL AND genres != ''
+                ),
+                split(id, token, rest) AS (
+                  SELECT id,
+                         TRIM(CASE WHEN INSTR(g, ',') = 0 THEN g ELSE SUBSTR(g, 1, INSTR(g, ',') - 1) END),
+                         TRIM(CASE WHEN INSTR(g, ',') = 0 THEN '' ELSE SUBSTR(g, INSTR(g, ',') + 1) END)
+                  FROM base
+                  UNION ALL
+                  SELECT id,
+                         TRIM(CASE WHEN INSTR(rest, ',') = 0 THEN rest ELSE SUBSTR(rest, 1, INSTR(rest, ',') - 1) END),
+                         TRIM(CASE WHEN INSTR(rest, ',') = 0 THEN '' ELSE SUBSTR(rest, INSTR(rest, ',') + 1) END)
+                  FROM split
+                  WHERE rest <> ''
+                )
+                SELECT token AS genre, COUNT(DISTINCT id) AS count
+                FROM split
+                WHERE token IS NOT NULL AND token != ''
+                GROUP BY token
+                ORDER BY count DESC
+                LIMIT 5`
+                if rows, err := db.Query(q); err == nil {
+                    defer rows.Close()
+                    for rows.Next() {
                         var g GenreStats
-                        if err := genreRows.Scan(&g.Genre, &g.Count); err == nil {
+                        if err := rows.Scan(&g.Genre, &g.Count); err == nil {
                             data.PopularGenres = append(data.PopularGenres, g)
                         }
                     }
