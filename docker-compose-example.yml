@@ -3,6 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-}
+        COMMIT: ${COMMIT:-}
+        DATE: ${DATE:-}
+        REPO: ${REPO:-TheMrClaus/emby-analytics}
     container_name: emby-analytics
     restart: unless-stopped
     ports:

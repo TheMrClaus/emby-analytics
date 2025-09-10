@@ -22,7 +22,7 @@ ARG REPO
 # Default DATE if not provided
 RUN if [ -z "$DATE" ]; then export DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ); fi; \
     CGO_ENABLED=0 go build \
-    -ldflags "-X emby-analytics/internal/version.Version=$VERSION -X emby-analytics/internal/version.Commit=$COMMIT -X emby-analytics/internal/version.Date=$DATE -X emby-analytics/internal/version.Repo=$REPO" \
+    -ldflags "-X emby-analytics/internal/version.Version=${VERSION} -X emby-analytics/internal/version.Commit=${COMMIT} -X emby-analytics/internal/version.Date=${DATE} -X emby-analytics/internal/version.Repo=${REPO:-TheMrClaus/emby-analytics}" \
     -o /emby-analytics ./cmd/emby-analytics
 
 # ---------- Stage 2: Final rootless distroless (UID:GID 1000:1000) ----------
