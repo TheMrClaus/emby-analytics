@@ -2,6 +2,7 @@ import { useSeriesStats } from "../hooks/useData";
 import { DataState, useDataState } from "./DataState";
 import { fmtInt, fmtLongSpanFromMinutes, fmtLongSpanFromHours } from "../lib/format";
 import Card from "./ui/Card";
+import Link from "next/link";
 
 export default function SeriesStatsCard() {
   const swrResponse = useSeriesStats();
@@ -86,15 +87,15 @@ export default function SeriesStatsCard() {
               <h3 className="text-sm font-medium text-gray-400 mb-3">Popular Genres</h3>
               <div className="flex flex-wrap gap-2">
                 {data.popular_genres.map((genre: { genre: string; count: number }) => (
-                  <a
+                  <Link
                     key={genre.genre}
-                    href={`/genres/${encodeURIComponent(genre.genre)}?media_type=Episode`}
+                    href={`/genres?genre=${encodeURIComponent(genre.genre)}&media_type=Episode`}
                     className="bg-purple-900/30 border border-purple-500/30 rounded-lg px-3 py-1 text-sm hover:bg-purple-900/50"
                     title={`View episodes in ${genre.genre}`}
                   >
                     <span className="text-purple-200">{genre.genre}</span>
                     <span className="text-purple-300 ml-1">({fmtInt(genre.count)})</span>
-                  </a>
+                  </Link>
                 ))}
               </div>
             </div>
