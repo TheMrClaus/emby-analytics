@@ -11,6 +11,9 @@ type SeriesRow struct {
     ID     string   `json:"id"`
     Name   string   `json:"name"`
     Genres []string `json:"genres,omitempty"`
+    Height *int     `json:"height,omitempty"`
+    Width  *int     `json:"width,omitempty"`
+    Codec  string   `json:"codec,omitempty"`
 }
 
 type SeriesByGenreResponse struct {
@@ -119,6 +122,60 @@ func SeriesByGenre(db *sql.DB) fiber.Handler {
                 for i := range out {
                     if g, ok := m[out[i].ID]; ok {
                         out[i].Genres = g
+                    }
+                }
+            }
+
+            // Compute representative resolution (max) and codec (mode) per series
+            statsQuery := `
+                WITH ep AS (
+                  SELECT series_id,
+                         COALESCE(height, 0) AS h,
+                         COALESCE(width, 0)  AS w,
+                         COALESCE(video_codec, 'Unknown') AS codec
+                  FROM library_item
+                  WHERE media_type = 'Episode' AND ` + excludeLiveTvFilter() + ` AND COALESCE(series_id,'') != '' AND series_id IN (` + strings.Join(placeholders, ",") + `)
+                ),
+                res AS (
+                  SELECT series_id, MAX(h) AS max_h, MAX(w) AS max_w
+                  FROM ep GROUP BY series_id
+                ),
+                codec_counts AS (
+                  SELECT series_id, codec, COUNT(*) AS cnt
+                  FROM ep GROUP BY series_id, codec
+                ),
+                codec_mode AS (
+                  SELECT c.series_id, c.codec
+                  FROM codec_counts c
+                  JOIN (
+                    SELECT series_id, MAX(cnt) AS mc
+                    FROM codec_counts GROUP BY series_id
+                  ) m ON c.series_id = m.series_id AND c.cnt = m.mc
+                )
+                SELECT res.series_id, res.max_h, res.max_w, cm.codec
+                FROM res
+                LEFT JOIN codec_mode cm ON cm.series_id = res.series_id
+            `
+            sr, err := db.Query(statsQuery, args...)
+            if err == nil {
+                defer sr.Close()
+                type srec struct{ h, w int; codec string }
+                smap := map[string]srec{}
+                for sr.Next() {
+                    var sid string
+                    var h, w int
+                    var codec sql.NullString
+                    if err := sr.Scan(&sid, &h, &w, &codec); err == nil {
+                        rec := srec{h: h, w: w}
+                        if codec.Valid { rec.codec = codec.String } else { rec.codec = "Unknown" }
+                        smap[sid] = rec
+                    }
+                }
+                for i := range out {
+                    if rec, ok := smap[out[i].ID]; ok {
+                        if rec.h > 0 { hh := rec.h; out[i].Height = &hh }
+                        if rec.w > 0 { ww := rec.w; out[i].Width = &ww }
+                        out[i].Codec = rec.codec
                     }
                 }
             }

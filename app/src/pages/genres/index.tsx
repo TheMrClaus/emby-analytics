@@ -58,7 +58,7 @@ export default function GenrePage() {
       .catch((err) => console.error("Failed to fetch config:", err));
   }, []);
 
-  const formatResolution = (item: GenreListItem) => {
+  const formatResolution = (item: { height?: number; width?: number }) => {
     if (item.height && item.width) return `${item.width}×${item.height}`;
     if (item.height) {
       const width = Math.round((item.height * 16) / 9);
@@ -162,9 +162,11 @@ export default function GenrePage() {
                                 <td className="py-3">
                                   <span className="px-2 py-1 bg-neutral-700 rounded text-xs">Series</span>
                                 </td>
-                                <td className="py-3">—</td>
-                                <td className="py-3">—</td>
-                                <td className="py-3">—</td>
+                                <td className="py-3">{getQualityLabel((data as SeriesByGenreResponse).items.find(x => x.id === s.id)?.height)}</td>
+                                <td className="py-3">{formatResolution(s)}</td>
+                                <td className="py-3">
+                                  <code className="bg-neutral-800 px-2 py-1 rounded text-xs">{s.codec ?? "Unknown"}</code>
+                                </td>
                               </tr>
                             ))
                           : (data as ItemsByGenreResponse).items.map((item) => (

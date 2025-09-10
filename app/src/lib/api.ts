@@ -238,6 +238,9 @@ export interface SeriesRow {
   id: string;
   name: string;
   genres?: string[];
+  height?: number;
+  width?: number;
+  codec?: string;
 }
 
 export interface SeriesByGenreResponse {
