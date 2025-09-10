@@ -1,0 +1,3 @@
+./defs.go
+./hooks.go
+./sqlite_linux_amd64.go

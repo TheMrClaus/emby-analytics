@@ -1,0 +1,7 @@
+./doc.go
+./fcntl.go
+./mutex.go
+./nodmesg.go
+./rulimit.go
+./sqlite.go
+./sqlite_go18.go

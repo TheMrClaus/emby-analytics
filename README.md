@@ -148,6 +148,35 @@ Key environment variables (see `.env.example` for complete list):
 - `NOW_POLL_SEC`: Interval in seconds for polling "Now Playing" data (default: `5`)
 - `LOG_LEVEL`: Logging level (e.g., `info`, `debug`, `warn`, `error`) (default: `info`)
 
+### Versioning & Updates
+
+The backend exposes build/version info at `GET /version`, and the UI shows a small version badge in the header. If a newer release/tag exists on GitHub, a red dot indicates an update is available. Clicking the badge opens the GitHub page for the current build (tag page or commit).
+
+- Build metadata is injected at compile-time: version (tag), commit, date, and repo.
+- Latest release/tag is fetched from GitHub and cached in memory (6h TTL).
+
+Local build with metadata:
+
+```bash
+make backend-build
+# Produces go/emby-analytics with ldflags set from your local git
+```
+
+Docker build with metadata:
+
+```bash
+docker build \
+  --build-arg VERSION=$(git describe --tags --dirty --always) \
+  --build-arg COMMIT=$(git rev-parse --short HEAD) \
+  --build-arg DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  --build-arg REPO="<owner>/<repo>" \
+  -t emby-analytics:latest .
+```
+
+Notes:
+- If `REPO` (owner/repo) isn’t provided, the server attempts to derive it during `make backend-build`; otherwise, the `/version` endpoint will omit repo URLs.
+- The update indicator relies on public GitHub APIs (subject to rate limits). It gracefully degrades if unreachable.
+
 ### Admin Authentication
 
 - Backend: set `ADMIN_TOKEN` to explicitly control the admin token, or omit it and let the server auto-generate and persist one.

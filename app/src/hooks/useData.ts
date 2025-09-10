@@ -13,6 +13,7 @@ import {
   fetchNowSnapshot,
   fetchRefreshStatus,
   fetchUserDetail,
+  fetchVersion,
 } from "../lib/api";
 import type {
   OverviewData,
@@ -28,6 +29,7 @@ import type {
   RefreshState,
   UserDetail,
 } from "../types";
+import type { VersionInfo } from "../lib/api";
 
 // SWR configuration
 const config = {
@@ -115,5 +117,14 @@ export function useRefreshStatus(enabled = true) {
   return useSWR<RefreshState>(enabled ? "refreshStatus" : null, () => fetchRefreshStatus(), {
     ...config,
     refreshInterval: 1000, // Poll every second when checking refresh status
+  });
+}
+
+// App/version info
+export function useVersion() {
+  return useSWR<VersionInfo>("version", () => fetchVersion(), {
+    ...config,
+    revalidateOnFocus: true,
+    dedupingInterval: 60000,
   });
 }

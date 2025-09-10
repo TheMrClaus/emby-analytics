@@ -1,7 +1,7 @@
 // app/src/components/Header.tsx
 import { useRef } from "react";
 import Link from "next/link";
-import { useUsage, useNowSnapshot, useRefreshStatus } from "../hooks/useData";
+import { useUsage, useNowSnapshot, useRefreshStatus, useVersion } from "../hooks/useData";
 import { startRefresh, setAdminToken } from "../lib/api";
 import { fmtHours } from "../lib/format";
 
@@ -14,6 +14,7 @@ export default function Header() {
   const { data: weeklyUsage = [], error: usageError } = useUsage(7);
   const { data: nowPlaying = [], error: snapshotError } = useNowSnapshot();
   const { data: refreshStatus } = useRefreshStatus(true); // poll regularly
+  const { data: versionInfo } = useVersion();
 
   // Derived UI counters
   const weeklyHours = weeklyUsage.reduce((acc, r) => acc + (r.hours || 0), 0);
@@ -80,6 +81,35 @@ export default function Header() {
 
         {/* Stats + Refresh */}
         <div className="flex items-center gap-6">
+          {/* Version badge */}
+          <div className="text-xs text-gray-300">
+            {versionInfo && (
+              <a
+                href={versionInfo.url || "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 border border-neutral-700"
+                title={
+                  versionInfo.update_available
+                    ? `Update available: ${versionInfo.latest_tag}`
+                    : `Version ${versionInfo.version}`
+                }
+              >
+                <span className="font-mono">
+                  {versionInfo.version}
+                  {versionInfo.commit && versionInfo.version === "dev" && (
+                    <span className="opacity-70">@{versionInfo.commit}</span>
+                  )}
+                </span>
+                {versionInfo.update_available && (
+                  <span
+                    className="inline-block w-2 h-2 rounded-full bg-red-500"
+                    title={`New: ${versionInfo.latest_tag}`}
+                  />
+                )}
+              </a>
+            )}
+          </div>
           {/* Weekly Hours */}
           <div className="text-center">
             <div className="text-sm text-gray-400">Weekly Hours</div>

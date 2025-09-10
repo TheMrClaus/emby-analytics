@@ -1,0 +1,14 @@
+./client.go
+./compression.go
+./conn.go
+./doc.go
+./errors.go
+./join.go
+./json.go
+./mask.go
+./prepared.go
+./proxy.go
+./server.go
+./server_fasthttp.go
+./server_utils.go
+./util.go
