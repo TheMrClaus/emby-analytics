@@ -2,7 +2,7 @@
 import { useRef } from "react";
 import Link from "next/link";
 import { useUsage, useNowSnapshot, useRefreshStatus } from "../hooks/useData";
-import { startRefresh, setAdminToken, clearAdminToken } from "../lib/api";
+import { startRefresh, setAdminToken } from "../lib/api";
 import { fmtHours } from "../lib/format";
 
 type SnapshotEntry = {
