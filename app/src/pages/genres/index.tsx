@@ -7,7 +7,6 @@ import Card from "../../components/ui/Card";
 import {
   fetchItemsByGenre,
   ItemsByGenreResponse,
-  GenreListItem,
   fetchSeriesByGenre,
   SeriesByGenreResponse,
   fetchConfig,
