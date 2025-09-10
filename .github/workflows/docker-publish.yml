@@ -55,23 +55,26 @@ jobs:
             version="${GITHUB_REF_NAME}"
             if echo "$version" | grep -q -- '-'; then
               # pre-release tag (e.g., v1.2.3-beta.1)
-              extra_tags="${IMAGE_NAME}:beta"
+              echo "extra_tags=${IMAGE_NAME}:beta" >> "$GITHUB_OUTPUT"
             else
               # stable tag
-              extra_tags="${IMAGE_NAME}:latest"
+              echo "extra_tags=${IMAGE_NAME}:latest" >> "$GITHUB_OUTPUT"
             fi
           elif [ "${GITHUB_REF_NAME}" = "main" ]; then
             version="main-${sha_short}"
-            extra_tags="${IMAGE_NAME}:beta
-${IMAGE_NAME}:dev"
+            {
+              echo "extra_tags<<EOF"
+              echo "${IMAGE_NAME}:beta"
+              echo "${IMAGE_NAME}:dev"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           else
             version="${GITHUB_REF_NAME}-${sha_short}"
-            extra_tags="${IMAGE_NAME}:dev"
+            echo "extra_tags=${IMAGE_NAME}:dev" >> "$GITHUB_OUTPUT"
           fi
           echo "sha_short=${sha_short}" >> "$GITHUB_OUTPUT"
           echo "date=${date}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "extra_tags=${extra_tags}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v6
