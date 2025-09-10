@@ -256,6 +256,37 @@ func (c *Client) ItemsByIDs(ids []string) ([]EmbyItem, error) {
 	return out.Items, nil
 }
 
+// SeriesGenres fetches Genres for a given Series ID.
+func (c *Client) SeriesGenres(seriesID string) ([]string, error) {
+    if c == nil || c.BaseURL == "" || c.APIKey == "" || strings.TrimSpace(seriesID) == "" {
+        return []string{}, nil
+    }
+    u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
+    q := url.Values{}
+    q.Set("api_key", c.APIKey)
+    q.Set("Ids", seriesID)
+    q.Set("Fields", "Genres")
+    req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+    req.Header.Set("X-Emby-Token", c.APIKey)
+    resp, err := c.doWithRetry(req, 2)
+    if err != nil {
+        return nil, err
+    }
+    var out struct {
+        Items []struct{
+            Id string `json:"Id"`
+            Genres []string `json:"Genres"`
+        } `json:"Items"`
+    }
+    if err := readJSON(resp, &out); err != nil {
+        return nil, err
+    }
+    if len(out.Items) == 0 {
+        return []string{}, nil
+    }
+    return out.Items[0].Genres, nil
+}
+
 type LibraryItem struct {
     Id            string `json:"Id"`
     Name          string `json:"Name"`

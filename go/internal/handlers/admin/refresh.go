@@ -1,8 +1,8 @@
 package admin
 
 import (
-	"emby-analytics/internal/logging"
 	"database/sql"
+	"emby-analytics/internal/logging"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -82,12 +82,12 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 
 		total = totalFound
 		actualItemsProcessed = len(libraryEntries)
-		
+
 		rm.set(Progress{
-			Total: total,
+			Total:     total,
 			Processed: 0,
-			Message: fmt.Sprintf("Processing %d new/modified items...", len(libraryEntries)),
-			Running: true,
+			Message:   fmt.Sprintf("Processing %d new/modified items...", len(libraryEntries)),
+			Running:   true,
 		})
 
 		// Process the incremental items
@@ -102,11 +102,11 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 		}
 
 		rm.set(Progress{
-			Total: total,
+			Total:     total,
 			Processed: actualItemsProcessed,
-			Message: fmt.Sprintf("Incremental sync complete! Processed %d items", actualItemsProcessed),
-			Done: true,
-			Running: false,
+			Message:   fmt.Sprintf("Incremental sync complete! Processed %d items", actualItemsProcessed),
+			Done:      true,
+			Running:   false,
 		})
 
 	} else {
@@ -241,13 +241,13 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 
 // processLibraryEntries handles the insertion and enrichment of library items
 func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, libraryEntries []emby.LibraryItem) int {
-    dbEntriesInserted := 0
-    // Cache SeriesID -> CSV genres to avoid repeated Emby lookups
-    seriesGenresCache := map[string]*string{}
-    for _, entry := range libraryEntries {
-        // Handle Series directly: upsert into series table and continue
-        if entry.Type == "Series" {
-            _, _ = db.Exec(`
+	dbEntriesInserted := 0
+	// Cache SeriesID -> CSV genres to avoid repeated Emby lookups
+	seriesGenresCache := map[string]*string{}
+	for _, entry := range libraryEntries {
+		// Handle Series directly: upsert into series table and continue
+		if entry.Type == "Series" {
+			_, _ = db.Exec(`
                 INSERT INTO series (id, name, year, created_at, updated_at)
                 VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT(id) DO UPDATE SET
@@ -255,9 +255,9 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
                     year = COALESCE(excluded.year, series.year),
                     updated_at = CURRENT_TIMESTAMP
             `, entry.Id, entry.Name, entry.ProductionYear)
-            // Do not insert Series into library_item
-            continue
-        }
+			// Do not insert Series into library_item
+			continue
+		}
 		// Extract width from height for older data compatibility
 		var width *int
 		if entry.Height != nil && *entry.Height > 0 {
@@ -266,14 +266,14 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
 			width = &calculatedWidth
 		}
 
-        // Include runtime ticks and container when available
-        // Prepare genres as CSV if present (Movies usually have; Episodes often don't)
-        var genresCSV *string
-        if len(entry.Genres) > 0 {
-            g := strings.Join(entry.Genres, ", ")
-            genresCSV = &g
-        }
-        result, err := db.Exec(`
+		// Include runtime ticks and container when available
+		// Prepare genres as CSV if present (Movies usually have; Episodes often don't)
+		var genresCSV *string
+		if len(entry.Genres) > 0 {
+			g := strings.Join(entry.Genres, ", ")
+			genresCSV = &g
+		}
+		result, err := db.Exec(`
             INSERT INTO library_item (id, server_id, item_id, name, media_type, height, width, run_time_ticks, container, video_codec, file_size_bytes, bitrate_bps, genres, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
@@ -295,11 +295,11 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
 		// For episodes, ensure we have proper series info
 		if entry.Type == "Episode" && em != nil {
 			// Enrich episode data immediately during refresh
-            if episodeItems, err := em.ItemsByIDs([]string{entry.Id}); err == nil && len(episodeItems) > 0 {
-                ep := episodeItems[0]
-                if ep.SeriesName != "" {
-                    // Build proper display name
-                    display := ep.Name
+			if episodeItems, err := em.ItemsByIDs([]string{entry.Id}); err == nil && len(episodeItems) > 0 {
+				ep := episodeItems[0]
+				if ep.SeriesName != "" {
+					// Build proper display name
+					display := ep.Name
 					if ep.ParentIndexNumber != nil && ep.IndexNumber != nil {
 						season := *ep.ParentIndexNumber
 						episode := *ep.IndexNumber
@@ -308,13 +308,13 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
 							display = fmt.Sprintf("%s - %s (%s)", ep.SeriesName, ep.Name, epcode)
 						}
 					}
-                    // Update the database with enriched info (+ series linkage)
-                    db.Exec(`UPDATE library_item SET name = ?, series_id = COALESCE(?, series_id), series_name = COALESCE(?, series_name), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-                        display, nullIfEmpty(ep.SeriesId), nullIfEmpty(ep.SeriesName), entry.Id)
+					// Update the database with enriched info (+ series linkage)
+					db.Exec(`UPDATE library_item SET name = ?, series_id = COALESCE(?, series_id), series_name = COALESCE(?, series_name), updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+						display, nullIfEmpty(ep.SeriesId), nullIfEmpty(ep.SeriesName), entry.Id)
 
-                    // Upsert series row when possible
-                    if strings.TrimSpace(ep.SeriesId) != "" {
-                        _, _ = db.Exec(`
+					// Upsert series row when possible
+					if strings.TrimSpace(ep.SeriesId) != "" {
+						_, _ = db.Exec(`
                             INSERT INTO series (id, name, year, created_at, updated_at)
                             VALUES (?, ?, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                             ON CONFLICT(id) DO UPDATE SET
@@ -322,31 +322,26 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
                                 updated_at = CURRENT_TIMESTAMP
                         `, ep.SeriesId, ep.SeriesName)
 
-                        // If this episode didn't have genres, try to populate from its Series genres
+						// If this episode didn't have genres, try to populate from its Series genres
                         if genresCSV == nil && em != nil {
                             if cached, ok := seriesGenresCache[ep.SeriesId]; ok {
                                 if cached != nil {
                                     db.Exec(`UPDATE library_item SET genres = COALESCE(genres, ?) WHERE id = ?`, *cached, entry.Id)
                                 }
                             } else {
-                                if seriesItems, err := em.ItemsByIDs([]string{ep.SeriesId}); err == nil && len(seriesItems) > 0 {
-                                    s := seriesItems[0]
-                                    if len(s.Genres) > 0 {
-                                        csv := strings.Join(s.Genres, ", ")
-                                        seriesGenresCache[ep.SeriesId] = &csv
-                                        db.Exec(`UPDATE library_item SET genres = COALESCE(genres, ?) WHERE id = ?`, csv, entry.Id)
-                                    } else {
-                                        seriesGenresCache[ep.SeriesId] = nil
-                                    }
+                                if g, err := em.SeriesGenres(ep.SeriesId); err == nil && len(g) > 0 {
+                                    csv := strings.Join(g, ", ")
+                                    seriesGenresCache[ep.SeriesId] = &csv
+                                    db.Exec(`UPDATE library_item SET genres = COALESCE(genres, ?) WHERE id = ?`, csv, entry.Id)
                                 } else {
                                     seriesGenresCache[ep.SeriesId] = nil
                                 }
                             }
                         }
-                    }
-                }
-            }
-        }
+					}
+				}
+			}
+		}
 
 		if err == nil {
 			if rows, _ := result.RowsAffected(); rows > 0 {
@@ -359,8 +354,10 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
 
 // helper: convert empty string to nil for COALESCE updates
 func nullIfEmpty(s string) any {
-    if strings.TrimSpace(s) == "" { return nil }
-    return s
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return s
 }
 
 // StartHandler kicks off a background refresh using the provided chunk size.
