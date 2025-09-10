@@ -35,12 +35,13 @@ export default function GenrePage() {
     setError(null);
 
     const mt = typeof media_type === "string" ? media_type : undefined;
-    const fetcher = mt === "Series"
-      ? fetchSeriesByGenre(genre, page, 50)
-      : fetchItemsByGenre(genre, page, 50, mt);
+    const fetcher: Promise<ItemsByGenreResponse | SeriesByGenreResponse> =
+      mt === "Series"
+        ? fetchSeriesByGenre(genre, page, 50)
+        : fetchItemsByGenre(genre, page, 50, mt);
 
-    Promise.resolve(fetcher)
-      .then((resp) => setData(resp as any))
+    fetcher
+      .then((resp) => setData(resp))
       .catch((err) => {
         console.error("Failed to fetch items:", err);
         setError("Failed to load items");
@@ -140,17 +141,17 @@ export default function GenrePage() {
                       </thead>
                       <tbody>
                         {media_type === "Series"
-                          ? (data.items as SeriesByGenreResponse["items"]).map((s) => (
+                          ? (data as SeriesByGenreResponse).items.map((s) => (
                               <tr
-                                key={(s as any).id}
+                                key={s.id}
                                 className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 cursor-pointer transition-colors"
-                                onClick={() => openInEmby((s as any).id, embyExternalUrl, embyServerId)}
+                                onClick={() => openInEmby(s.id, embyExternalUrl, embyServerId)}
                                 title="Click to open in Emby"
                               >
-                                <td className="py-3 font-medium">{(s as any).name}</td>
+                                <td className="py-3 font-medium">{s.name}</td>
                               </tr>
                             ))
-                          : (data.items as ItemsByGenreResponse["items"]).map((item) => (
+                          : (data as ItemsByGenreResponse).items.map((item) => (
                               <tr
                                 key={item.id}
                                 className="border-b border-neutral-800 last:border-0 hover:bg-neutral-800 cursor-pointer transition-colors"
