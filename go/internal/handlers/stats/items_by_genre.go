@@ -31,9 +31,10 @@ func ItemsByGenre(db *sql.DB) fiber.Handler {
         if pageSize < 1 || pageSize > 500 { pageSize = 50 }
         mediaType := c.Query("media_type", "")
 
-        // Build WHERE clause for genre token match (case-insensitive, token boundary)
-        // Normalize to comma-separated without spaces and wrap with commas, then search token with INSTR
-        where := "WHERE genres IS NOT NULL AND genres != '' AND INSTR(LOWER(',' || REPLACE(genres, ', ', ',') || ','), LOWER(',' || ? || ',')) > 0"
+        // Match by PRIMARY genre only to align with "Popular Genres" bubbles,
+        // which compute counts based on the first token before the first comma.
+        primary := "TRIM(CASE WHEN INSTR(genres, ',') > 0 THEN SUBSTR(genres, 1, INSTR(genres, ',') - 1) ELSE genres END)"
+        where := "WHERE genres IS NOT NULL AND genres != '' AND (" + primary + ") = ?"
         args := []interface{}{genre}
 
         if mediaType != "" {
