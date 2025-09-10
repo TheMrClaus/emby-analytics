@@ -14,7 +14,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ghcr.io/TheMrClaus/emby-analytics
+  IMAGE_NAME: ghcr.io/themrclaus/emby-analytics
 
 jobs:
   build-and-push:
