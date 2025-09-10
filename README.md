@@ -177,6 +177,23 @@ Notes:
 - If `REPO` (owner/repo) isn’t provided, the server attempts to derive it during `make backend-build`; otherwise, the `/version` endpoint will omit repo URLs.
 - The update indicator relies on public GitHub APIs (subject to rate limits). It gracefully degrades if unreachable.
 
+#### Recommended workflow: tag-driven versions
+
+Use git tags as the source of truth for releases so the UI and `/version` endpoint reflect the correct version and link to the corresponding GitHub page.
+
+- Set a new version (e.g., v0.1.0):
+  1. Commit your changes on a feature branch
+  2. Merge to `main`
+  3. Create an annotated tag: `git tag -a v0.1.0 -m "v0.1.0"`
+  4. Push tag: `git push origin v0.1.0`
+  5. Build (local or Docker) so ldflags pick up the tag
+
+- Clicking the version badge links to:
+  - The GitHub release page if the build was from a tag starting with `v` (e.g., `v0.1.0`).
+  - The GitHub commit page if not built from a tag.
+
+- Update indicator: the badge shows a red dot when a newer release/tag exists on GitHub.
+
 ### Admin Authentication
 
 - Backend: set `ADMIN_TOKEN` to explicitly control the admin token, or omit it and let the server auto-generate and persist one.
