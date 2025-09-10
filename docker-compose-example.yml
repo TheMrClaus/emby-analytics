@@ -8,7 +8,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./data:/var/lib/emby-analytics
+      - emby_analytics_data:/var/lib/emby-analytics
     environment:
       # Change these to match your setup
       EMBY_BASE_URL: "http://emby:8096"
@@ -20,3 +20,6 @@ services:
       # Optional: set true to auto-auth UI via HttpOnly cookie (auto-enabled when ADMIN_TOKEN is not set)
       # ADMIN_AUTO_COOKIE: "true"
       KEEPALIVE_SEC: 15
+
+volumes:
+  emby_analytics_data:
