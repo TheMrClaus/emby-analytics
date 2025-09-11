@@ -115,7 +115,18 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 		// This ensures currently playing or newly seen items appear even before metadata sync.
 		{
             intervalRows, err := db.Query(`
-                SELECT l.item_id, SUM(MAX(0, MIN(MIN(l.end_ts, ?)-MAX(l.start_ts, ?), l.duration_seconds))) / 3600.0 as hours
+                SELECT l.item_id, SUM(
+                    MAX(
+                        0,
+                        MIN(
+                            MIN(l.end_ts, ?) - MAX(l.start_ts, ?),
+                            CASE WHEN l.duration_seconds IS NULL OR l.duration_seconds <= 0
+                                 THEN (l.end_ts - l.start_ts)
+                                 ELSE l.duration_seconds
+                            END
+                        )
+                    )
+                ) / 3600.0 as hours
                 FROM play_intervals l
                 JOIN library_item li ON li.id = l.item_id
                 WHERE l.start_ts <= ? AND l.end_ts >= ?
@@ -331,8 +342,11 @@ func computeExactItemHours(db *sql.DB, itemIDs []string, winStart, winEnd int64)
         windowSec := e - s
         if windowSec < 0 { windowSec = 0 }
         // Cap by recorded active duration
+        // derive effective duration: fall back to (end-start) if missing/zero
+        eff := dur
+        if eff <= 0 { eff = e - s }
         var add int64 = windowSec
-        if dur > 0 && dur < add { add = dur }
+        if eff > 0 && eff < add { add = eff }
         secs[item] += add
     }
     if err := rows.Err(); err != nil {

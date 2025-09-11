@@ -31,7 +31,16 @@ func Usage(db *sql.DB) fiber.Handler {
                 strftime('%Y-%m-%d', datetime(pi.start_ts, 'unixepoch')) AS day,
                 u.name,
                 SUM(
-                    MAX(0, MIN(MIN(pi.end_ts, ?)-MAX(pi.start_ts, ?), pi.duration_seconds))
+                    MAX(
+                        0,
+                        MIN(
+                            MIN(pi.end_ts, ?) - MAX(pi.start_ts, ?),
+                            CASE WHEN pi.duration_seconds IS NULL OR pi.duration_seconds <= 0
+                                 THEN (pi.end_ts - pi.start_ts)
+                                 ELSE pi.duration_seconds
+                            END
+                        )
+                    )
                 ) / 3600.0 AS hours
             FROM play_intervals pi
             JOIN emby_user u ON u.id = pi.user_id
