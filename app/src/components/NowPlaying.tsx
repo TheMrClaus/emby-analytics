@@ -340,33 +340,34 @@ export default function NowPlaying() {
                       </div>
                     )}
                     </div>
-
-                    {/* Admin controls - icon-only, tight spacing */}
-                    <div className="flex items-center gap-2 pt-2 border-t border-neutral-700">
-                      <button
-                        onClick={() => send(s.session_id, "pause")}
-                        className="p-2 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
-                        aria-label="Pause"
-                        title="Pause"
-                      >
-                        <Icon name="pause" />
-                      </button>
-                      <button
-                        onClick={() => send(s.session_id, "unpause")}
-                        className="p-2 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
-                        aria-label="Resume"
-                        title="Resume"
-                      >
-                        <Icon name="play" />
-                      </button>
-                      <button
-                        onClick={() => send(s.session_id, "stop")}
-                        className="p-2 bg-red-700 hover:bg-red-600 rounded transition-colors"
-                        aria-label="Stop"
-                        title="Stop"
-                      >
-                        <Icon name="stop" />
-                      </button>
+                    {/* Admin controls - icon-only, tight spacing; width bound to same block */}
+                    <div className="pt-2 border-t border-neutral-700 w-max">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => send(s.session_id, "pause")}
+                          className="p-2 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
+                          aria-label="Pause"
+                          title="Pause"
+                        >
+                          <Icon name="pause" />
+                        </button>
+                        <button
+                          onClick={() => send(s.session_id, "unpause")}
+                          className="p-2 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
+                          aria-label="Resume"
+                          title="Resume"
+                        >
+                          <Icon name="play" />
+                        </button>
+                        <button
+                          onClick={() => send(s.session_id, "stop")}
+                          className="p-2 bg-red-700 hover:bg-red-600 rounded transition-colors"
+                          aria-label="Stop"
+                          title="Stop"
+                        >
+                          <Icon name="stop" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </article>
