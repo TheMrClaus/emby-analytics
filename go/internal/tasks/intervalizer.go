@@ -161,6 +161,12 @@ func (iz *Intervalizer) onStart(d emby.PlaybackProgressData) {
         SessionStartTS: now, // Store the absolute start time
         IsIntervalOpen: false,
     }
+
+	var intervalCount int
+	err = iz.DB.QueryRow(`SELECT COUNT(*) FROM play_intervals WHERE session_fk = ?`, sessionFK).Scan(&intervalCount)
+	if err == nil && intervalCount > 0 {
+		s.HadAnyInterval = true
+	}
 	LiveSessions[k] = s
 	logging.Debug("onStart complete, added to LiveSessions: %s", k)
 }
