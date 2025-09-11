@@ -115,7 +115,7 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 		// This ensures currently playing or newly seen items appear even before metadata sync.
 		{
             intervalRows, err := db.Query(`
-                SELECT l.item_id, SUM(MIN(l.end_ts, ?) - MAX(l.start_ts, ?)) / 3600.0 as hours
+                SELECT l.item_id, SUM(MAX(0, MIN(MIN(l.end_ts, ?)-MAX(l.start_ts, ?), l.duration_seconds))) / 3600.0 as hours
                 FROM play_intervals l
                 JOIN library_item li ON li.id = l.item_id
                 WHERE l.start_ts <= ? AND l.end_ts >= ?
@@ -300,7 +300,7 @@ func computeExactItemHours(db *sql.DB, itemIDs []string, winStart, winEnd int64)
     args = append(args, winEnd, winStart) // for clamp and filter
 
     query := fmt.Sprintf(`
-        SELECT pi.item_id, ps.session_id, pi.start_ts, pi.end_ts
+        SELECT pi.item_id, ps.session_id, pi.start_ts, pi.end_ts, pi.duration_seconds
         FROM play_intervals pi
         JOIN play_sessions ps ON ps.id = pi.session_fk
         WHERE pi.item_id IN (%s)
@@ -314,60 +314,29 @@ func computeExactItemHours(db *sql.DB, itemIDs []string, winStart, winEnd int64)
     }
     defer rows.Close()
 
-    // Group by item_id + session_fk
-    type key struct{ item string; sess string }
-    groups := make(map[key][]interval)
+    secs := make(map[string]int64)
+    // Accumulate per item using per-interval capped seconds; no need to merge
     for rows.Next() {
         var item string
         var sess string
         var s, e int64
-        if err := rows.Scan(&item, &sess, &s, &e); err != nil {
+        var dur int64
+        if err := rows.Scan(&item, &sess, &s, &e, &dur); err != nil {
             return nil, err
         }
         // Clamp to window
         if s < winStart { s = winStart }
         if e > winEnd { e = winEnd }
         if e <= s { continue }
-        k := key{item: item, sess: sess}
-        groups[k] = append(groups[k], interval{s: s, e: e})
+        windowSec := e - s
+        if windowSec < 0 { windowSec = 0 }
+        // Cap by recorded active duration
+        var add int64 = windowSec
+        if dur > 0 && dur < add { add = dur }
+        secs[item] += add
     }
     if err := rows.Err(); err != nil {
         return nil, err
-    }
-
-    // Merge per group and accumulate seconds per item, with per-session cap based on runtime (if known)
-    secs := make(map[string]int64)
-    for k, ivs := range groups {
-        if len(ivs) == 0 { continue }
-        // Sort by start then end (already ordered by query but be safe)
-        sort.Slice(ivs, func(i, j int) bool {
-            if ivs[i].s == ivs[j].s { return ivs[i].e < ivs[j].e }
-            return ivs[i].s < ivs[j].s
-        })
-        curS := ivs[0].s
-        curE := ivs[0].e
-        for i := 1; i < len(ivs); i++ {
-            if ivs[i].s <= curE { // overlap or touch
-                if ivs[i].e > curE { curE = ivs[i].e }
-            } else {
-                // add merged segment for this session
-                merged := (curE - curS)
-                // Apply per-session cap using runtime if available (allow 1.5x slack)
-                if rt, ok := runtimeSec[k.item]; ok && rt > 0 {
-                    capSeconds := int64(rt * 1.5)
-                    if merged > capSeconds { merged = capSeconds }
-                }
-                secs[k.item] += merged
-                curS, curE = ivs[i].s, ivs[i].e
-            }
-        }
-        // close last segment
-        merged := (curE - curS)
-        if rt, ok := runtimeSec[k.item]; ok && rt > 0 {
-            capSeconds := int64(rt * 1.5)
-            if merged > capSeconds { merged = capSeconds }
-        }
-        secs[k.item] += merged
     }
 
     for item, s := range secs {

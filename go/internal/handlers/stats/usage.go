@@ -27,26 +27,17 @@ func Usage(db *sql.DB) fiber.Handler {
 		// CORRECTED & SIMPLIFIED: This query correctly calculates the overlap
 		// duration for each interval within the window and then sums it up per day and user.
         query := `
-            WITH latest AS (
-                SELECT pi.*
-                FROM play_intervals pi
-                JOIN (
-                    SELECT session_fk, MAX(id) AS latest_id
-                    FROM play_intervals
-                    GROUP BY session_fk
-                ) m ON m.latest_id = pi.id
-            )
             SELECT
-                strftime('%Y-%m-%d', datetime(l.start_ts, 'unixepoch')) AS day,
+                strftime('%Y-%m-%d', datetime(pi.start_ts, 'unixepoch')) AS day,
                 u.name,
                 SUM(
-                    MIN(l.end_ts, ?) - MAX(l.start_ts, ?)
+                    MAX(0, MIN(MIN(pi.end_ts, ?)-MAX(pi.start_ts, ?), pi.duration_seconds))
                 ) / 3600.0 AS hours
-            FROM latest l
-            JOIN emby_user u ON u.id = l.user_id
-            JOIN library_item li ON li.id = l.item_id
+            FROM play_intervals pi
+            JOIN emby_user u ON u.id = pi.user_id
+            JOIN library_item li ON li.id = pi.item_id
             WHERE
-                l.start_ts <= ? AND l.end_ts >= ?
+                pi.start_ts <= ? AND pi.end_ts >= ?
                 AND COALESCE(li.media_type, 'Unknown') NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')
             GROUP BY day, u.name
             ORDER BY day ASC, u.name ASC;

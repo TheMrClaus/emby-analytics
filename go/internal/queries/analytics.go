@@ -26,7 +26,9 @@ func TopUsersByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd in
         SELECT
             l.user_id,
             u.name,
-            SUM(MIN(l.end_ts, ?) - MAX(l.start_ts, ?)) / 3600.0 AS hours
+            SUM(
+                MAX(0, MIN(MIN(l.end_ts, ?)-MAX(l.start_ts, ?), l.duration_seconds))
+            ) / 3600.0 AS hours
         FROM play_intervals l
         JOIN emby_user u ON u.id = l.user_id
         JOIN library_item li ON li.id = l.item_id
@@ -63,7 +65,9 @@ func TopItemsByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd in
             l.item_id,
             li.name,
             li.media_type,
-            SUM(MIN(l.end_ts, ?) - MAX(l.start_ts, ?)) / 3600.0 AS hours
+            SUM(
+                MAX(0, MIN(MIN(l.end_ts, ?)-MAX(l.start_ts, ?), l.duration_seconds))
+            ) / 3600.0 AS hours
         FROM play_intervals l
         JOIN library_item li ON li.id = l.item_id
         WHERE
