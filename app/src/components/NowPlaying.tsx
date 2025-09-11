@@ -318,7 +318,6 @@ export default function NowPlaying() {
                           />
                         </div>
                       </div>
-                    </div>
                     {/* If anything is transcoding, show the reason */}
                     {(isVideoTrans || isAudioTrans) && s.trans_reason && (
                       <div className="text-xs text-gray-400">
@@ -332,7 +331,7 @@ export default function NowPlaying() {
                           <span>Transcoding</span>
                           <span>{pct(s.trans_pct)}%</span>
                         </div>
-                        <div className="h-1.5 bg-neutral-700 rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-neutral-700 rounded-full overflow-hidden w-full">
                           <div
                             className="h-full bg-orange-500 transition-all duration-300"
                             style={{ width: `${pct(s.trans_pct)}%` }}
@@ -340,6 +339,7 @@ export default function NowPlaying() {
                         </div>
                       </div>
                     )}
+                    </div>
 
                     {/* Admin controls - icon-only, tight spacing */}
                     <div className="flex items-center gap-2 pt-2 border-t border-neutral-700">
