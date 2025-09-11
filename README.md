@@ -4,7 +4,7 @@ Emby Analytics is a self-hosted dashboard and API service for monitoring and vis
 
 ## Features
 
-- **Real-time "Now Playing" dashboard** via Server-Sent Events (SSE)
+- **Real-time "Now Playing" dashboard** via WebSocket (with snapshot fallback)
 - **Usage analytics** (hours watched per user/day)
 - **Top users** and **top items** in custom time windows
 - **Media quality breakdown** (4K / 1080p / 720p / SD / Unknown)
@@ -14,14 +14,14 @@ Emby Analytics is a self-hosted dashboard and API service for monitoring and vis
 - **Manual library refresh** and user sync from Emby
 - **Admin controls** for data management and cleanup
 - **Lightweight database** (SQLite) for persistence
-- **Modern web UI** with Recharts visualizations
+- **Modern web UI** with Nivo visualizations (@nivo/*)
 
 ## Architecture
 
 - **Backend**: Go with Fiber v3 framework
 - **Frontend**: Next.js (static export served by Go backend)
 - **Database**: SQLite
-- **Real-time**: Server-Sent Events (SSE)
+- **Real-time**: WebSocket live updates (with HTTP snapshot fallback)
 - **Images**: Proxied through backend from Emby
 
 ## Project Structure
@@ -39,7 +39,7 @@ Emby Analytics is a self-hosted dashboard and API service for monitoring and vis
 │   │   │   ├── health/          # Health checks
 │   │   │   ├── images/          # Image proxy
 │   │   │   ├── items/           # Library items
-│   │   │   ├── now/             # Now playing & SSE
+│   │   │   ├── now/             # Now playing (WebSocket + snapshot)
 │   │   │   └── stats/           # Statistics endpoints
 │   │   └── tasks/               # Background sync tasks
 │   ├── go.mod                   # Go module definition
@@ -167,7 +167,7 @@ Key environment variables (see `.env.example` for complete list):
 - `REFRESH_INTERVAL`: Interval in seconds for background library refresh (default: `60`)
 - `REFRESH_CHUNK_SIZE`: Number of items to process per refresh chunk (default: `100`)
 - `HISTORY_DAYS`: Number of days of playback history to sync (default: `2`)
-- `NOW_POLL_SEC`: Interval in seconds for polling "Now Playing" data (default: `5`)
+- `NOW_POLL_SEC`: Server-side polling interval for Now Playing ingestion (UI uses WebSocket; polling used as fallback) (default: `5`)
 - `LOG_LEVEL`: Logging level (e.g., `info`, `debug`, `warn`, `error`) (default: `info`)
 
 ### Versioning & Updates
