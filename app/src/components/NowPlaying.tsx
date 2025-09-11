@@ -13,6 +13,14 @@ export default function NowPlaying() {
   // Get sessions from context instead of managing WebSocket locally
   const { sessions, error } = useNowPlaying();
 
+  // If any card is transcoding, we’ll render invisible placeholders
+  // in non-transcoding cards to visually equalize heights subtly.
+  const anyTranscoding = useMemo(() =>
+    sessions.some(
+      (s) => (s.video_method || "Direct Play") === "Transcode" || (s.audio_method || "Direct Play") === "Transcode"
+    ),
+  [sessions]);
+
   // Crossfade + parallax state
   const [bgA, setBgA] = useState<string>("");
   const [bgB, setBgB] = useState<string>("");
@@ -323,6 +331,12 @@ export default function NowPlaying() {
                         Reason: <span className="text-white">{s.trans_reason}</span>
                       </div>
                     )}
+                    {/* Placeholder to balance height if any card is transcoding */}
+                    {anyTranscoding && !(isVideoTrans || isAudioTrans) && (
+                      <div className="text-xs text-transparent select-none" aria-hidden>
+                        Reason: placeholder
+                      </div>
+                    )}
                     {/* Transcoding progress bar (only if transcoding) */}
                     {(isVideoTrans || isAudioTrans) && s.trans_pct !== undefined && (
                       <div>
@@ -335,6 +349,18 @@ export default function NowPlaying() {
                             className="h-full bg-orange-500 transition-all duration-300"
                             style={{ width: `${pct(s.trans_pct)}%` }}
                           />
+                        </div>
+                      </div>
+                    )}
+                    {/* Placeholder bar to balance height if any card is transcoding */}
+                    {anyTranscoding && !(isVideoTrans || isAudioTrans) && (
+                      <div aria-hidden>
+                        <div className="flex items-center justify-between text-[11px] text-transparent mb-1">
+                          <span>Transcoding</span>
+                          <span>00%</span>
+                        </div>
+                        <div className="h-1.5 bg-transparent rounded-full overflow-hidden w-full">
+                          <div className="h-full" />
                         </div>
                       </div>
                     )}
