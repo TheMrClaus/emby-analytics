@@ -258,6 +258,7 @@ func main() {
 	app.Get("/img/primary/:id", images.Primary(imgOpts))
 	app.Get("/img/backdrop/:id", images.Backdrop(imgOpts))
 	// Now Playing Routes
+	app.Get("/api/now-playing/summary", now.Summary)
 	app.Get("/now/snapshot", now.Snapshot)
 	app.Get("/now/ws", func(c fiber.Ctx) error {
 		if ws.IsWebSocketUpgrade(c) {
