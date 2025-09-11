@@ -225,20 +225,29 @@ docker run -d --name emby-analytics \
 
 #### Recommended workflow: tag-driven versions
 
-Use git tags as the source of truth for releases so the UI and `/version` endpoint reflect the correct version and link to the corresponding GitHub page.
+Use git tags as the source of truth for releases so the UI and `/version` endpoint reflect the correct version and link to the corresponding GitHub page. Docker images publish only on tags.
 
-- Set a new version (e.g., v0.1.0):
-  1. Commit your changes on a feature branch
-  2. Merge to `main`
-  3. Create an annotated tag: `git tag -a v0.1.0 -m "v0.1.0"`
-  4. Push tag: `git push origin v0.1.0`
-  5. Build (local or Docker) so ldflags pick up the tag
+Best Practice
 
-- Clicking the version badge links to:
-  - The GitHub release page if the build was from a tag starting with `v` (e.g., `v0.1.0`).
-  - The GitHub commit page if not built from a tag.
+- Develop on feature/fix branches; open PRs to `main`.
+- Merge to `main` after review/tests pass (no image publish).
+- Cut a tag (e.g., `v0.1.2`) when you’re ready; CI builds and publishes images from the tag.
+- Draft a GitHub Release with notes for that tag.
 
-- Update indicator: the badge shows a red dot when a newer release/tag exists on GitHub.
+Set a new version (example `v0.1.0`)
+
+1. Commit your changes on a feature branch
+2. Merge to `main`
+3. Create an annotated tag: `git tag -a v0.1.0 -m "v0.1.0"`
+4. Push tag: `git push origin v0.1.0`
+5. CI will build/publish images for the tag
+
+Clicking the version badge links to:
+
+- The GitHub release page if the build was from a tag starting with `v` (e.g., `v0.1.0`).
+- The GitHub commit page if not built from a tag.
+
+Update indicator: the badge shows a red dot when a newer release/tag exists on GitHub.
 
 ### Admin Authentication
 
