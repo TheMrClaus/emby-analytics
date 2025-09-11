@@ -1,6 +1,7 @@
 // app/src/components/NowPlaying.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useNowPlaying, type NowEntry } from "../contexts/NowPlayingContext";
+import { fetchNowPlayingSummary } from "../lib/api";
 import Image from "next/image";
 
 const apiBase =
@@ -12,6 +13,29 @@ const apiBase =
 export default function NowPlaying() {
   // Get sessions from context instead of managing WebSocket locally
   const { sessions, error } = useNowPlaying();
+  const [summary, setSummary] = useState<{ outbound_mbps: number; active_streams: number; active_transcodes: number } | null>(null);
+  const [msgOpen, setMsgOpen] = useState<Record<string, boolean>>({});
+  const [msgText, setMsgText] = useState<Record<string, string>>({});
+
+  // Poll summary every 5s
+  useEffect(() => {
+    let stop = false;
+    const load = async () => {
+      try {
+        const s = await fetchNowPlayingSummary();
+        if (!stop) setSummary(s);
+      } catch {
+        // ignore
+      }
+    };
+    // initial
+    void load();
+    const id = setInterval(load, 5000);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, []);
 
   // If any card is transcoding, we’ll render invisible placeholders
   // in non-transcoding cards to visually equalize heights subtly.
@@ -96,6 +120,16 @@ export default function NowPlaying() {
     }
   };
 
+  const toggleMsg = (id: string) => {
+    setMsgOpen((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+  const setMsg = (id: string, v: string) => setMsgText((prev) => ({ ...prev, [id]: v }));
+  const sendMsg = async (id: string) => {
+    const text = (msgText[id] ?? "").trim() || "Hello from Emby Analytics";
+    await send(id, "message", text);
+    setMsgOpen((prev) => ({ ...prev, [id]: false }));
+  };
+
   // ---------- UI helpers ----------
   const Chip = ({ tone, label }: { tone: "ok" | "warn"; label: string }) => (
     <span
@@ -111,7 +145,7 @@ export default function NowPlaying() {
   );
 
   // Small inline icons for admin controls (no external deps)
-  const Icon = ({ name, className }: { name: "pause" | "play" | "stop"; className?: string }) => {
+  const Icon = ({ name, className }: { name: "pause" | "play" | "stop" | "message"; className?: string }) => {
     if (name === "pause") {
       return (
         <svg viewBox="0 0 24 24" fill="currentColor" className={className || "w-4 h-4"} aria-hidden>
@@ -123,6 +157,13 @@ export default function NowPlaying() {
       return (
         <svg viewBox="0 0 24 24" fill="currentColor" className={className || "w-4 h-4"} aria-hidden>
           <path d="M8 5v14l11-7L8 5z" />
+        </svg>
+      );
+    }
+    if (name === "message") {
+      return (
+        <svg viewBox="0 0 24 24" fill="currentColor" className={className || "w-4 h-4"} aria-hidden>
+          <path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 3v-3H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
         </svg>
       );
     }
@@ -210,7 +251,23 @@ export default function NowPlaying() {
 
       {/* Foreground content */}
       <div className="hero-foreground space-y-5">
-        <h2 className="ty-title text-emerald-400">Now Playing</h2>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="ty-title text-emerald-400">Now Playing</h2>
+          <div className="flex items-center gap-2 text-xs">
+            <span
+              className="px-2 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+              title="5s rolling average of all active session bitrates."
+            >
+              Outbound: {summary ? (summary.outbound_mbps ?? 0).toFixed(1) : "0.0"} Mbps
+            </span>
+            <span className="px-2 py-1 rounded-full border border-gray-500/30 bg-gray-500/10 text-gray-200">
+              Streams: {summary ? summary.active_streams : 0}
+            </span>
+            <span className="px-2 py-1 rounded-full border border-orange-500/30 bg-orange-500/10 text-orange-300">
+              Transcodes: {summary ? summary.active_transcodes : 0}
+            </span>
+          </div>
+        </div>
 
         {error && <div className="text-red-400 text-sm">{error}</div>}
 
@@ -366,7 +423,7 @@ export default function NowPlaying() {
                     )}
                     </div>
                     {/* Admin controls - icon-only, tight spacing; width bound to same block */}
-                    <div className="pt-2 border-t border-neutral-700 w-max">
+                    <div className="pt-2 w-max">
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => send(s.session_id, "pause")}
@@ -385,6 +442,14 @@ export default function NowPlaying() {
                           <Icon name="play" />
                         </button>
                         <button
+                          onClick={() => toggleMsg(s.session_id)}
+                          className="p-2 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
+                          aria-label="Message"
+                          title="Message"
+                        >
+                          <Icon name="message" />
+                        </button>
+                        <button
                           onClick={() => send(s.session_id, "stop")}
                           className="p-2 bg-red-700 hover:bg-red-600 rounded transition-colors"
                           aria-label="Stop"
@@ -393,6 +458,39 @@ export default function NowPlaying() {
                           <Icon name="stop" />
                         </button>
                       </div>
+                      {msgOpen[s.session_id] && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            autoFocus
+                            type="text"
+                            value={msgText[s.session_id] ?? ""}
+                            onChange={(e) => setMsg(s.session_id, e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                void sendMsg(s.session_id);
+                              } else if (e.key === "Escape") {
+                                e.preventDefault();
+                                toggleMsg(s.session_id);
+                              }
+                            }}
+                            placeholder="Type a message…"
+                            className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-600 rounded text-white placeholder:text-neutral-400 min-w-[180px]"
+                          />
+                          <button
+                            onClick={() => void sendMsg(s.session_id)}
+                            className="px-2 py-1 text-xs rounded bg-emerald-600 hover:bg-emerald-500 text-white"
+                          >
+                            Send
+                          </button>
+                          <button
+                            onClick={() => toggleMsg(s.session_id)}
+                            className="px-2 py-1 text-xs rounded bg-neutral-700 hover:bg-neutral-600 text-white"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </article>

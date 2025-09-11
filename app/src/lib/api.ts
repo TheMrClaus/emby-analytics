@@ -6,6 +6,7 @@ import {
   MovieStats,
   SeriesStats,
   NowEntry,
+  NowPlayingSummary,
   OverviewData,
   QualityBuckets,
   RefreshState,
@@ -156,6 +157,9 @@ export const fetchRefreshStatus = () => j<RefreshState>("/admin/refresh/status")
 
 // Now Playing snapshot (HTTP)
 export const fetchNowSnapshot = () => j<NowEntry[]>("/now/snapshot");
+
+// Now Playing summary metrics (lightweight)
+export const fetchNowPlayingSummary = () => j<NowPlayingSummary>("/api/now-playing/summary");
 
 // Image helpers
 export const imgPrimary = (id: string) => `${API_BASE}/img/primary/${id}`;

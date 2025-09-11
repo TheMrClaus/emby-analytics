@@ -79,6 +79,13 @@ export type NowEntry = {
   hdr10?: boolean;
 };
 
+// Lightweight Now Playing header summary
+export type NowPlayingSummary = {
+  outbound_mbps: number;
+  active_streams: number;
+  active_transcodes: number;
+};
+
 export type PlayMethodCounts = {
   methods: {
     DirectPlay?: number;
