@@ -102,6 +102,30 @@ export default function NowPlaying() {
     </span>
   );
 
+  // Small inline icons for admin controls (no external deps)
+  const Icon = ({ name, className }: { name: "pause" | "play" | "stop"; className?: string }) => {
+    if (name === "pause") {
+      return (
+        <svg viewBox="0 0 24 24" fill="currentColor" className={className || "w-4 h-4"} aria-hidden>
+          <path d="M6 5h4v14H6V5zm8 0h4v14h-4V5z" />
+        </svg>
+      );
+    }
+    if (name === "play") {
+      return (
+        <svg viewBox="0 0 24 24" fill="currentColor" className={className || "w-4 h-4"} aria-hidden>
+          <path d="M8 5v14l11-7L8 5z" />
+        </svg>
+      );
+    }
+    // stop
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={className || "w-4 h-4"} aria-hidden>
+        <path d="M6 6h12v12H6z" />
+      </svg>
+    );
+  };
+
   const pct = (n: number) => Math.min(100, Math.max(0, Math.floor(Number.isFinite(n) ? n : 0)));
 
   const fmtHMS = (sec?: number) => {
@@ -185,7 +209,7 @@ export default function NowPlaying() {
         {sessions.length === 0 ? (
           <div className="text-gray-500 text-sm">Nobody is watching right now.</div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-7">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {sessions.map((s) => {
               const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
               const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
@@ -205,12 +229,9 @@ export default function NowPlaying() {
               const sub = subsStatus(s);
 
               return (
-                <article
-                  key={s.session_id}
-                  className="card overflow-hidden flex flex-col min-h-[380px] p-5"
-                >
+                <article key={s.session_id} className="card overflow-hidden flex flex-col min-h-[300px] p-4">
                   {/* Top row: poster + title/meta arranged symmetrically */}
-                  <div className="flex gap-5">
+                  <div className="flex gap-3">
                     {/* Poster column - fixed size to align all cards */}
                     <div className="shrink-0">
                       <Image
@@ -220,8 +241,8 @@ export default function NowPlaying() {
                             : s.poster || "/placeholder-poster.jpg"
                         }
                         alt={s.title || "Unknown"}
-                        width={80}
-                        height={112}
+                        width={64}
+                        height={96}
                         className="object-cover rounded shadow-sm"
                         unoptimized
                         priority={false}
@@ -230,10 +251,10 @@ export default function NowPlaying() {
 
                     {/* Content column - variable width to balance card design */}
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-lg text-white leading-tight mb-2 line-clamp-2">
+                      <h3 className="font-semibold text-base text-white leading-snug mb-1.5 line-clamp-2">
                         {s.title || "Unknown Title"}
                       </h3>
-                      <div className="text-sm text-gray-300 space-y-1 mb-3">
+                      <div className="text-xs text-gray-300 space-y-0.5 mb-2">
                         <div>
                           <span className="font-medium text-emerald-400">{s.user}</span>
                         </div>
@@ -241,7 +262,7 @@ export default function NowPlaying() {
                       </div>
 
                       {/* NEW: top status + tech chips */}
-                      <div className="flex flex-wrap gap-2 mb-3">
+                      <div className="flex flex-wrap gap-1.5 mb-2">
                         <Chip tone={top.tone} label={top.label} />
                         {s.container && <Chip tone="ok" label={s.container.toUpperCase()} />}
                         {s.width && s.height && <Chip tone="ok" label={`${s.width}×${s.height}`} />}
@@ -249,7 +270,7 @@ export default function NowPlaying() {
 
                       {/* Playback progress */}
                       <div className="mt-auto">
-                        <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                        <div className="flex items-center justify-between text-[11px] text-gray-400 mb-1">
                           <span>Progress</span>
                           <span>
                             {hasTime
@@ -257,7 +278,7 @@ export default function NowPlaying() {
                               : `${progress}%`}
                           </span>
                         </div>
-                        <div className="h-2 bg-neutral-700 rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-neutral-700 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-emerald-500 transition-all duration-300"
                             style={{ width: `${progress}%` }}
@@ -268,42 +289,32 @@ export default function NowPlaying() {
                   </div>
 
                   {/* Quality indicators */}
-                  <div className="mt-4 space-y-3 flex-1">
-                    {/* Video & Audio & Subtitles with explicit badges */}
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Video:</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-white">{s.video || "Unknown"}</span>
-                          <Chip tone={v.tone} label={v.label} />
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Audio:</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-white">{s.audio || "Unknown"}</span>
-                          <Chip tone={a.tone} label={a.label} />
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Subtitles:</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-white">{s.subs || "None"}</span>
-                          <Chip tone={sub.tone} label={sub.label} />
-                        </div>
-                      </div>
-
-                      {s.bitrate > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-400">Bitrate:</span>
-                          <span className="text-white">
-                            {(s.bitrate / 1_000_000).toFixed(1)} Mbps
-                          </span>
-                        </div>
-                      )}
+                  <div className="mt-3 space-y-1.5 flex-1 text-sm">
+                    {/* Slim inline rows with no large spacing */}
+                    <div className="text-gray-300">
+                      <span className="text-gray-400">Video: </span>
+                      <span className="text-white">{s.video || "Unknown"}</span>
+                      {" "}
+                      <span className={v.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{v.label}</span>
                     </div>
+                    <div className="text-gray-300">
+                      <span className="text-gray-400">Audio: </span>
+                      <span className="text-white">{s.audio || "Unknown"}</span>
+                      {" "}
+                      <span className={a.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{a.label}</span>
+                    </div>
+                    <div className="text-gray-300">
+                      <span className="text-gray-400">Subtitles: </span>
+                      <span className="text-white">{s.subs || "None"}</span>
+                      {" "}
+                      <span className={sub.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{sub.label}</span>
+                    </div>
+                    {s.bitrate > 0 && (
+                      <div className="text-gray-300">
+                        <span className="text-gray-400">Bitrate: </span>
+                        <span className="text-white">{(s.bitrate / 1_000_000).toFixed(1)} Mbps</span>
+                      </div>
+                    )}
                     {/* If anything is transcoding, show the reason */}
                     {(isVideoTrans || isAudioTrans) && s.trans_reason && (
                       <div className="text-xs text-gray-400">
@@ -313,7 +324,7 @@ export default function NowPlaying() {
                     {/* Transcoding progress bar (only if transcoding) */}
                     {(isVideoTrans || isAudioTrans) && s.trans_pct !== undefined && (
                       <div>
-                        <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                        <div className="flex items-center justify-between text-[11px] text-gray-400 mb-1">
                           <span>Transcoding</span>
                           <span>{pct(s.trans_pct)}%</span>
                         </div>
@@ -326,25 +337,31 @@ export default function NowPlaying() {
                       </div>
                     )}
 
-                    {/* Admin controls */}
-                    <div className="flex gap-2 pt-2 border-t border-neutral-700">
+                    {/* Admin controls - icon-only, tight spacing */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-neutral-700">
                       <button
                         onClick={() => send(s.session_id, "pause")}
-                        className="flex-1 px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-xs font-medium transition-colors"
+                        className="p-2 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
+                        aria-label="Pause"
+                        title="Pause"
                       >
-                        Pause
+                        <Icon name="pause" />
                       </button>
                       <button
                         onClick={() => send(s.session_id, "unpause")}
-                        className="flex-1 px-3 py-1.5 bg-neutral-700 hover:bg-neutral-600 rounded text-xs font-medium transition-colors"
+                        className="p-2 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
+                        aria-label="Resume"
+                        title="Resume"
                       >
-                        Resume
+                        <Icon name="play" />
                       </button>
                       <button
                         onClick={() => send(s.session_id, "stop")}
-                        className="flex-1 px-3 py-1.5 bg-red-700 hover:bg-red-600 rounded text-xs font-medium transition-colors"
+                        className="p-2 bg-red-700 hover:bg-red-600 rounded transition-colors"
+                        aria-label="Stop"
+                        title="Stop"
                       >
-                        Stop
+                        <Icon name="stop" />
                       </button>
                     </div>
                   </div>
