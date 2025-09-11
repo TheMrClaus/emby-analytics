@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { SymbolProps } from "@nivo/legends";
-import type { BarItemProps } from "@nivo/bar";
+// (no custom bar renderer needed)
 import { ResponsiveBar } from "@nivo/bar";
 import { colors } from "../theme/colors";
 import { fetchPlayMethods, fetchConfig } from "../lib/api";
@@ -238,49 +238,9 @@ export default function PlaybackMethodsCard() {
   const selectedOption = timeframeOptions.find((opt) => opt.value === timeframe);
   const total = summaryChartData.reduce((a, b) => a + b.value, 0);
 
-  // Subtle glow filter for bars
-  const GlowDefsLayer = () => (
-    <defs>
-      <filter id="bar-glow" x="-50%" y="-50%" width="200%" height="200%">
-        <feGaussianBlur in="SourceGraphic" stdDeviation="2.25" result="blur" />
-        <feMerge>
-          <feMergeNode in="blur" />
-          <feMergeNode in="SourceGraphic" />
-        </feMerge>
-      </filter>
-    </defs>
-  );
+  // No glow renderer; using default bars
 
-  // Custom bar component that applies the glow filter
-  type SummaryBarDatum = { name: string; value: number; color: string };
-  const BarWithGlow = ({ bar, borderRadius, borderWidth, style, onClick, onMouseEnter, onMouseLeave }: BarItemProps<SummaryBarDatum>) => (
-    <g
-      transform={(style.transform as unknown as string) ?? undefined}
-      style={{ opacity: (style.opacity as unknown as number) ?? 1 }}
-    >
-      <rect
-        x={bar.x}
-        y={bar.y}
-        width={bar.width}
-        height={bar.height}
-        rx={borderRadius}
-        fill={(style.color as unknown as string) ?? bar.color}
-        stroke={(style.borderColor as unknown as string) ?? undefined}
-        strokeWidth={borderWidth}
-        filter="url(#bar-glow)"
-        onClick={onClick as any}
-        onMouseEnter={onMouseEnter as any}
-        onMouseLeave={onMouseLeave as any}
-      />
-    </g>
-  );
-
-  const handleChartClick = () => {
-    setShowDetailed(true);
-    if (allSessions.length === 0) {
-      loadData(true);
-    }
-  };
+  // (chart container no longer clickable; bars handle clicks directly)
 
   const handleBackClick = () => {
     setShowDetailed(false);
@@ -429,11 +389,7 @@ export default function PlaybackMethodsCard() {
 
       {!showDetailed ? (
         <>
-          <div
-            className="h-64 cursor-pointer"
-            onClick={handleChartClick}
-            title="Click to view detailed breakdown"
-          >
+          <div className="h-64">
             <ResponsiveBar
               data={summaryChartData}
               keys={["value"]}
@@ -442,8 +398,17 @@ export default function PlaybackMethodsCard() {
               padding={0.3}
               valueScale={{ type: "linear" }}
               indexScale={{ type: "band", round: true }}
-              layers={["grid", "axes", GlowDefsLayer, "bars", "markers", "legends"]}
-              barComponent={BarWithGlow}
+              onClick={(datum) => {
+                const name = String(datum.indexValue ?? "");
+                const filterKey = getRectangleFilterKey(name);
+                setActiveFilters(new Set([filterKey]));
+                // Direct = not transcode; others = transcode only
+                setShowTranscodeOnly(filterKey !== "Direct");
+                setShowDetailed(true);
+                if (allSessions.length === 0) {
+                  loadData(true);
+                }
+              }}
               colors={({ data }) => data.color}
               borderColor={{ from: "color", modifiers: [["darker", 1.6]] }}
               axisTop={null}
@@ -556,7 +521,7 @@ export default function PlaybackMethodsCard() {
           <div className="mt-3 text-white/70 text-sm text-center">
             Total sessions: <span className="text-white">{total}</span>
             <br />
-            <span className="text-xs text-gray-400">💡 Click chart to view detailed breakdown</span>
+            <span className="text-xs text-gray-400">💡 Click a bar to view details</span>
           </div>
         </>
       ) : (
