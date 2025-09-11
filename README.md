@@ -249,6 +249,34 @@ Clicking the version badge links to:
 
 Update indicator: the badge shows a red dot when a newer release/tag exists on GitHub.
 
+### Branch Lifecycle & Cleanup
+
+Best Practice
+
+- Develop on feature/fix branches; open PRs to `main`.
+- Merge to `main` after review/tests pass (publishing is tag-driven only).
+- After a successful merge, delete the remote branch.
+- Also delete your local branch once merged (to keep a tidy repo).
+
+Suggested commands after merging a PR
+
+```bash
+# Update local main
+git checkout main
+git pull --ff-only
+
+# Delete local branch (safe, only if merged)
+git branch -d <branch>
+
+# Optionally prune remote-tracking refs
+git remote prune origin
+
+# (If the branch wasn’t auto-deleted on GitHub)
+git push origin --delete <branch>
+```
+
+Tip: In GitHub repo settings, enable “Automatically delete head branches” to remove branches after PRs are merged.
+
 ### Admin Authentication
 
 - Backend: set `ADMIN_TOKEN` to explicitly control the admin token, or omit it and let the server auto-generate and persist one.
