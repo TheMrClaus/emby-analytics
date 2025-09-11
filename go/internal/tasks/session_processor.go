@@ -30,6 +30,9 @@ type TrackedSession struct {
     LastPosTicks int64
     AccumulatedSec int // sum of active (unpaused, progressing) seconds
     LastPaused    bool
+    // CurrentIntervalID tracks the play_intervals.id for the active contiguous segment
+    // so we don't overwrite previous segments when a session is re-activated later.
+    CurrentIntervalID int64
 }
 
 // NewSessionProcessor creates a new session processor
@@ -138,6 +141,7 @@ func (sp *SessionProcessor) startNewSession(session emby.EmbySession, startTime 
         LastPosTicks: session.PosTicks,
         AccumulatedSec: 0,
         LastPaused: session.IsPaused,
+        CurrentIntervalID: 0,
     }
 
 	log.Printf("[session-processor] Started tracking session %s (FK: %d)", session.SessionID, sessionFK)
@@ -186,39 +190,38 @@ func (sp *SessionProcessor) finalizeSession(tracked *TrackedSession, endTime tim
 
 // createOrUpdateInterval creates or updates a play interval
 func (sp *SessionProcessor) createOrUpdateInterval(tracked *TrackedSession, endTime time.Time, duration int) {
-	if duration < 1 {
-		return // Skip very short intervals
-	}
+    if duration < 1 {
+        return // Skip very short intervals
+    }
 
-	// Maintain a single interval per session in this processor:
-	// - If an interval already exists for this session_fk, update its end_ts and duration_seconds
-	// - Otherwise, insert a new interval
-	var existingID int64
-	err := sp.DB.QueryRow(`SELECT id FROM play_intervals WHERE session_fk = ? LIMIT 1`, tracked.SessionFK).Scan(&existingID)
-	if err == nil {
-		// Update existing interval (keep original start_ts)
-		_, uerr := sp.DB.Exec(`
+    // Maintain multiple intervals per session (one per contiguous active segment):
+    // - If we have a current interval for this tracked segment, update it
+    // - Otherwise, insert a new interval and remember its id
+    if tracked.CurrentIntervalID != 0 {
+        _, uerr := sp.DB.Exec(`
             UPDATE play_intervals
             SET end_ts = ?, duration_seconds = ?
             WHERE id = ?
-        `, endTime.Unix(), duration, existingID)
-		if uerr != nil {
-			log.Printf("[session-processor] Failed to update interval: %v", uerr)
-		}
-		return
-	}
+        `, endTime.Unix(), duration, tracked.CurrentIntervalID)
+        if uerr != nil {
+            log.Printf("[session-processor] Failed to update interval: %v", uerr)
+        }
+        return
+    }
 
-	// No existing interval; insert a new one
-	_, ierr := sp.DB.Exec(`
+    res, ierr := sp.DB.Exec(`
         INSERT INTO play_intervals 
         (session_fk, item_id, user_id, start_ts, end_ts, start_pos_ticks, end_pos_ticks, duration_seconds, seeked)
         SELECT id, item_id, user_id, ?, ?, 0, 0, ?, 0
         FROM play_sessions
         WHERE id = ?
     `, tracked.StartTime.Unix(), endTime.Unix(), duration, tracked.SessionFK)
-	if ierr != nil {
-		log.Printf("[session-processor] Failed to insert interval: %v", ierr)
-	}
+    if ierr != nil {
+        log.Printf("[session-processor] Failed to insert interval: %v", ierr)
+        return
+    }
+    newID, _ := res.LastInsertId()
+    tracked.CurrentIntervalID = newID
 }
 
 // createPlaySession creates a new play_session record in the database
