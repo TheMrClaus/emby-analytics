@@ -91,20 +91,24 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: NowEntry[] = await res.json();
       const arr = Array.isArray(data) ? data : [];
-      // update first-seen map for stable ordering
+      // Use the same stable-ordering as the WebSocket path
+      // (connectWS defines applyStableOrder and will be initialized shortly after)
+      // To avoid duplication, perform the minimal steps here or rely on WS shortly updating.
       for (const s of arr) {
         if (!firstSeenRef.current.has(s.session_id)) {
           firstSeenRef.current.set(s.session_id, orderCounterRef.current++);
         }
       }
-      // remove entries no longer present
       const present = new Set(arr.map((s) => s.session_id));
       for (const key of Array.from(firstSeenRef.current.keys())) {
         if (!present.has(key)) firstSeenRef.current.delete(key);
       }
-      // sort by first-seen order
-      arr.sort((a, b) => (firstSeenRef.current.get(a.session_id)! - firstSeenRef.current.get(b.session_id)!));
-      setSessions(arr);
+      const ordered = [...arr].sort(
+        (a, b) =>
+          (firstSeenRef.current.get(a.session_id) ?? 0) -
+          (firstSeenRef.current.get(b.session_id) ?? 0)
+      );
+      setSessions(ordered);
       setError(null);
     } catch (e: unknown) {
       const msg = (e as Error)?.message || String(e);
@@ -132,24 +136,31 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
         }
       };
 
+      const applyStableOrder = (arr: NowEntry[]): NowEntry[] => {
+        // update first-seen map for stable ordering
+        for (const s of arr) {
+          if (!firstSeenRef.current.has(s.session_id)) {
+            firstSeenRef.current.set(s.session_id, orderCounterRef.current++);
+          }
+        }
+        // remove entries no longer present
+        const present = new Set(arr.map((s) => s.session_id));
+        for (const key of Array.from(firstSeenRef.current.keys())) {
+          if (!present.has(key)) firstSeenRef.current.delete(key);
+        }
+        // sort by first-seen order (return a new array to avoid side effects)
+        return [...arr].sort(
+          (a, b) =>
+            (firstSeenRef.current.get(a.session_id) ?? 0) -
+            (firstSeenRef.current.get(b.session_id) ?? 0)
+        );
+      };
+
       ws.onmessage = (ev) => {
         try {
           const data: NowEntry[] = JSON.parse(ev.data);
           const arr = Array.isArray(data) ? data : [];
-          // update first-seen map for stable ordering
-          for (const s of arr) {
-            if (!firstSeenRef.current.has(s.session_id)) {
-              firstSeenRef.current.set(s.session_id, orderCounterRef.current++);
-            }
-          }
-          // remove entries no longer present
-          const present = new Set(arr.map((s) => s.session_id));
-          for (const key of Array.from(firstSeenRef.current.keys())) {
-            if (!present.has(key)) firstSeenRef.current.delete(key);
-          }
-          // sort by first-seen order
-          arr.sort((a, b) => (firstSeenRef.current.get(a.session_id)! - firstSeenRef.current.get(b.session_id)!));
-          setSessions(arr);
+          setSessions(applyStableOrder(arr));
         } catch {
           /* ignore parse errors */
         }
