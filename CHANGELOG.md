@@ -15,7 +15,4 @@ All notable changes to this project will be documented in this file.
 - Legend polish: added left padding inside legend items on Playback Methods chart for better visual separation
 - General: minor UI tweaks, code cleanup, and type-safety improvements
 
-Notes
-- Tag-driven releases: version badge links to the GitHub tag page when built from a tag.
-- Building/publishing images is triggered by pushing the tag `v0.1.1`.
-
+ 
