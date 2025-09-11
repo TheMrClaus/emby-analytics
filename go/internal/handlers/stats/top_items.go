@@ -111,30 +111,14 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
             candidateIDs[row.ItemID] = struct{}{}
         }
 
-		// 2.5. Always supplement from play_intervals to include items missing from library_item
-		// This ensures currently playing or newly seen items appear even before metadata sync.
+		// 2.5. Always supplement from play_intervals to include items missing from library_item.
+		// This is a broad query to ensure any item with any watch history is a candidate.
+		// The exact time clamping is handled robustly in computeExactItemHours.
 		{
-            intervalRows, err := db.Query(`
-                SELECT l.item_id, SUM(
-                    MAX(
-                        0,
-                        MIN(
-                            MIN(l.end_ts, ?) - MAX(l.start_ts, ?),
-                            CASE WHEN l.duration_seconds IS NULL OR l.duration_seconds <= 0
-                                 THEN (l.end_ts - l.start_ts)
-                                 ELSE l.duration_seconds
-                            END
-                        )
-                    )
-                ) / 3600.0 as hours
+			intervalRows, err := db.Query(`
+                SELECT DISTINCT l.item_id, 0.0 as hours
                 FROM play_intervals l
-                LEFT JOIN library_item li ON li.id = l.item_id
-                WHERE l.start_ts <= ? AND l.end_ts >= ?
-                GROUP BY l.item_id
-                HAVING hours > 0
-                ORDER BY hours DESC
-                LIMIT ?
-            `, winEnd, winStart, winEnd, winStart, 2000)
+            `)
 
 			if err == nil {
 				defer intervalRows.Close()
