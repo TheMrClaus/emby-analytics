@@ -268,8 +268,41 @@ export default function NowPlaying() {
                         {s.width && s.height && <Chip tone="ok" label={`${s.width}×${s.height}`} />}
                       </div>
 
-                      {/* Playback progress */}
-                      <div className="mt-auto">
+                      {/* Progress moved below media rows to match their width */}
+                    </div>
+                  </div>
+
+                  {/* Quality indicators */}
+                  <div className="mt-3 flex-1 text-sm">
+                    {/* Wrap details + progress in a max-content block so the bar width equals the longest row */}
+                    <div className="inline-grid w-max gap-1.5">
+                      {/* Slim inline rows with no large spacing */}
+                      <div className="text-gray-300">
+                        <span className="text-gray-400">Video: </span>
+                        <span className="text-white">{s.video || "Unknown"}</span>
+                        {" "}
+                        <span className={v.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{v.label}</span>
+                      </div>
+                      <div className="text-gray-300">
+                        <span className="text-gray-400">Audio: </span>
+                        <span className="text-white">{s.audio || "Unknown"}</span>
+                        {" "}
+                        <span className={a.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{a.label}</span>
+                      </div>
+                      <div className="text-gray-300">
+                        <span className="text-gray-400">Subtitles: </span>
+                        <span className="text-white">{s.subs || "None"}</span>
+                        {" "}
+                        <span className={sub.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{sub.label}</span>
+                      </div>
+                      {s.bitrate > 0 && (
+                        <div className="text-gray-300">
+                          <span className="text-gray-400">Bitrate: </span>
+                          <span className="text-white">{(s.bitrate / 1_000_000).toFixed(1)} Mbps</span>
+                        </div>
+                      )}
+                      {/* Progress bound to the width of this block */}
+                      <div>
                         <div className="flex items-center justify-between text-[11px] text-gray-400 mb-1">
                           <span>Progress</span>
                           <span>
@@ -278,7 +311,7 @@ export default function NowPlaying() {
                               : `${progress}%`}
                           </span>
                         </div>
-                        <div className="h-1.5 bg-neutral-700 rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-neutral-700 rounded-full overflow-hidden w-full">
                           <div
                             className="h-full bg-emerald-500 transition-all duration-300"
                             style={{ width: `${progress}%` }}
@@ -286,35 +319,6 @@ export default function NowPlaying() {
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Quality indicators */}
-                  <div className="mt-3 space-y-1.5 flex-1 text-sm">
-                    {/* Slim inline rows with no large spacing */}
-                    <div className="text-gray-300">
-                      <span className="text-gray-400">Video: </span>
-                      <span className="text-white">{s.video || "Unknown"}</span>
-                      {" "}
-                      <span className={v.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{v.label}</span>
-                    </div>
-                    <div className="text-gray-300">
-                      <span className="text-gray-400">Audio: </span>
-                      <span className="text-white">{s.audio || "Unknown"}</span>
-                      {" "}
-                      <span className={a.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{a.label}</span>
-                    </div>
-                    <div className="text-gray-300">
-                      <span className="text-gray-400">Subtitles: </span>
-                      <span className="text-white">{s.subs || "None"}</span>
-                      {" "}
-                      <span className={sub.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{sub.label}</span>
-                    </div>
-                    {s.bitrate > 0 && (
-                      <div className="text-gray-300">
-                        <span className="text-gray-400">Bitrate: </span>
-                        <span className="text-white">{(s.bitrate / 1_000_000).toFixed(1)} Mbps</span>
-                      </div>
-                    )}
                     {/* If anything is transcoding, show the reason */}
                     {(isVideoTrans || isAudioTrans) && s.trans_reason && (
                       <div className="text-xs text-gray-400">
