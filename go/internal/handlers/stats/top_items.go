@@ -350,7 +350,9 @@ func computeExactItemHours(db *sql.DB, itemIDs []string, winStart, winEnd int64)
         if eff <= 0 { eff = e - s }
         var add int64 = windowSec
         if eff > 0 && eff < add { add = eff }
-        secs[item] += add
+        if add > 0 {
+            secs[item] += add
+        }
     }
     if err := rows.Err(); err != nil {
         return nil, err
