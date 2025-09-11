@@ -229,7 +229,7 @@ export default function NowPlaying() {
               const sub = subsStatus(s);
 
               return (
-                <article key={s.session_id} className="card overflow-hidden flex flex-col min-h-[300px] p-4">
+                <article key={s.session_id} className="card overflow-hidden flex flex-col p-3">
                   {/* Top row: poster + title/meta arranged symmetrically */}
                   <div className="flex gap-3">
                     {/* Poster column - fixed size to align all cards */}
@@ -264,7 +264,6 @@ export default function NowPlaying() {
                       {/* NEW: top status + tech chips */}
                       <div className="flex flex-wrap gap-1.5 mb-2">
                         <Chip tone={top.tone} label={top.label} />
-                        {s.container && <Chip tone="ok" label={s.container.toUpperCase()} />}
                         {s.width && s.height && <Chip tone="ok" label={`${s.width}×${s.height}`} />}
                       </div>
 
