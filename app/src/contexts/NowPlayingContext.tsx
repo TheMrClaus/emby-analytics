@@ -76,24 +76,49 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const sessionsLenRef = useRef(0);
+  // Stable ordering: remember first-seen order for each session id
+  const firstSeenRef = useRef<Map<string, number>>(new Map());
+  const orderCounterRef = useRef(0);
 
   // Keep a ref of the latest sessions length for use in stable callbacks
   useEffect(() => {
     sessionsLenRef.current = sessions.length;
   }, [sessions.length]);
 
+  // Reusable helper to maintain stable first-seen ordering of sessions
+  const orderSessions = useCallback((arr: NowEntry[]): NowEntry[] => {
+    // assign first-seen order to new sessions
+    for (const s of arr) {
+      if (!firstSeenRef.current.has(s.session_id)) {
+        firstSeenRef.current.set(s.session_id, orderCounterRef.current++);
+      }
+    }
+    // remove entries no longer present
+    const present = new Set(arr.map((s) => s.session_id));
+    for (const key of Array.from(firstSeenRef.current.keys())) {
+      if (!present.has(key)) firstSeenRef.current.delete(key);
+    }
+    // return a new array sorted by first-seen
+    return [...arr].sort(
+      (a, b) =>
+        (firstSeenRef.current.get(a.session_id) ?? 0) -
+        (firstSeenRef.current.get(b.session_id) ?? 0)
+    );
+  }, []);
+
   const loadSnapshot = useCallback(async () => {
     try {
       const res = await fetch(`${apiBase}/now/snapshot`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: NowEntry[] = await res.json();
-      setSessions(data || []);
+      const arr = Array.isArray(data) ? data : [];
+      setSessions(orderSessions(arr));
       setError(null);
     } catch (e: unknown) {
       const msg = (e as Error)?.message || String(e);
       setError(`Failed to load now playing: ${msg}`);
     }
-  }, []);
+  }, [orderSessions]);
 
   const connectWS = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -118,7 +143,8 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
       ws.onmessage = (ev) => {
         try {
           const data: NowEntry[] = JSON.parse(ev.data);
-          setSessions(Array.isArray(data) ? data : []);
+          const arr = Array.isArray(data) ? data : [];
+          setSessions(orderSessions(arr));
         } catch {
           /* ignore parse errors */
         }
@@ -152,7 +178,7 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
         }, 2000);
       }
     }
-  }, [loadSnapshot]);
+  }, [loadSnapshot, orderSessions]);
 
   useEffect(() => {
     // Load initial snapshot

@@ -4,7 +4,7 @@ Emby Analytics is a self-hosted dashboard and API service for monitoring and vis
 
 ## Features
 
-- **Real-time "Now Playing" dashboard** via Server-Sent Events (SSE)
+- **Real-time "Now Playing" dashboard** via WebSocket (with snapshot fallback)
 - **Usage analytics** (hours watched per user/day)
 - **Top users** and **top items** in custom time windows
 - **Media quality breakdown** (4K / 1080p / 720p / SD / Unknown)
@@ -14,14 +14,14 @@ Emby Analytics is a self-hosted dashboard and API service for monitoring and vis
 - **Manual library refresh** and user sync from Emby
 - **Admin controls** for data management and cleanup
 - **Lightweight database** (SQLite) for persistence
-- **Modern web UI** with Recharts visualizations
+- **Modern web UI** with Nivo visualizations (@nivo/*)
 
 ## Architecture
 
 - **Backend**: Go with Fiber v3 framework
 - **Frontend**: Next.js (static export served by Go backend)
 - **Database**: SQLite
-- **Real-time**: Server-Sent Events (SSE)
+- **Real-time**: WebSocket live updates (with HTTP snapshot fallback)
 - **Images**: Proxied through backend from Emby
 
 ## Project Structure
@@ -39,7 +39,7 @@ Emby Analytics is a self-hosted dashboard and API service for monitoring and vis
 │   │   │   ├── health/          # Health checks
 │   │   │   ├── images/          # Image proxy
 │   │   │   ├── items/           # Library items
-│   │   │   ├── now/             # Now playing & SSE
+│   │   │   ├── now/             # Now playing (WebSocket + snapshot)
 │   │   │   └── stats/           # Statistics endpoints
 │   │   └── tasks/               # Background sync tasks
 │   ├── go.mod                   # Go module definition
@@ -167,7 +167,7 @@ Key environment variables (see `.env.example` for complete list):
 - `REFRESH_INTERVAL`: Interval in seconds for background library refresh (default: `60`)
 - `REFRESH_CHUNK_SIZE`: Number of items to process per refresh chunk (default: `100`)
 - `HISTORY_DAYS`: Number of days of playback history to sync (default: `2`)
-- `NOW_POLL_SEC`: Interval in seconds for polling "Now Playing" data (default: `5`)
+- `NOW_POLL_SEC`: Server-side polling interval for Now Playing ingestion (UI uses WebSocket; polling used as fallback) (default: `5`)
 - `LOG_LEVEL`: Logging level (e.g., `info`, `debug`, `warn`, `error`) (default: `info`)
 
 ### Versioning & Updates
@@ -225,20 +225,57 @@ docker run -d --name emby-analytics \
 
 #### Recommended workflow: tag-driven versions
 
-Use git tags as the source of truth for releases so the UI and `/version` endpoint reflect the correct version and link to the corresponding GitHub page.
+Use git tags as the source of truth for releases so the UI and `/version` endpoint reflect the correct version and link to the corresponding GitHub page. Docker images publish only on tags.
 
-- Set a new version (e.g., v0.1.0):
-  1. Commit your changes on a feature branch
-  2. Merge to `main`
-  3. Create an annotated tag: `git tag -a v0.1.0 -m "v0.1.0"`
-  4. Push tag: `git push origin v0.1.0`
-  5. Build (local or Docker) so ldflags pick up the tag
+Best Practice
 
-- Clicking the version badge links to:
-  - The GitHub release page if the build was from a tag starting with `v` (e.g., `v0.1.0`).
-  - The GitHub commit page if not built from a tag.
+- Develop on feature/fix branches; open PRs to `main`.
+- Merge to `main` after review/tests pass (no image publish).
+- Cut a tag (e.g., `v0.1.2`) when you’re ready; CI builds and publishes images from the tag.
+- Draft a GitHub Release with notes for that tag.
 
-- Update indicator: the badge shows a red dot when a newer release/tag exists on GitHub.
+Set a new version (example `v0.1.0`)
+
+1. Commit your changes on a feature branch
+2. Merge to `main`
+3. Create an annotated tag: `git tag -a v0.1.0 -m "v0.1.0"`
+4. Push tag: `git push origin v0.1.0`
+5. CI will build/publish images for the tag
+
+Clicking the version badge links to:
+
+- The GitHub release page if the build was from a tag starting with `v` (e.g., `v0.1.0`).
+- The GitHub commit page if not built from a tag.
+
+Update indicator: the badge shows a red dot when a newer release/tag exists on GitHub.
+
+### Branch Lifecycle & Cleanup
+
+Best Practice
+
+- Develop on feature/fix branches; open PRs to `main`.
+- Merge to `main` after review/tests pass (publishing is tag-driven only).
+- After a successful merge, delete the remote branch.
+- Also delete your local branch once merged (to keep a tidy repo).
+
+Suggested commands after merging a PR
+
+```bash
+# Update local main
+git checkout main
+git pull --ff-only
+
+# Delete local branch (safe, only if merged)
+git branch -d <branch>
+
+# Optionally prune remote-tracking refs
+git remote prune origin
+
+# (If the branch wasn’t auto-deleted on GitHub)
+git push origin --delete <branch>
+```
+
+Tip: In GitHub repo settings, enable “Automatically delete head branches” to remove branches after PRs are merged.
 
 ### Admin Authentication
 
