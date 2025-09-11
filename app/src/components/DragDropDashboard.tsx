@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { useDashboardLayout } from '../hooks/useDashboardLayout';
-import { DashboardCard } from '../types/dashboard';
-import { ErrorBoundary } from './ErrorBoundary';
-import { X, Plus, RotateCcw, GripVertical } from 'lucide-react';
-import { useState } from 'react';
+import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
+import { useDashboardLayout } from "../hooks/useDashboardLayout";
+import { DashboardCard } from "../types/dashboard";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { X, Plus, RotateCcw, GripVertical } from "lucide-react";
+import { useState } from "react";
 
 interface DraggableCardWrapperProps {
   card: DashboardCard;
@@ -23,11 +23,9 @@ function DraggableCardWrapper({ card, index, isEditMode, onRemove }: DraggableCa
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
-          className={`${
-            isEditMode ? '' : 'break-inside-avoid mb-4'
-          } transition-all duration-200 ${
-            snapshot.isDragging ? 'opacity-75 scale-105 z-50' : ''
-          } ${isEditMode ? 'ring-2 ring-blue-500/30 ring-offset-2 ring-offset-neutral-900' : ''}`}
+          className={`${isEditMode ? "" : "break-inside-avoid mb-4"} transition-all duration-200 ${
+            snapshot.isDragging ? "opacity-75 scale-105 z-50" : ""
+          } ${isEditMode ? "ring-2 ring-blue-500/30 ring-offset-2 ring-offset-neutral-900" : ""}`}
         >
           <div className="relative group">
             {isEditMode && (
@@ -39,7 +37,7 @@ function DraggableCardWrapper({ card, index, isEditMode, onRemove }: DraggableCa
                 >
                   <GripVertical className="w-4 h-4" />
                 </div>
-                
+
                 {/* Remove Button */}
                 <button
                   onClick={() => onRemove(card.id)}
@@ -49,7 +47,7 @@ function DraggableCardWrapper({ card, index, isEditMode, onRemove }: DraggableCa
                 </button>
               </>
             )}
-            
+
             <ErrorBoundary>
               <CardComponent />
             </ErrorBoundary>
@@ -61,7 +59,7 @@ function DraggableCardWrapper({ card, index, isEditMode, onRemove }: DraggableCa
 }
 
 interface AddCardDropdownProps {
-  availableCards: Array<Omit<DashboardCard, 'isVisible' | 'position'>>;
+  availableCards: Array<Omit<DashboardCard, "isVisible" | "position">>;
   onAddCard: (cardId: string) => void;
 }
 
@@ -112,16 +110,16 @@ interface EditControlsProps {
   isEditMode: boolean;
   onToggleEdit: () => void;
   onReset: () => void;
-  availableCards: Array<Omit<DashboardCard, 'isVisible' | 'position'>>;
+  availableCards: Array<Omit<DashboardCard, "isVisible" | "position">>;
   onAddCard: (cardId: string) => void;
 }
 
-function EditControls({ 
-  isEditMode, 
-  onToggleEdit, 
-  onReset, 
-  availableCards, 
-  onAddCard 
+function EditControls({
+  isEditMode,
+  onToggleEdit,
+  onReset,
+  availableCards,
+  onAddCard,
 }: EditControlsProps) {
   return (
     <div className="flex items-center gap-3 mb-6">
@@ -129,17 +127,17 @@ function EditControls({
         onClick={onToggleEdit}
         className={`px-4 py-2 rounded-lg font-medium transition-colors ${
           isEditMode
-            ? 'bg-green-600 hover:bg-green-700 text-white'
-            : 'bg-neutral-700 hover:bg-neutral-600 text-neutral-200'
+            ? "bg-green-600 hover:bg-green-700 text-white"
+            : "bg-neutral-700 hover:bg-neutral-600 text-neutral-200"
         }`}
       >
-        {isEditMode ? 'Done Editing' : 'Edit Dashboard'}
+        {isEditMode ? "Done Editing" : "Edit Dashboard"}
       </button>
 
       {isEditMode && (
         <>
           <AddCardDropdown availableCards={availableCards} onAddCard={onAddCard} />
-          
+
           <button
             onClick={onReset}
             className="flex items-center gap-2 px-4 py-2 bg-neutral-700 hover:bg-neutral-600 text-neutral-200 rounded-lg transition-colors"
@@ -154,17 +152,11 @@ function EditControls({
 }
 
 export default function DragDropDashboard() {
-  const { 
-    cards, 
-    availableCards, 
-    isEditMode, 
-    editModeContext, 
-    reorderCards 
-  } = useDashboardLayout();
+  const { cards, availableCards, isEditMode, editModeContext, reorderCards } = useDashboardLayout();
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
-    
+
     if (result.source.index !== result.destination.index) {
       reorderCards(result.source.index, result.destination.index);
     }
@@ -187,13 +179,11 @@ export default function DragDropDashboard() {
               ref={provided.innerRef}
               {...provided.droppableProps}
               className={`${
-                isEditMode 
-                  ? 'grid gap-6 lg:grid-cols-2' 
-                  : 'columns-1 lg:columns-2 gap-4'
+                isEditMode ? "grid gap-6 lg:grid-cols-2" : "columns-1 lg:columns-2 gap-4"
               } transition-all duration-200 ${
-                snapshot.isDraggingOver ? 'bg-neutral-800/30 rounded-lg p-4' : ''
+                snapshot.isDraggingOver ? "bg-neutral-800/30 rounded-lg p-4" : ""
               }`}
-              style={!isEditMode ? { columnGap: '1rem' } : undefined}
+              style={!isEditMode ? { columnGap: "1rem" } : undefined}
             >
               {cards.map((card, index) => (
                 <DraggableCardWrapper
@@ -205,7 +195,7 @@ export default function DragDropDashboard() {
                 />
               ))}
               {provided.placeholder}
-              
+
               {cards.length === 0 && (
                 <div className="lg:col-span-2 text-center py-12">
                   <div className="text-neutral-400 mb-4">

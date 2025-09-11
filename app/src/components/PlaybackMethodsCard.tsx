@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import type { SymbolProps } from "@nivo/legends";
+import type { BarItemProps } from "@nivo/bar";
+import { ResponsiveBar } from "@nivo/bar";
 import { colors } from "../theme/colors";
 import { fetchPlayMethods, fetchConfig } from "../lib/api";
 import { openInEmby } from "../lib/emby";
@@ -153,13 +155,17 @@ export default function PlaybackMethodsCard() {
       .catch((e) => console.error("Failed to fetch config:", e));
   }, []);
 
-  // Summary chart data - only DirectPlay vs Transcode
+  // Summary chart data using additive mode
   const summaryChartData = useMemo(() => {
-    const methods = data?.methods || {};
+    if (!data) return [];
+    
+    const details = data.transcodeDetails || {};
     return [
-      { name: "Direct", value: methods.DirectPlay || 0, color: "#22c55e" }, // green-500 to match Now Playing
-      { name: "Transcode", value: methods.Transcode || 0, color: "#f97316" }, // orange-500 to match Now Playing
-    ].filter((d) => d.value > 0);
+      { name: "Direct", value: details.Direct || 0, color: "#22c55e" },
+      { name: "Video Transcode", value: details.TranscodeVideo || 0, color: "#f97316" },
+      { name: "Audio Transcode", value: details.TranscodeAudio || 0, color: "#ea580c" },
+      { name: "Subtitle Transcode", value: details.TranscodeSubtitle || 0, color: "#dc2626" },
+    ].filter(d => d.value > 0);
   }, [data]);
 
   // Detailed transcode breakdown
@@ -231,6 +237,43 @@ export default function PlaybackMethodsCard() {
 
   const selectedOption = timeframeOptions.find((opt) => opt.value === timeframe);
   const total = summaryChartData.reduce((a, b) => a + b.value, 0);
+
+  // Subtle glow filter for bars
+  const GlowDefsLayer = () => (
+    <defs>
+      <filter id="bar-glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="2.25" result="blur" />
+        <feMerge>
+          <feMergeNode in="blur" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+    </defs>
+  );
+
+  // Custom bar component that applies the glow filter
+  type SummaryBarDatum = { name: string; value: number; color: string };
+  const BarWithGlow = ({ bar, borderRadius, borderWidth, style, onClick, onMouseEnter, onMouseLeave }: BarItemProps<SummaryBarDatum>) => (
+    <g
+      transform={(style.transform as unknown as string) ?? undefined}
+      style={{ opacity: (style.opacity as unknown as number) ?? 1 }}
+    >
+      <rect
+        x={bar.x}
+        y={bar.y}
+        width={bar.width}
+        height={bar.height}
+        rx={borderRadius}
+        fill={(style.color as unknown as string) ?? bar.color}
+        stroke={(style.borderColor as unknown as string) ?? undefined}
+        strokeWidth={borderWidth}
+        filter="url(#bar-glow)"
+        onClick={onClick as any}
+        onMouseEnter={onMouseEnter as any}
+        onMouseLeave={onMouseLeave as any}
+      />
+    </g>
+  );
 
   const handleChartClick = () => {
     setShowDetailed(true);
@@ -391,25 +434,124 @@ export default function PlaybackMethodsCard() {
             onClick={handleChartClick}
             title="Click to view detailed breakdown"
           >
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={summaryChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip
-                  contentStyle={{
+            <ResponsiveBar
+              data={summaryChartData}
+              keys={["value"]}
+              indexBy="name"
+              margin={{ top: 20, right: 130, left: 50, bottom: 35 }}
+              padding={0.3}
+              valueScale={{ type: "linear" }}
+              indexScale={{ type: "band", round: true }}
+              layers={["grid", "axes", GlowDefsLayer, "bars", "markers", "legends"]}
+              barComponent={BarWithGlow}
+              colors={({ data }) => data.color}
+              borderColor={{ from: "color", modifiers: [["darker", 1.6]] }}
+              axisTop={null}
+              axisRight={null}
+              axisBottom={{
+                tickSize: 5,
+                tickPadding: 5,
+                tickRotation: 0,
+                format: (value) => value,
+              }}
+              axisLeft={{
+                tickSize: 5,
+                tickPadding: 5,
+                tickRotation: 0,
+                legend: 'Sessions',
+                legendPosition: 'middle',
+                legendOffset: -40,
+              }}
+              enableLabel={false}
+              tooltip={({ value, indexValue }) => (
+                <div
+                  style={{
                     background: colors.tooltipBg,
                     border: `1px solid ${colors.tooltipBorder}`,
                     borderRadius: 12,
+                    padding: "8px 12px",
+                    color: "#fff",
                   }}
-                  formatter={(val: number | string) => [`${val} sessions`, ""]}
-                />
-                <Bar dataKey="value" name="Sessions">
-                  {summaryChartData.map((entry, idx) => (
-                    <Cell key={`bar-${idx}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                >
+                  <div>
+                    <strong>{indexValue}</strong>: {value} sessions
+                  </div>
+                  <div style={{ fontSize: "11px", opacity: 0.8, marginTop: "2px" }}>
+                    Sessions may contribute to multiple categories
+                  </div>
+                </div>
+              )}
+              legends={[
+                {
+                  dataFrom: "indexes",
+                  anchor: "top-right",
+                  direction: "column",
+                  justify: false,
+                  translateX: 5,
+                  translateY: 10,
+                  itemsSpacing: 4,
+                  itemWidth: 120,
+                  itemHeight: 18,
+                  itemDirection: "left-to-right",
+                  itemOpacity: 0.85,
+                  symbolSize: 12,
+                  // Add left padding inside the legend item background by
+                  // shifting the color swatch a few pixels to the right.
+                  symbolShape: ({ x, y, size, fill, borderWidth, borderColor }: SymbolProps) => (
+                    <rect
+                      x={x + 6}
+                      y={y}
+                      width={size}
+                      height={size}
+                      fill={fill}
+                      stroke={borderColor}
+                      strokeWidth={borderWidth}
+                      rx={2}
+                      ry={2}
+                    />
+                  ),
+                  symbolSpacing: 8,
+                  itemBackground: "#ffffff",
+                  itemTextColor: "#000000",
+                  effects: [
+                    {
+                      on: "hover",
+                      style: {
+                        itemOpacity: 1,
+                      },
+                    },
+                  ],
+                }
+              ]}
+              theme={{
+                axis: {
+                  ticks: {
+                    text: {
+                      fontSize: 12,
+                      fill: "#ffffff",
+                    },
+                  },
+                  legend: {
+                    text: {
+                      fill: "#ffffff",
+                    },
+                  },
+                },
+                grid: {
+                  line: {
+                    stroke: "#374151",
+                    strokeOpacity: 0.4,
+                  },
+                },
+                legends: {
+                  text: {
+                    fill: "#000000",
+                  },
+                },
+              }}
+              role="application"
+              ariaLabel="Playback methods summary"
+            />
           </div>
           <div className="mt-3 text-white/70 text-sm text-center">
             Total sessions: <span className="text-white">{total}</span>
