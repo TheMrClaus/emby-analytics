@@ -3,7 +3,22 @@ name: Docker Publish
 on:
   push:
     tags: [ 'v*', 'v*-*' ]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      no_cache:
+        description: "Force a clean build (disable Buildx cache)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+      pull_base:
+        description: "Pull latest base images before build"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+  schedule:
+    - cron: '0 2 * * 1'  # weekly, Mondays at 02:00 UTC to refresh cache only
 
 permissions:
   contents: read
@@ -85,6 +100,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          pull: ${{ github.event_name == 'schedule' || github.event.inputs.pull_base == 'true' }}
+          no-cache: ${{ github.event.inputs.no_cache == 'true' }}
           build-args: |
             VERSION=${{ github.ref_type == 'tag' && github.ref_name || steps.vars.outputs.version }}
             COMMIT=${{ steps.vars.outputs.sha_short }}
