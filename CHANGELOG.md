@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.1.2 — Now Playing fixes and stats
+
+- Bug fixes
+  - Watch time no longer increases while a video is paused (issue #29)
+  - Now Playing cards no longer jump around when multiple items are playing (issue #24)
+- Enhancements
+  - Added current streaming bitrate, number of active streams, and active transcodes to the top of the Now Playing card (issue #26)
+  - Reduced the size of Now Playing cards so they’re easier to scan (issue #25)
+
 ## v0.1.1 — Replace Recharts with Nivo, UX polish
 
 - Charts: migrated UI charts to `@nivo/*` for improved rendering and theming
