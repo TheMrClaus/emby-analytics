@@ -76,6 +76,9 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const sessionsLenRef = useRef(0);
+  // Stable ordering: remember first-seen order for each session id
+  const firstSeenRef = useRef<Map<string, number>>(new Map());
+  const orderCounterRef = useRef(0);
 
   // Keep a ref of the latest sessions length for use in stable callbacks
   useEffect(() => {
@@ -87,7 +90,21 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
       const res = await fetch(`${apiBase}/now/snapshot`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: NowEntry[] = await res.json();
-      setSessions(data || []);
+      const arr = Array.isArray(data) ? data : [];
+      // update first-seen map for stable ordering
+      for (const s of arr) {
+        if (!firstSeenRef.current.has(s.session_id)) {
+          firstSeenRef.current.set(s.session_id, orderCounterRef.current++);
+        }
+      }
+      // remove entries no longer present
+      const present = new Set(arr.map((s) => s.session_id));
+      for (const key of Array.from(firstSeenRef.current.keys())) {
+        if (!present.has(key)) firstSeenRef.current.delete(key);
+      }
+      // sort by first-seen order
+      arr.sort((a, b) => (firstSeenRef.current.get(a.session_id)! - firstSeenRef.current.get(b.session_id)!));
+      setSessions(arr);
       setError(null);
     } catch (e: unknown) {
       const msg = (e as Error)?.message || String(e);
@@ -118,7 +135,21 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
       ws.onmessage = (ev) => {
         try {
           const data: NowEntry[] = JSON.parse(ev.data);
-          setSessions(Array.isArray(data) ? data : []);
+          const arr = Array.isArray(data) ? data : [];
+          // update first-seen map for stable ordering
+          for (const s of arr) {
+            if (!firstSeenRef.current.has(s.session_id)) {
+              firstSeenRef.current.set(s.session_id, orderCounterRef.current++);
+            }
+          }
+          // remove entries no longer present
+          const present = new Set(arr.map((s) => s.session_id));
+          for (const key of Array.from(firstSeenRef.current.keys())) {
+            if (!present.has(key)) firstSeenRef.current.delete(key);
+          }
+          // sort by first-seen order
+          arr.sort((a, b) => (firstSeenRef.current.get(a.session_id)! - firstSeenRef.current.get(b.session_id)!));
+          setSessions(arr);
         } catch {
           /* ignore parse errors */
         }
