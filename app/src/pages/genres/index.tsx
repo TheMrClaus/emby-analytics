@@ -97,9 +97,7 @@ export default function GenrePage() {
             </Link>
             <div>
               <h1 className="text-2xl font-bold">{pageTitle}</h1>
-              {data && (
-                <p className="text-gray-400">{fmtInt(data.total)} items found</p>
-              )}
+              {data && <p className="text-gray-400">{fmtInt(data.total)} items found</p>}
             </div>
           </div>
 
@@ -116,7 +114,7 @@ export default function GenrePage() {
               <div className="text-red-400">{error || "Failed to load data"}</div>
             </Card>
           ) : (
-          <Card title={`Items in ${data.genre}`}>
+            <Card title={`Items in ${data.genre}`}>
               {data.items.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">No items found for this genre</div>
               ) : (
@@ -159,12 +157,21 @@ export default function GenrePage() {
                                   )}
                                 </td>
                                 <td className="py-3">
-                                  <span className="px-2 py-1 bg-neutral-700 rounded text-xs">Series</span>
+                                  <span className="px-2 py-1 bg-neutral-700 rounded text-xs">
+                                    Series
+                                  </span>
                                 </td>
-                                <td className="py-3">{getQualityLabel((data as SeriesByGenreResponse).items.find(x => x.id === s.id)?.height)}</td>
+                                <td className="py-3">
+                                  {getQualityLabel(
+                                    (data as SeriesByGenreResponse).items.find((x) => x.id === s.id)
+                                      ?.height
+                                  )}
+                                </td>
                                 <td className="py-3">{formatResolution(s)}</td>
                                 <td className="py-3">
-                                  <code className="bg-neutral-800 px-2 py-1 rounded text-xs">{s.codec ?? "Unknown"}</code>
+                                  <code className="bg-neutral-800 px-2 py-1 rounded text-xs">
+                                    {s.codec ?? "Unknown"}
+                                  </code>
                                 </td>
                               </tr>
                             ))
@@ -200,7 +207,9 @@ export default function GenrePage() {
                                 <td className="py-3">{getQualityLabel(item.height)}</td>
                                 <td className="py-3">{formatResolution(item)}</td>
                                 <td className="py-3">
-                                  <code className="bg-neutral-800 px-2 py-1 rounded text-xs">{item.codec}</code>
+                                  <code className="bg-neutral-800 px-2 py-1 rounded text-xs">
+                                    {item.codec}
+                                  </code>
                                 </td>
                               </tr>
                             ))}
@@ -212,7 +221,8 @@ export default function GenrePage() {
                   {Math.ceil(data.total / data.page_size) > 1 && (
                     <div className="flex items-center justify-between mt-4 pt-4 border-t border-neutral-700">
                       <div className="text-sm text-gray-400">
-                        Page {page} of {Math.ceil(data.total / data.page_size)} ({fmtInt(data.total)} total items)
+                        Page {page} of {Math.ceil(data.total / data.page_size)} (
+                        {fmtInt(data.total)} total items)
                       </div>
                       <div className="flex gap-2">
                         <button

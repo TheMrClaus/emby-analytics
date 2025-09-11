@@ -2,7 +2,7 @@ export interface DashboardCard {
   id: string;
   title: string;
   description: string;
-  category: 'stats' | 'admin' | 'activity';
+  category: "stats" | "admin" | "activity";
   component: React.ComponentType;
   isVisible: boolean;
   position: number;
