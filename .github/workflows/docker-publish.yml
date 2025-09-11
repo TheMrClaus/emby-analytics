@@ -3,8 +3,6 @@ name: Docker Publish
 on:
   push:
     tags: [ 'v*', 'v*-*' ]
-  release:
-    types: [ published ]
   workflow_dispatch: {}
 
 permissions:
