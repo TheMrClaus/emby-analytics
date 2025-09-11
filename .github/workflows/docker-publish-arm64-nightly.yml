@@ -1,8 +1,8 @@
-name: Docker Publish
+name: Docker Publish (ARM64 Nightly)
 
 on:
-  push:
-    tags: [ 'v*', 'v*-*' ]
+  schedule:
+    - cron: '0 3 * * *' # daily at 03:00 UTC
   workflow_dispatch: {}
 
 permissions:
@@ -14,11 +14,13 @@ env:
   IMAGE_NAME: ghcr.io/themrclaus/emby-analytics
 
 jobs:
-  build-and-push:
+  build-and-push-arm64:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -33,52 +35,44 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Docker metadata
+      - name: Docker metadata (arm64, with -arm64 suffix)
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=tag
             type=ref,event=branch
             type=sha
+          flavor: |
+            suffix=-arm64,onlatest=true
 
-      - name: Compute build vars and extra tags
+      - name: Compute build vars and extra tags (arm64)
         id: vars
         run: |
           sha_short=${GITHUB_SHA::7}
           date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            version="${GITHUB_REF_NAME}"
-            if echo "$version" | grep -q -- '-'; then
-              # pre-release tag (e.g., v1.2.3-beta.1)
-              echo "extra_tags=${IMAGE_NAME}:beta" >> "$GITHUB_OUTPUT"
-            else
-              # stable tag
-              echo "extra_tags=${IMAGE_NAME}:latest" >> "$GITHUB_OUTPUT"
-            fi
-          elif [ "${GITHUB_REF_NAME}" = "main" ]; then
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
             version="main-${sha_short}"
             {
               echo "extra_tags<<EOF"
-              echo "${IMAGE_NAME}:beta"
-              echo "${IMAGE_NAME}:dev"
+              echo "${IMAGE_NAME}:beta-arm64"
+              echo "${IMAGE_NAME}:dev-arm64"
               echo "EOF"
             } >> "$GITHUB_OUTPUT"
           else
             version="${GITHUB_REF_NAME}-${sha_short}"
-            echo "extra_tags=${IMAGE_NAME}:dev" >> "$GITHUB_OUTPUT"
+            echo "extra_tags=${IMAGE_NAME}:dev-arm64" >> "$GITHUB_OUTPUT"
           fi
           echo "sha_short=${sha_short}" >> "$GITHUB_OUTPUT"
           echo "date=${date}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push (tags only, amd64)
+      - name: Build and push (arm64 nightly)
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: ${{ github.ref_type == 'tag' }}
-          platforms: linux/amd64
+          push: true
+          platforms: linux/arm64
           tags: |
             ${{ steps.meta.outputs.tags }}
             ${{ steps.vars.outputs.extra_tags }}
@@ -86,7 +80,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            VERSION=${{ github.ref_type == 'tag' && github.ref_name || steps.vars.outputs.version }}
+            VERSION=${{ steps.vars.outputs.version }}
             COMMIT=${{ steps.vars.outputs.sha_short }}
             DATE=${{ steps.vars.outputs.date }}
             REPO=TheMrClaus/emby-analytics
+
