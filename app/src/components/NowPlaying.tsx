@@ -209,7 +209,7 @@ export default function NowPlaying() {
         {sessions.length === 0 ? (
           <div className="text-gray-500 text-sm">Nobody is watching right now.</div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="flex flex-wrap gap-4 items-start">
             {sessions.map((s) => {
               const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
               const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
@@ -229,7 +229,7 @@ export default function NowPlaying() {
               const sub = subsStatus(s);
 
               return (
-                <article key={s.session_id} className="card overflow-hidden flex flex-col p-3">
+                <article key={s.session_id} className="card overflow-hidden flex flex-col p-3 flex-none w-auto">
                   {/* Top row: poster + title/meta arranged symmetrically */}
                   <div className="flex gap-3">
                     {/* Poster column - fixed size to align all cards */}
