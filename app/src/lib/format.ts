@@ -31,6 +31,7 @@ export const fmtHours = (hours: number) => {
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
   if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  if (m === 0 && totalSec > 0) return "<1m";
   return `${m}m`;
 };
 

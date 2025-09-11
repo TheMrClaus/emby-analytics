@@ -128,9 +128,8 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
                     )
                 ) / 3600.0 as hours
                 FROM play_intervals l
-                JOIN library_item li ON li.id = l.item_id
+                LEFT JOIN library_item li ON li.id = l.item_id
                 WHERE l.start_ts <= ? AND l.end_ts >= ?
-                  AND `+excludeLiveTvFilter()+`
                 GROUP BY l.item_id
                 HAVING hours > 0
                 ORDER BY hours DESC
@@ -233,6 +232,10 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
         finalResult := make([]TopItem, 0, len(combinedHours))
         for itemID, hours := range combinedHours {
             details := itemDetails[itemID]
+            // Exclude Live TV types from final top items
+            if strings.EqualFold(details.Type, "TvChannel") || strings.EqualFold(details.Type, "LiveTv") || strings.EqualFold(details.Type, "Channel") || strings.EqualFold(details.Type, "TvProgram") {
+                continue
+            }
             finalResult = append(finalResult, TopItem{
                 ItemID:  itemID,
                 Name:    details.Name,
