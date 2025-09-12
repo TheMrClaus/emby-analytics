@@ -82,16 +82,13 @@ func Summary(c fiber.Ctx) error {
         }
         active++
 
-        // Determine if this session is doing any A/V or subtitle transcode
+        // Determine if this session is actually transcoding (re-encoding)
+        // We intentionally do NOT count remux-only sessions (PlayMethod=Transcode but codecs copied)
         isTrans := false
-        if !strings.EqualFold(s.PlayMethod, "Direct") {
-            isTrans = true
-        }
         if strings.EqualFold(s.VideoMethod, "Transcode") || strings.EqualFold(s.AudioMethod, "Transcode") {
             isTrans = true
-        }
-        // Heuristic: subtitles/burn-in indicated by reasons
-        if !isTrans && len(s.TransReasons) > 0 {
+        } else if len(s.TransReasons) > 0 {
+            // Heuristic: subtitles/burn-in indicated by reasons
             for _, r := range s.TransReasons {
                 rr := strings.ToLower(r)
                 if strings.Contains(rr, "subtitle") || strings.Contains(rr, "burn") {
