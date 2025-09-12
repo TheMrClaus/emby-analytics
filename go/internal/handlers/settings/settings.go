@@ -84,6 +84,8 @@ func isValidSetting(key, value string) bool {
 	switch key {
 	case "include_trakt_items":
 		return value == "true" || value == "false"
+	case "prevent_4k_video_transcoding":
+		return value == "true" || value == "false"
 	default:
 		return false // Only allow known settings
 	}

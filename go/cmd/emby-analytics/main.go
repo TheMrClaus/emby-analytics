@@ -24,6 +24,7 @@ import (
 	stats "emby-analytics/internal/handlers/stats"
 	"emby-analytics/internal/logging"
 	"emby-analytics/internal/middleware"
+	"emby-analytics/internal/monitors"
 	"emby-analytics/internal/sync"
 	tasks "emby-analytics/internal/tasks"
 
@@ -389,6 +390,12 @@ func main() {
 	logger.Info("Starting cleanup scheduler")
 	cleanupScheduler := tasks.NewCleanupScheduler(sqlDB, em, sessionProcessor.Intervalizer)
 	cleanupScheduler.Start()
+
+	// Start 4K video transcoding monitor
+	logger.Info("Starting 4K video transcoding monitor")
+	transcodingMonitor := monitors.NewTranscodingMonitor(sqlDB, em, 30*time.Second)
+	transcodingMonitor.Start()
+	defer transcodingMonitor.Stop()
 
 	// Add scheduler stats endpoint (protected)
 	app.Get("/admin/scheduler/stats", adminAuth, func(c fiber.Ctx) error {
