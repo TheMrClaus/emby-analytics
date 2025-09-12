@@ -330,6 +330,15 @@ export default function NowPlaying() {
                       <div className="flex flex-wrap gap-1.5 mb-2">
                         <Chip tone={top.tone} label={top.label} />
                         {s.width && s.height && <Chip tone="ok" label={`${s.width}×${s.height}`} />}
+                        {(() => {
+                          const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
+                          const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
+                          const remuxOnly = (s.play_method || "") === "Transcode" && !isVideoTrans && !isAudioTrans;
+                          if (!remuxOnly) return null;
+                          const sp = (s.stream_path || "").toUpperCase();
+                          const label = sp ? `Remux/${sp}` : "Remux";
+                          return <Chip tone="ok" label={label} />;
+                        })()}
                       </div>
 
                       {/* Progress moved below media rows to match their width */}
