@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import Head from "next/head";
-import Link from "next/link";
 import { useRouter } from "next/router";
 
 type AuthConfig = {
@@ -62,8 +61,10 @@ export default function LoginPage() {
         setError(msg || "Invalid username or password");
         return;
       }
-      const next = (router.query?.next as string) || "/";
-      router.replace(next);
+      // Only allow internal relative redirects to avoid open-redirect or injection
+      const rawNext = (router.query?.next as string) || "/";
+      const safeNext = typeof rawNext === "string" && rawNext.startsWith("/") && !rawNext.startsWith("/auth") && rawNext !== "/login" ? rawNext : "/";
+      router.replace(safeNext);
     } catch (err: unknown) {
       setError(getErrorMessage(err) || "Login failed");
     } finally {
@@ -88,8 +89,9 @@ export default function LoginPage() {
         setError(msg || "Registration failed");
         return;
       }
-      const next = (router.query?.next as string) || "/";
-      router.replace(next);
+      const rawNext = (router.query?.next as string) || "/";
+      const safeNext = typeof rawNext === "string" && rawNext.startsWith("/") && !rawNext.startsWith("/auth") && rawNext !== "/login" ? rawNext : "/";
+      router.replace(safeNext);
     } catch (err: unknown) {
       setError(getErrorMessage(err) || "Failed to create account");
     } finally {
@@ -224,11 +226,7 @@ export default function LoginPage() {
             )}
           </form>
 
-          <div className="mt-4 text-center">
-            <Link href="/" className="text-blue-300 hover:text-white underline decoration-dotted text-sm">
-              Back to dashboard
-            </Link>
-          </div>
+          {/* Dashboard link removed to prevent bypass attempts from login page */}
         </div>
       </div>
     </>
