@@ -32,6 +32,7 @@ export default function SettingsPage() {
   };
 
   const includeTrakt = settings?.find((s) => s.key === "include_trakt_items")?.value || "false";
+  const prevent4kTranscoding = settings?.find((s) => s.key === "prevent_4k_video_transcoding")?.value || "false";
   const [meRole, setMeRole] = useState<string | null>(null);
   const [users, setUsers] = useState<AppUser[] | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
@@ -84,7 +85,7 @@ export default function SettingsPage() {
     if (meRole && meRole.toLowerCase() === "admin") {
       loadUsers();
     }
-  }, [meRole]);
+  }, [meRole, loadUsers]);
 
   if (isLoading) {
     return (
@@ -254,6 +255,83 @@ export default function SettingsPage() {
                   Changes to this setting will take effect the next time user data is synced (every
                   12 hours by default, or when manually triggered via the admin panel). The new
                   calculation will be applied to all users.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-neutral-800 rounded-lg p-6 mt-6">
+              <h2 className="text-lg font-semibold mb-4">Performance Settings</h2>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-neutral-700/50 rounded-lg">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <label htmlFor="prevent_4k_video_transcoding" className="text-white font-medium">
+                        Prevent 4K Video Transcoding
+                      </label>
+                      {saveStatus?.key === "prevent_4k_video_transcoding" && (
+                        <div
+                          className={`flex items-center gap-1 text-sm ${
+                            saveStatus.status === "success" ? "text-green-400" : "text-red-400"
+                          }`}
+                        >
+                          {saveStatus.status === "success" ? (
+                            <>
+                              <Check className="w-4 h-4 text-green-400" />
+                              <span>Saved</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle className="w-4 h-4 text-red-400" />
+                              <span>Error saving</span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-gray-400 text-sm mb-3">
+                      Automatically stops sessions when 4K video transcoding is detected to prevent server overload.
+                      Audio and subtitle transcoding on 4K content will continue normally as they have minimal performance impact.
+                    </p>
+                    <div className="flex items-start gap-2 text-xs text-blue-300 bg-blue-900/20 border border-blue-500/30 rounded p-3">
+                      <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-400" />
+                      <div>
+                        <strong>How it works:</strong> This setting monitors active sessions and automatically stops 
+                        those transcoding 4K video content. Users will receive a standard Emby &quot;session stopped&quot; 
+                        notification. Only video transcoding is blocked - audio conversion and subtitle burn-in 
+                        continue to work normally for better user experience.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 ml-6">
+                    {saving === "prevent_4k_video_transcoding" && (
+                      <RotateCcw className="w-4 h-4 text-gray-400 animate-spin" />
+                    )}
+                    <button
+                      id="prevent_4k_video_transcoding"
+                      onClick={() => handleToggleChange("prevent_4k_video_transcoding", prevent4kTranscoding)}
+                      disabled={saving === "prevent_4k_video_transcoding"}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-neutral-900 ${
+                        prevent4kTranscoding === "true" ? "bg-amber-600" : "bg-neutral-600"
+                      } ${saving === "prevent_4k_video_transcoding" ? "opacity-50 cursor-not-allowed" : ""}`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          prevent4kTranscoding === "true" ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 p-4 bg-neutral-700/30 rounded-lg border border-neutral-600">
+                <h3 className="text-sm font-medium text-gray-300 mb-2">Performance Impact</h3>
+                <p className="text-sm text-gray-400">
+                  4K video transcoding can consume significant CPU/GPU resources and impact server performance 
+                  for all users. This setting helps maintain server stability by preventing the most 
+                  resource-intensive transcoding operations while preserving user experience for audio and subtitle features.
                 </p>
               </div>
             </div>
