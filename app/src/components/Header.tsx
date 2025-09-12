@@ -20,9 +20,8 @@ export default function Header() {
   // Derived UI counters
   const weeklyHours = weeklyUsage.reduce((acc, r) => acc + (r.hours || 0), 0);
   const streamsTotal = nowPlaying.length;
-  const directPlay = nowPlaying.filter(
-    (s: SnapshotEntry) => s.play_method === "DirectPlay" || s.play_method === "DirectStream"
-  ).length;
+  // Backend provides play_method as "Direct" or "Transcode".
+  const directPlay = nowPlaying.filter((s: SnapshotEntry) => s.play_method !== "Transcode").length;
   const transcoding = streamsTotal - directPlay;
 
   // Progress %
@@ -147,8 +146,12 @@ export default function Header() {
                 <>
                   {streamsTotal}
                   {streamsTotal > 0 && (
-                    <span className="text-sm text-gray-400 ml-1">
-                      ({directPlay}D/{transcoding}T)
+                    <span className="text-sm ml-1">
+                      (
+                      <span className="text-green-400">{directPlay}D</span>
+                      /
+                      <span className="text-orange-400">{transcoding}T</span>
+                      )
                     </span>
                   )}
                 </>
