@@ -27,6 +27,7 @@ This repository uses a tag-driven release workflow and a branch-first developmen
 - When the user asks to “commit each step, but don’t push”, respect it: commit locally and wait.
 - Ask for confirmation before pushing, merging, or tagging.
 - Include issue references when applicable, e.g., `closes #24`.
+- Before adding an issue reference, run `gh issue list` to check for a relevant open issue and then confirm with the user whether it’s okay to link/close it (e.g., `closes #123`). Only include the reference after explicit user approval.
 
 ## PR Preparation
 
@@ -44,4 +45,3 @@ This repository uses a tag-driven release workflow and a branch-first developmen
 
 - Avoid destructive operations (resets, force pushes) unless explicitly requested.
 - Never publish images or tags without explicit user approval.
-
