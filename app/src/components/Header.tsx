@@ -3,6 +3,7 @@ import { useRef } from "react";
 import Link from "next/link";
 import { useUsage, useNowSnapshot, useRefreshStatus, useVersion } from "../hooks/useData";
 import { startRefresh, setAdminToken } from "../lib/api";
+import { useRouter } from "next/router";
 import { fmtHours } from "../lib/format";
 
 type SnapshotEntry = {
@@ -35,6 +36,8 @@ export default function Header() {
   // ---- Double-click / spam click guard ----
   const clickLockRef = useRef(false);
 
+  const router = useRouter();
+
   const handleRefresh = async () => {
     // Block if lock engaged, UI already refreshing, or backend says it's running.
     if (clickLockRef.current || isRunning) return;
@@ -64,6 +67,18 @@ export default function Header() {
       }
       console.error("Failed to start refresh:", err);
     }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/auth/logout", { method: "POST", credentials: "include" });
+    } catch {}
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem("emby_admin_token");
+      }
+    } catch {}
+    router.replace("/login");
   };
 
   return (
@@ -200,6 +215,14 @@ export default function Header() {
             >
               API Explorer
             </Link>
+            <span className="text-gray-500">|</span>
+            <button
+              onClick={handleLogout}
+              className="text-red-300 hover:text-white underline decoration-dotted"
+              title="Logout"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </div>

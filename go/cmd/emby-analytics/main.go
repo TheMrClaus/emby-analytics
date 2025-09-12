@@ -12,7 +12,8 @@ import (
 	"emby-analytics/internal/config"
 	db "emby-analytics/internal/db"
 	emby "emby-analytics/internal/emby"
-	admin "emby-analytics/internal/handlers/admin"
+    admin "emby-analytics/internal/handlers/admin"
+    auth "emby-analytics/internal/handlers/auth"
 	configHandler "emby-analytics/internal/handlers/config"
 	verhandler "emby-analytics/internal/handlers/version"
 	health "emby-analytics/internal/handlers/health"
@@ -118,11 +119,11 @@ func main() {
 
     dbURL := fmt.Sprintf("sqlite://file:%s?cache=shared&mode=rwc", filepath.ToSlash(absPath))
 
-	if err := db.MigrateUp(dbURL); err != nil {
-		logger.Error("Database migrations failed", "error", err, "url", dbURL)
-		os.Exit(1)
-	}
-	logger.Info("Database migrations completed", "path", absPath)
+    if err := db.MigrateUp(dbURL); err != nil {
+        logger.Error("Database migrations failed", "error", err, "url", dbURL)
+        os.Exit(1)
+    }
+    logger.Info("Database migrations completed", "path", absPath)
 
 	// Open database connection for verification
 	sqlDB, err := db.Open(cfg.SQLitePath)
@@ -138,6 +139,15 @@ func main() {
 		logger.Error("play_sessions table not found after migrations", "error", err)
 		os.Exit(1)
 	}
+
+	// Ensure auth tables exist even if a prior image failed to apply late migrations
+	ensureAuthTables(sqlDB, logger)
+
+	// Ensure genres column exists (migration 0013) for legacy DBs that got stuck at v12
+	ensureGenresColumn(sqlDB, logger)
+
+	// If we detect all late schema pieces present but migration version < 14, bump it to avoid reattempts
+	bumpLegacyMigrationVersion(sqlDB, logger)
 
 	// Check for enhanced columns from migration 0005
 	var testCol string
@@ -177,10 +187,10 @@ func main() {
 	defer broadcaster.Stop()
 
 	// ---- Fiber App and Routes ----
-	app := fiber.New(fiber.Config{
-		EnableIPValidation: true,
-		ProxyHeader:        fiber.HeaderXForwardedFor,
-	})
+    app := fiber.New(fiber.Config{
+        EnableIPValidation: true,
+        ProxyHeader:        fiber.HeaderXForwardedFor,
+    })
     app.Use(recover.New())
 
     // CORS with credentials support (echo Origin)
@@ -199,8 +209,11 @@ func main() {
         return c.Next()
     })
 
-	// Add structured logging middleware
-	app.Use(logging.FiberMiddleware(logger))
+    // Add structured logging middleware
+    app.Use(logging.FiberMiddleware(logger))
+
+    // Attach session user to context
+    app.Use(middleware.AttachUser(sqlDB, cfg))
 
 	// Health Routes
 	// Optional: auto-auth cookie for UI
@@ -272,8 +285,8 @@ func main() {
 	// Admin Routes with Authentication
 	rm := admin.NewRefreshManager()
 
-	// Protected admin endpoints
-	adminAuth := middleware.AdminAuth(cfg.AdminToken)
+    // Protected admin endpoints (admin session OR ADMIN_TOKEN)
+    adminAuth := middleware.AdminAccess(sqlDB, cfg.AdminToken, cfg)
 
 	// Settings Routes (admin-protected for updates)
 	app.Get("/api/settings", settings.GetSettings(sqlDB))
@@ -332,12 +345,22 @@ func main() {
 	app.Get("/admin/diagnostics/media-field-coverage", adminAuth, admin.MediaFieldCoverage(sqlDB))
 	app.Get("/admin/diagnostics/items/missing", adminAuth, admin.MissingItems(sqlDB))
 
-	// Webhook endpoint with separate authentication
-	webhookAuth := middleware.WebhookAuth(cfg.WebhookSecret)
-	app.Post("/admin/webhook/emby", webhookAuth, admin.WebhookHandler(rm, sqlDB, em))
+    // Webhook endpoint with separate authentication
+    webhookAuth := middleware.WebhookAuth(cfg.WebhookSecret)
+    app.Post("/admin/webhook/emby", webhookAuth, admin.WebhookHandler(rm, sqlDB, em))
 
-	// Static UI Serving
-	app.Use("/", static.New(cfg.WebPath))
+    // Auth endpoints
+    app.Post("/auth/login", auth.LoginHandler(sqlDB, cfg))
+    app.Post("/auth/logout", auth.LogoutHandler(sqlDB, cfg))
+    app.Post("/auth/register", auth.RegisterHandler(sqlDB, cfg))
+    app.Get("/auth/me", auth.MeHandler(sqlDB, cfg))
+    app.Get("/auth/config", auth.ConfigHandler(sqlDB, cfg))
+
+    // Static UI Serving
+    if cfg.AuthEnabled {
+        app.Use(middleware.RequireUserForUI(cfg))
+    }
+    app.Use("/", static.New(cfg.WebPath))
 	app.Use(func(c fiber.Ctx) error {
 		if c.Method() == fiber.MethodGet && !startsWithAny(c.Path(), "/stats", "/health", "/admin", "/now", "/config", "/api", "/items", "/img") {
 			// If a static exported page exists at /path/index.html, serve it (supports clean URLs without trailing slash)
@@ -386,7 +409,13 @@ func main() {
 	})
 
 	// System metrics endpoint (protected)
-	app.Get("/admin/metrics", adminAuth, admin.SystemMetricsHandler(sqlDB))
+    app.Get("/admin/metrics", adminAuth, admin.SystemMetricsHandler(sqlDB))
+
+    // App user management (admin-only)
+    app.Get("/admin/app-users", adminAuth, auth.ListAppUsers(sqlDB))
+    app.Post("/admin/app-users", adminAuth, auth.CreateAppUser(sqlDB))
+    app.Put("/admin/app-users/:id", adminAuth, auth.UpdateAppUser(sqlDB))
+    app.Delete("/admin/app-users/:id", adminAuth, auth.DeleteAppUser(sqlDB))
 
 	// Start Server
 	addr := ":8080"
@@ -407,4 +436,92 @@ func startsWithAny(s string, prefixes ...string) bool {
 		}
 	}
 	return false
+}
+
+// ensureAuthTables defensively creates auth tables if they are missing.
+func ensureAuthTables(db *sql.DB, logger logging.Logger) {
+    // app_user
+    if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS app_user (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user',
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );`); err != nil {
+        logger.Warn("Failed to ensure app_user table", "error", err)
+    } else {
+        logger.Info("Auth: ensured app_user table")
+    }
+    // app_session
+    if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS app_session (
+        token TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL
+    );`); err != nil {
+        logger.Warn("Failed to ensure app_session table", "error", err)
+    } else {
+        logger.Info("Auth: ensured app_session table")
+    }
+    // indexes
+    if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_app_session_user ON app_session(user_id);`); err != nil {
+        logger.Warn("Failed to ensure idx_app_session_user", "error", err)
+    }
+    if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_app_user_username ON app_user(username);`); err != nil {
+        logger.Warn("Failed to ensure idx_app_user_username", "error", err)
+    }
+}
+
+func ensureGenresColumn(db *sql.DB, logger logging.Logger) {
+    // Check if column exists
+    rows, err := db.Query(`PRAGMA table_info(library_item);`)
+    if err != nil {
+        logger.Warn("Failed to inspect library_item schema", "error", err)
+        return
+    }
+    defer rows.Close()
+    has := false
+    for rows.Next() {
+        var cid int
+        var name, ctype string
+        var notnull int
+        var dflt interface{}
+        var pk int
+        _ = rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk)
+        if strings.EqualFold(name, "genres") {
+            has = true
+            break
+        }
+    }
+    if !has {
+        if _, err := db.Exec(`ALTER TABLE library_item ADD COLUMN genres TEXT;`); err != nil {
+            logger.Warn("Failed to add genres column (may already exist)", "error", err)
+        } else {
+            logger.Info("Auth: ensured library_item.genres column")
+        }
+    }
+}
+
+func bumpLegacyMigrationVersion(db *sql.DB, logger logging.Logger) {
+    // Determine if app_user and app_session exist
+    var cnt int
+    _ = db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='app_user'`).Scan(&cnt)
+    if cnt == 0 {
+        return
+    }
+    _ = db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='app_session'`).Scan(&cnt)
+    if cnt == 0 {
+        return
+    }
+    // Check migration version
+    var version int
+    var dirty int
+    if err := db.QueryRow(`SELECT version, dirty FROM schema_migrations`).Scan(&version, &dirty); err != nil {
+        return
+    }
+    if version < 14 {
+        if _, err := db.Exec(`UPDATE schema_migrations SET version=14, dirty=0`); err == nil {
+            logger.Info("Auth: bumped schema_migrations version to 14 to reflect ensured tables")
+        }
+    }
 }

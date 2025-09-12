@@ -68,7 +68,22 @@ async function j<T>(path: string, init?: RequestInit): Promise<T> {
     const text = await res.text().catch(() => "");
     throw new Error(`${res.status} ${res.statusText} ${text}`);
   }
-  return res.json() as Promise<T>;
+  // Handle no-content responses (e.g., 204) and empty bodies
+  if (res.status === 204) {
+    return undefined as unknown as T;
+  }
+  const ct = res.headers.get("content-type") || "";
+  if (!ct.toLowerCase().includes("application/json")) {
+    // If not JSON or empty, try to read text and return undefined
+    const text = await res.text().catch(() => "");
+    if (!text) return undefined as unknown as T;
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      return undefined as unknown as T;
+    }
+  }
+  return (await res.json()) as T;
 }
 
 // GET helpers
@@ -326,3 +341,31 @@ export interface VersionInfo {
 }
 
 export const fetchVersion = () => j<VersionInfo>("/version");
+
+// ---- App Users (Admin) ----
+export type AppUser = {
+  id: number;
+  username: string;
+  role: "admin" | "user" | string;
+  created_at?: string;
+};
+
+export const fetchAppUsers = () => j<AppUser[]>("/admin/app-users");
+
+export const createAppUser = (username: string, password: string, role: "admin" | "user") =>
+  j<AppUser>("/admin/app-users", {
+    method: "POST",
+    body: JSON.stringify({ username, password, role }),
+  });
+
+export const updateAppUser = (
+  id: number,
+  patch: Partial<{ username: string; password: string; role: "admin" | "user" }>
+) =>
+  j<AppUser>(`/admin/app-users/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(patch),
+  });
+
+export const deleteAppUser = (id: number) =>
+  j<void>(`/admin/app-users/${id}`, { method: "DELETE" });

@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Head from "next/head";
 import Header from "../components/Header";
 import { useSettings } from "../hooks/useSettings";
-import { Settings, RotateCcw, Check, AlertCircle, Info, ArrowLeft } from "lucide-react";
+import { Settings, RotateCcw, Check, AlertCircle, Info, ArrowLeft, UserPlus, Shield, User, Trash2, Pencil, Save, X } from "lucide-react";
+import { fetchAppUsers, createAppUser, updateAppUser, deleteAppUser, AppUser } from "../lib/api";
 
 export default function SettingsPage() {
   const { data: settings, error, isLoading, updateSetting } = useSettings();
@@ -31,6 +32,59 @@ export default function SettingsPage() {
   };
 
   const includeTrakt = settings?.find((s) => s.key === "include_trakt_items")?.value || "false";
+  const [meRole, setMeRole] = useState<string | null>(null);
+  const [users, setUsers] = useState<AppUser[] | null>(null);
+  const [usersError, setUsersError] = useState<string | null>(null);
+  const [busyUsers, setBusyUsers] = useState(false);
+
+  const [newUser, setNewUser] = useState<{ username: string; password: string; role: "admin" | "user" }>(
+    { username: "", password: "", role: "user" }
+  );
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<Partial<{ username: string; password: string; role: "admin" | "user" }>>({});
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/auth/me", { credentials: "include" });
+        if (res.ok) {
+          const j = await res.json();
+          setMeRole(String(j?.role || ""));
+        } else {
+          setMeRole(null);
+        }
+      } catch {
+        setMeRole(null);
+      }
+    })();
+  }, []);
+
+  const getErrMessage = (e: unknown): string => {
+    if (typeof e === "string") return e;
+    if (e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string") {
+      return (e as { message: string }).message;
+    }
+    return "";
+  };
+
+  const loadUsers = async () => {
+    setBusyUsers(true);
+    setUsersError(null);
+    try {
+      const list = await fetchAppUsers();
+      setUsers(list);
+    } catch (e: unknown) {
+      setUsersError(getErrMessage(e) || "Failed to load users");
+    } finally {
+      setBusyUsers(false);
+    }
+  };
+
+  useEffect(() => {
+    if (meRole && meRole.toLowerCase() === "admin") {
+      loadUsers();
+    }
+  }, [meRole]);
 
   if (isLoading) {
     return (
@@ -203,6 +257,226 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
+
+            {meRole && meRole.toLowerCase() === "admin" && (
+              <div className="bg-neutral-800 rounded-lg p-6 mt-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <User className="w-5 h-5 text-gray-400" />
+                  <h2 className="text-lg font-semibold">Users</h2>
+                </div>
+
+                {/* Create new user */}
+                <div className="p-4 bg-neutral-700/40 rounded-lg border border-neutral-600 mb-4">
+                  <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-end">
+                    <div className="flex-1">
+                      <label className="block text-sm text-gray-300 mb-1">Username</label>
+                      <input
+                        className="w-full px-3 py-2 rounded-md bg-neutral-900 border border-neutral-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        value={newUser.username}
+                        onChange={(e) => setNewUser((s) => ({ ...s, username: e.target.value }))}
+                        placeholder="new username"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-sm text-gray-300 mb-1">Password</label>
+                      <input
+                        type="password"
+                        className="w-full px-3 py-2 rounded-md bg-neutral-900 border border-neutral-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        value={newUser.password}
+                        onChange={(e) => setNewUser((s) => ({ ...s, password: e.target.value }))}
+                        placeholder="set password"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">Role</label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className={`px-3 py-2 rounded-md border ${newUser.role === "user" ? "bg-neutral-700 border-neutral-600" : "bg-neutral-800 border-neutral-700"}`}
+                          onClick={() => setNewUser((s) => ({ ...s, role: "user" }))}
+                          title="Standard user"
+                        >
+                          User
+                        </button>
+                        <button
+                          type="button"
+                          className={`px-3 py-2 rounded-md border flex items-center gap-1 ${newUser.role === "admin" ? "bg-amber-700/50 border-amber-600 text-amber-200" : "bg-neutral-800 border-neutral-700"}`}
+                          onClick={() => setNewUser((s) => ({ ...s, role: "admin" }))}
+                          title="Administrator"
+                        >
+                          <Shield className="w-4 h-4" /> Admin
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <button
+                        disabled={busyUsers || !newUser.username || !newUser.password}
+                        onClick={async () => {
+                          try {
+                            setBusyUsers(true);
+                            await createAppUser(newUser.username.trim(), newUser.password, newUser.role);
+                            setNewUser({ username: "", password: "", role: "user" });
+                            await loadUsers();
+                          } catch (e: unknown) {
+                            alert(getErrMessage(e) || "Failed to create user");
+                          } finally {
+                            setBusyUsers(false);
+                          }
+                        }}
+                        className="bg-amber-600 hover:bg-amber-500 text-black font-semibold px-4 py-2 rounded-md flex items-center gap-2 disabled:opacity-50"
+                      >
+                        <UserPlus className="w-4 h-4" /> Create
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Users table */}
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-gray-300">
+                        <th className="py-2 pr-4">Username</th>
+                        <th className="py-2 pr-4">Role</th>
+                        <th className="py-2 pr-4">Created</th>
+                        <th className="py-2 pr-2 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usersError && (
+                        <tr>
+                          <td colSpan={4} className="text-red-400 py-2">{usersError}</td>
+                        </tr>
+                      )}
+                      {!usersError && (!users || users.length === 0) && (
+                        <tr>
+                          <td colSpan={4} className="text-gray-400 py-2">No users</td>
+                        </tr>
+                      )}
+                      {users?.map((u) => (
+                        <tr key={u.id} className="border-t border-neutral-700/60">
+                          <td className="py-2 pr-4 align-middle">
+                            {editingId === u.id ? (
+                              <input
+                                className="w-full px-2 py-1 rounded bg-neutral-900 border border-neutral-700"
+                                defaultValue={u.username}
+                                onChange={(e) => setEditDraft((s) => ({ ...s, username: e.target.value }))}
+                              />
+                            ) : (
+                              <span className="text-white">{u.username}</span>
+                            )}
+                          </td>
+                          <td className="py-2 pr-4 align-middle">
+                            {editingId === u.id ? (
+                              <select
+                                defaultValue={u.role}
+                                onChange={(e) => setEditDraft((s) => ({ ...s, role: e.target.value as "admin" | "user" }))}
+                                className="px-2 py-1 rounded bg-neutral-900 border border-neutral-700"
+                              >
+                                <option value="user">user</option>
+                                <option value="admin">admin</option>
+                              </select>
+                            ) : (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${u.role === "admin" ? "bg-amber-700/40 text-amber-200" : "bg-neutral-700/60 text-gray-200"}`}>
+                                {u.role === "admin" && <Shield className="w-3 h-3" />} {u.role}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 pr-4 align-middle text-gray-400">
+                            {u.created_at?.replace(".000Z", "Z") || ""}
+                          </td>
+                          <td className="py-2 pr-2 align-middle">
+                            <div className="flex items-center justify-end gap-2">
+                              {editingId === u.id ? (
+                                <>
+                                  <button
+                                    className="px-2 py-1 rounded bg-green-700/70 hover:bg-green-700 text-white flex items-center gap-1"
+                                    onClick={async () => {
+                                      try {
+                                        setBusyUsers(true);
+                                        await updateAppUser(u.id, editDraft);
+                                        setEditingId(null);
+                                        setEditDraft({});
+                                        await loadUsers();
+                                      } catch (e: unknown) {
+                                        alert(getErrMessage(e) || "Save failed");
+                                      } finally {
+                                        setBusyUsers(false);
+                                      }
+                                    }}
+                                  >
+                                    <Save className="w-4 h-4" /> Save
+                                  </button>
+                                  <button
+                                    className="px-2 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-white flex items-center gap-1"
+                                    onClick={() => {
+                                      setEditingId(null);
+                                      setEditDraft({});
+                                    }}
+                                  >
+                                    <X className="w-4 h-4" /> Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  <button
+                                    className="px-2 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-white flex items-center gap-1"
+                                    onClick={() => {
+                                      setEditingId(u.id);
+                                      setEditDraft({});
+                                    }}
+                                  >
+                                    <Pencil className="w-4 h-4" /> Edit
+                                  </button>
+                                  <button
+                                    className="px-2 py-1 rounded bg-red-700/70 hover:bg-red-700 text-white flex items-center gap-1"
+                                    onClick={async () => {
+                                      if (!confirm(`Delete user ${u.username}?`)) return;
+                                      try {
+                                        setBusyUsers(true);
+                                        await deleteAppUser(u.id);
+                                        await loadUsers();
+                                      } catch (e: unknown) {
+                                        alert(getErrMessage(e) || "Delete failed");
+                                      } finally {
+                                        setBusyUsers(false);
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" /> Delete
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Inline password reset when editing */}
+                {editingId && (
+                  <div className="mt-4 p-3 bg-neutral-700/30 border border-neutral-600 rounded">
+                    <label className="block text-sm text-gray-300 mb-1">Set new password</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        className="flex-1 px-3 py-2 rounded-md bg-neutral-900 border border-neutral-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        placeholder="leave blank to keep current password"
+                        onChange={(e) => setEditDraft((s) => ({ ...s, password: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {busyUsers && (
+                  <div className="mt-3 text-sm text-gray-400 flex items-center gap-2">
+                    <RotateCcw className="w-4 h-4 animate-spin" /> Working…
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </main>
       </div>

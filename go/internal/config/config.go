@@ -36,10 +36,17 @@ type Config struct {
 	// Admin refresh
 	RefreshChunkSize int // e.g. 200
 
-	// Security
-	AdminToken      string // Authentication token for admin endpoints
-	WebhookSecret   string // Secret for webhook signature validation
-	AdminAutoCookie bool   // If true, server sets HttpOnly cookie to auto-auth UI
+    // Security
+    AdminToken      string // Authentication token for admin endpoints
+    WebhookSecret   string // Secret for webhook signature validation
+    AdminAutoCookie bool   // If true, server sets HttpOnly cookie to auto-auth UI
+
+    // App auth (users + sessions)
+    AuthEnabled              bool   // if true, gate UI behind session auth
+    AuthRegistrationMode     string // closed|secret|open (default closed)
+    AuthRegistrationSecret   string // invite/registration secret when mode=secret
+    AuthCookieName           string // cookie name for session token
+    AuthSessionTTLMinutes    int    // session lifetime in minutes
 
 	// Logging
 	LogLevel  string // DEBUG, INFO, WARN, ERROR
@@ -63,7 +70,7 @@ func Load() Config {
 	embyKey := env("EMBY_API_KEY", "")
 	embyExternal := env("EMBY_EXTERNAL_URL", embyBase)
 
-	cfg := Config{
+    cfg := Config{
 		EmbyBaseURL:         embyBase,
 		EmbyAPIKey:          embyKey,
 		EmbyExternalURL:     embyExternal,
@@ -79,8 +86,13 @@ func Load() Config {
 		RefreshChunkSize:    envInt("REFRESH_CHUNK_SIZE", 200),
 		AdminToken:          env("ADMIN_TOKEN", ""),
 		WebhookSecret:       env("WEBHOOK_SECRET", ""),
-		AdminAutoCookie:     envBool("ADMIN_AUTO_COOKIE", false),
-		LogLevel:            env("LOG_LEVEL", "INFO"),
+        AdminAutoCookie:     envBool("ADMIN_AUTO_COOKIE", false),
+        AuthEnabled:         envBool("AUTH_ENABLED", true),
+        AuthRegistrationMode: env("AUTH_REGISTRATION_MODE", "closed"),
+        AuthRegistrationSecret: env("AUTH_REGISTRATION_SECRET", ""),
+        AuthCookieName:       env("AUTH_COOKIE_NAME", "ea_session"),
+        AuthSessionTTLMinutes: envInt("AUTH_SESSION_TTL_MINUTES", 43200), // 30 days
+        LogLevel:            env("LOG_LEVEL", "INFO"),
 		LogFormat:           env("LOG_FORMAT", "text"),
 		LogOutput:           env("LOG_OUTPUT", "stdout"),
 		NowSseDebug:         envBool("NOW_SSE_DEBUG", false),
@@ -124,6 +136,11 @@ func Load() Config {
     if cfg.WebhookSecret == "" && cfg.AdminToken != "" {
         cfg.WebhookSecret = cfg.AdminToken
         fmt.Println("[INFO] WEBHOOK_SECRET not set; defaulting to ADMIN_TOKEN.")
+    }
+
+    if cfg.AuthRegistrationMode != "closed" && cfg.AuthRegistrationMode != "open" && cfg.AuthRegistrationMode != "secret" {
+        fmt.Println("[WARN] Invalid AUTH_REGISTRATION_MODE; defaulting to 'closed'.")
+        cfg.AuthRegistrationMode = "closed"
     }
 
 	fmt.Printf("[INFO] Using SQLite DB at: %s\n", dbPath)

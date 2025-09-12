@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.1.3 — Auth system
+
+New Feature:
+- Added Auth system
+
 ## v0.1.2 — Now Playing fixes and stats
 
 - Bug fixes
