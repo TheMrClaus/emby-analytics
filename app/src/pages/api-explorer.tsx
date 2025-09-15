@@ -420,6 +420,17 @@ const endpoints: Endpoint[] = [
 
   // Now Playing
   {
+    id: "now-snapshot-multi",
+    category: "Now",
+    method: "GET",
+    path: "/api/now/snapshot",
+    description: "Current active sessions across all configured servers.",
+    usage: "Optionally filter by ?server=<server_id> (e.g., default-emby).",
+    params: [
+      { key: "server", kind: "query", required: false, placeholder: "default-emby|default-plex|default-jellyfin" },
+    ],
+  },
+  {
     id: "now-snapshot",
     category: "Now",
     method: "GET",
@@ -469,6 +480,16 @@ const endpoints: Endpoint[] = [
       { key: "text", kind: "body", required: true, placeholder: "Hello there 👋" },
       { key: "timeout_ms", kind: "body", required: false, placeholder: "5000" },
     ],
+  },
+
+  // Servers
+  {
+    id: "servers-list",
+    category: "Servers",
+    method: "GET",
+    path: "/api/servers",
+    description: "List configured media servers with health status.",
+    usage: "Verify connectivity and IDs for server filtering.",
   },
 
   // Admin - Refresh & scheduler
