@@ -206,9 +206,9 @@ func envBool(key string, def bool) bool {
 
 // loadMediaServers loads multi-server configuration with backwards compatibility
 func loadMediaServers(legacyEmbyBase, legacyEmbyKey, legacyEmbyExternal string) []media.ServerConfig {
-    // 1) New: numbered env block (preferred for manageability)
-    if servers := loadMediaServersNumbered(); len(servers) > 0 {
-        fmt.Printf("[INFO] Loaded %d media servers from numbered env configuration\n", len(servers))
+    // 1) Preferred: simple per-type envs EMBY_*, PLEX_*, JELLYFIN_*
+    if servers := loadMediaServersSimple(); len(servers) > 0 {
+        fmt.Printf("[INFO] Loaded %d media servers from simple per-type env configuration\n", len(servers))
         return servers
     }
 
@@ -223,6 +223,12 @@ func loadMediaServers(legacyEmbyBase, legacyEmbyKey, legacyEmbyExternal string) 
             fmt.Printf("[INFO] Loaded %d media servers from MEDIA_SERVERS configuration\n", len(servers))
             return servers
         }
+    }
+
+    // 3) Optional: numbered env block (still supported for advanced setups)
+    if servers := loadMediaServersNumbered(); len(servers) > 0 {
+        fmt.Printf("[INFO] Loaded %d media servers from numbered env configuration\n", len(servers))
+        return servers
     }
 
 	// Fallback to legacy single-server configuration
@@ -242,6 +248,58 @@ func loadMediaServers(legacyEmbyBase, legacyEmbyKey, legacyEmbyExternal string) 
 
 	fmt.Println("[WARN] No media servers configured! Set MEDIA_SERVERS or EMBY_API_KEY")
 	return []media.ServerConfig{}
+}
+
+// loadMediaServersSimple reads EMBY_*, PLEX_*, JELLYFIN_* variables
+func loadMediaServersSimple() []media.ServerConfig {
+    servers := make([]media.ServerConfig, 0, 3)
+
+    // Emby
+    if base := strings.TrimRight(env("EMBY_BASE_URL", ""), "/"); base != "" {
+        if key := env("EMBY_API_KEY", ""); key != "" {
+            servers = append(servers, media.ServerConfig{
+                ID:          "default-emby",
+                Type:        media.ServerTypeEmby,
+                Name:        env("EMBY_NAME", "Emby Server"),
+                BaseURL:     base,
+                APIKey:      key,
+                ExternalURL: env("EMBY_EXTERNAL_URL", base),
+                Enabled:     envBool("EMBY_ENABLED", true),
+            })
+        }
+    }
+
+    // Plex
+    if base := strings.TrimRight(env("PLEX_BASE_URL", ""), "/"); base != "" {
+        if key := env("PLEX_API_KEY", ""); key != "" {
+            servers = append(servers, media.ServerConfig{
+                ID:          "default-plex",
+                Type:        media.ServerTypePlex,
+                Name:        env("PLEX_NAME", "Plex Server"),
+                BaseURL:     base,
+                APIKey:      key,
+                ExternalURL: env("PLEX_EXTERNAL_URL", base),
+                Enabled:     envBool("PLEX_ENABLED", true),
+            })
+        }
+    }
+
+    // Jellyfin
+    if base := strings.TrimRight(env("JELLYFIN_BASE_URL", ""), "/"); base != "" {
+        if key := env("JELLYFIN_API_KEY", ""); key != "" {
+            servers = append(servers, media.ServerConfig{
+                ID:          "default-jellyfin",
+                Type:        media.ServerTypeJellyfin,
+                Name:        env("JELLYFIN_NAME", "Jellyfin Server"),
+                BaseURL:     base,
+                APIKey:      key,
+                ExternalURL: env("JELLYFIN_EXTERNAL_URL", base),
+                Enabled:     envBool("JELLYFIN_ENABLED", true),
+            })
+        }
+    }
+
+    return servers
 }
 
 // loadMediaServersNumbered reads MEDIA_SERVER_1_*, MEDIA_SERVER_2_* ... using MEDIA_SERVERS_COUNT
