@@ -296,8 +296,9 @@ func main() {
 	app.Get("/img/backdrop/:id", images.Backdrop(imgOpts))
 	// Now Playing Routes
     app.Get("/api/now-playing/summary", now.Summary)
-    // Multi-server snapshot on both legacy and new paths
-    app.Get("/now/snapshot", now.MultiSnapshot)
+    // Legacy single-Emby snapshot remains for compatibility with current UI
+    app.Get("/now/snapshot", now.Snapshot)
+    // New multi-server snapshot for updated UI/clients
     app.Get("/api/now/snapshot", now.MultiSnapshot)
 	app.Get("/now/ws", func(c fiber.Ctx) error {
 		if ws.IsWebSocketUpgrade(c) {

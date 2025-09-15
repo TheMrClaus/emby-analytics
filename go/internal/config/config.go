@@ -206,18 +206,24 @@ func envBool(key string, def bool) bool {
 
 // loadMediaServers loads multi-server configuration with backwards compatibility
 func loadMediaServers(legacyEmbyBase, legacyEmbyKey, legacyEmbyExternal string) []media.ServerConfig {
-	// Check for new multi-server configuration first
-	mediaServersJSON := env("MEDIA_SERVERS", "")
-	if mediaServersJSON != "" {
-		var servers []media.ServerConfig
-		if err := json.Unmarshal([]byte(mediaServersJSON), &servers); err != nil {
-			fmt.Printf("[WARN] Failed to parse MEDIA_SERVERS JSON: %v\n", err)
-			fmt.Println("[INFO] Falling back to legacy single-server configuration")
-		} else {
-			fmt.Printf("[INFO] Loaded %d media servers from MEDIA_SERVERS configuration\n", len(servers))
-			return servers
-		}
-	}
+    // 1) New: numbered env block (preferred for manageability)
+    if servers := loadMediaServersNumbered(); len(servers) > 0 {
+        fmt.Printf("[INFO] Loaded %d media servers from numbered env configuration\n", len(servers))
+        return servers
+    }
+
+    // 2) Backwards-compatible: JSON array in MEDIA_SERVERS
+    mediaServersJSON := env("MEDIA_SERVERS", "")
+    if mediaServersJSON != "" {
+        var servers []media.ServerConfig
+        if err := json.Unmarshal([]byte(mediaServersJSON), &servers); err != nil {
+            fmt.Printf("[WARN] Failed to parse MEDIA_SERVERS JSON: %v\n", err)
+            fmt.Println("[INFO] Falling back to legacy single-server configuration")
+        } else {
+            fmt.Printf("[INFO] Loaded %d media servers from MEDIA_SERVERS configuration\n", len(servers))
+            return servers
+        }
+    }
 
 	// Fallback to legacy single-server configuration
 	if legacyEmbyKey != "" {
@@ -236,6 +242,65 @@ func loadMediaServers(legacyEmbyBase, legacyEmbyKey, legacyEmbyExternal string) 
 
 	fmt.Println("[WARN] No media servers configured! Set MEDIA_SERVERS or EMBY_API_KEY")
 	return []media.ServerConfig{}
+}
+
+// loadMediaServersNumbered reads MEDIA_SERVER_1_*, MEDIA_SERVER_2_* ... using MEDIA_SERVERS_COUNT
+func loadMediaServersNumbered() []media.ServerConfig {
+    cnt := envInt("MEDIA_SERVERS_COUNT", 0)
+    if cnt <= 0 {
+        return nil
+    }
+    servers := make([]media.ServerConfig, 0, cnt)
+    for i := 1; i <= cnt; i++ {
+        prefix := fmt.Sprintf("MEDIA_SERVER_%d_", i)
+        t := strings.ToLower(env(prefix+"TYPE", ""))
+        if t == "" {
+            fmt.Printf("[WARN] %sTYPE missing; skipping server %d\n", prefix, i)
+            continue
+        }
+        // Map to ServerType
+        var st media.ServerType
+        switch t {
+        case string(media.ServerTypeEmby):
+            st = media.ServerTypeEmby
+        case string(media.ServerTypePlex):
+            st = media.ServerTypePlex
+        case string(media.ServerTypeJellyfin):
+            st = media.ServerTypeJellyfin
+        default:
+            fmt.Printf("[WARN] %sTYPE unsupported: %s; skipping\n", prefix, t)
+            continue
+        }
+
+        id := env(prefix+"ID", "")
+        if id == "" {
+            id = fmt.Sprintf("%s-%d", t, i)
+        }
+        name := env(prefix+"NAME", "")
+        if name == "" {
+            name = fmt.Sprintf("%s %d", strings.Title(t), i)
+        }
+        base := strings.TrimRight(env(prefix+"BASE_URL", ""), "/")
+        key := env(prefix+"API_KEY", "")
+        ext := env(prefix+"EXTERNAL_URL", base)
+        enabled := envBool(prefix+"ENABLED", true)
+
+        if base == "" || key == "" {
+            fmt.Printf("[WARN] %sBASE_URL or %sAPI_KEY missing; skipping server '%s'\n", prefix, prefix, id)
+            continue
+        }
+
+        servers = append(servers, media.ServerConfig{
+            ID:          id,
+            Type:        st,
+            Name:        name,
+            BaseURL:     base,
+            APIKey:      key,
+            ExternalURL: ext,
+            Enabled:     enabled,
+        })
+    }
+    return servers
 }
 
 // getDefaultServerID returns the first enabled server ID or empty string
