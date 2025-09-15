@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { useMultiServer } from "../contexts/MultiServerContext";
 import ServerSelector from "./ServerSelector";
 
@@ -71,4 +70,3 @@ export default function MultiServerNowPlaying() {
     </section>
   );
 }
-
