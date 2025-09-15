@@ -260,7 +260,7 @@ func loadMediaServersSimple() []media.ServerConfig {
             servers = append(servers, media.ServerConfig{
                 ID:          "default-emby",
                 Type:        media.ServerTypeEmby,
-                Name:        env("EMBY_NAME", "Emby Server"),
+                Name:        env("EMBY_NAME", "Emby"),
                 BaseURL:     base,
                 APIKey:      key,
                 ExternalURL: env("EMBY_EXTERNAL_URL", base),
@@ -275,7 +275,7 @@ func loadMediaServersSimple() []media.ServerConfig {
             servers = append(servers, media.ServerConfig{
                 ID:          "default-plex",
                 Type:        media.ServerTypePlex,
-                Name:        env("PLEX_NAME", "Plex Server"),
+                Name:        env("PLEX_NAME", "Plex"),
                 BaseURL:     base,
                 APIKey:      key,
                 ExternalURL: env("PLEX_EXTERNAL_URL", base),
@@ -290,7 +290,7 @@ func loadMediaServersSimple() []media.ServerConfig {
             servers = append(servers, media.ServerConfig{
                 ID:          "default-jellyfin",
                 Type:        media.ServerTypeJellyfin,
-                Name:        env("JELLYFIN_NAME", "Jellyfin Server"),
+                Name:        env("JELLYFIN_NAME", "Jellyfin"),
                 BaseURL:     base,
                 APIKey:      key,
                 ExternalURL: env("JELLYFIN_EXTERNAL_URL", base),
