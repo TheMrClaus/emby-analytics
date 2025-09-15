@@ -482,6 +482,48 @@ const endpoints: Endpoint[] = [
     ],
   },
 
+  // Now Playing (multi-server controls)
+  {
+    id: "now-pause-server",
+    category: "Now",
+    method: "POST",
+    path: "/api/now/sessions/:server/:id/pause",
+    description: "Pause or resume a session on a specific server.",
+    usage: "Multi-server aware moderation.",
+    params: [
+      { key: "server", kind: "path", required: true, placeholder: "default-emby|default-plex|default-jellyfin" },
+      { key: "id", kind: "path", required: true, placeholder: "session-id" },
+      { key: "paused", kind: "body", required: false, placeholder: "true|false" },
+    ],
+  },
+  {
+    id: "now-stop-server",
+    category: "Now",
+    method: "POST",
+    path: "/api/now/sessions/:server/:id/stop",
+    description: "Stop a session on a specific server.",
+    usage: "Multi-server aware moderation.",
+    params: [
+      { key: "server", kind: "path", required: true, placeholder: "default-emby|default-plex|default-jellyfin" },
+      { key: "id", kind: "path", required: true, placeholder: "session-id" },
+    ],
+  },
+  {
+    id: "now-message-server",
+    category: "Now",
+    method: "POST",
+    path: "/api/now/sessions/:server/:id/message",
+    description: "Send an on-screen message to a session on a specific server.",
+    usage: "Inform users across servers.",
+    params: [
+      { key: "server", kind: "path", required: true, placeholder: "default-emby|default-plex|default-jellyfin" },
+      { key: "id", kind: "path", required: true, placeholder: "session-id" },
+      { key: "header", kind: "body", required: false, placeholder: "Emby Analytics" },
+      { key: "text", kind: "body", required: true, placeholder: "Hello there 👋" },
+      { key: "timeout_ms", kind: "body", required: false, placeholder: "5000" },
+    ],
+  },
+
   // Servers
   {
     id: "servers-list",

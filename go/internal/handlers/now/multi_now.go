@@ -202,6 +202,97 @@ func MultiSnapshot(c fiber.Ctx) error {
     return c.JSON(out)
 }
 
+// MultiPauseSession pauses or resumes a session on a specific server
+// POST /api/now/sessions/:server/:id/pause  body: {"paused":true|false}
+func MultiPauseSession(c fiber.Ctx) error {
+    serverID := c.Params("server")
+    sessionID := c.Params("id")
+    var body struct { Paused *bool `json:"paused"` }
+    _ = c.Bind().Body(&body)
+
+    if multiServerMgr == nil {
+        return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "multi-server not initialized"})
+    }
+    client, ok := multiServerMgr.GetClient(serverID)
+    if !ok || client == nil {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "unknown server id"})
+    }
+    if body.Paused != nil && !*body.Paused {
+        if err := client.UnpauseSession(sessionID); err != nil {
+            return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
+        }
+        return c.SendStatus(fiber.StatusNoContent)
+    }
+    if err := client.PauseSession(sessionID); err != nil {
+        return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
+    }
+    return c.SendStatus(fiber.StatusNoContent)
+}
+
+// MultiStopSession stops a session on a specific server
+// POST /api/now/sessions/:server/:id/stop
+func MultiStopSession(c fiber.Ctx) error {
+    serverID := c.Params("server")
+    sessionID := c.Params("id")
+    if multiServerMgr == nil {
+        return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "multi-server not initialized"})
+    }
+    client, ok := multiServerMgr.GetClient(serverID)
+    if !ok || client == nil {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "unknown server id"})
+    }
+    if err := client.StopSession(sessionID); err != nil {
+        return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
+    }
+    return c.SendStatus(fiber.StatusNoContent)
+}
+
+// MultiMessageSession sends a message to a session on a specific server
+// POST /api/now/sessions/:server/:id/message  body: {header?, text|message, timeout_ms?}
+func MultiMessageSession(c fiber.Ctx) error {
+    serverID := c.Params("server")
+    sessionID := c.Params("id")
+    if multiServerMgr == nil {
+        return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "multi-server not initialized"})
+    }
+    client, ok := multiServerMgr.GetClient(serverID)
+    if !ok || client == nil {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "unknown server id"})
+    }
+
+    var body struct {
+        Header string `json:"header"`
+        Text   string `json:"text"`
+        Message string `json:"message"`
+        TimeoutMs int  `json:"timeout_ms"`
+    }
+    if err := c.Bind().Body(&body); err != nil {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid JSON body"})
+    }
+
+    if strings.TrimSpace(body.Text) == "" && strings.TrimSpace(body.Message) != "" {
+        body.Text = body.Message
+    }
+
+    // Sanitize and validate like legacy
+    const maxHeaderLength = 100
+    const maxTextLength = 500
+    body.Header = sanitizeMessageInput(body.Header, maxHeaderLength)
+    body.Text = sanitizeMessageInput(body.Text, maxTextLength)
+    if strings.TrimSpace(body.Text) == "" {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Message text required"})
+    }
+    if body.TimeoutMs < 1000 { body.TimeoutMs = 5000 }
+    if body.TimeoutMs > 60000 { body.TimeoutMs = 60000 }
+    if body.Header == "" { body.Header = "Emby Analytics" }
+
+    if err := client.SendMessage(sessionID, body.Header, body.Text, body.TimeoutMs); err != nil {
+        return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
+    }
+    return c.SendStatus(fiber.StatusNoContent)
+}
+
+
 // Helpers mapping normalized session to UI strings
 func videoDetailFromNormalized(s media.Session) string {
     parts := []string{}

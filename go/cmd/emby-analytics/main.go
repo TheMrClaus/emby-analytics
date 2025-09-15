@@ -310,6 +310,11 @@ func main() {
     // Server list/health
     app.Get("/api/servers", serversHandler.List())
 
+    // Server-aware now controls
+    app.Post("/api/now/sessions/:server/:id/pause", now.MultiPauseSession)
+    app.Post("/api/now/sessions/:server/:id/stop", now.MultiStopSession)
+    app.Post("/api/now/sessions/:server/:id/message", now.MultiMessageSession)
+
     // Admin Routes with Authentication
 	rm := admin.NewRefreshManager()
 
