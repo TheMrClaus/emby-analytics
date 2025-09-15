@@ -448,6 +448,15 @@ const endpoints: Endpoint[] = [
     note: "Open in a WS client or via the UI card. Not runnable here.",
   },
   {
+    id: "now-ws-multi",
+    category: "Now",
+    method: "GET",
+    path: "/api/now/ws",
+    description: "WebSocket stream of active sessions across servers.",
+    usage: "Live updates with optional ?server=emby|plex|jellyfin|all.",
+    note: "Open in a WS client or via updated UI. Not runnable here.",
+  },
+  {
     id: "now-pause",
     category: "Now",
     method: "POST",

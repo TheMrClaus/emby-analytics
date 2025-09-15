@@ -298,6 +298,11 @@ func main() {
     app.Get("/now/snapshot", now.Snapshot)
     // New multi-server snapshot for updated UI/clients
     app.Get("/api/now/snapshot", now.MultiSnapshot)
+    // Multi-server WebSocket stream (optional ?server=emby|plex|jellyfin|all)
+    app.Get("/api/now/ws", func(c fiber.Ctx) error {
+        if ws.IsWebSocketUpgrade(c) { return c.Next() }
+        return fiber.ErrUpgradeRequired
+    }, ws.New(now.MultiWS()))
 	app.Get("/now/ws", func(c fiber.Ctx) error {
 		if ws.IsWebSocketUpgrade(c) {
 			return c.Next()
