@@ -1,13 +1,14 @@
 package stats
 
 import (
-	"database/sql"
-	"emby-analytics/internal/emby"
-	"emby-analytics/internal/queries"
-	"emby-analytics/internal/tasks"
-	"fmt"
-	"sort"
-	"strings"
+    "database/sql"
+    "emby-analytics/internal/emby"
+    "emby-analytics/internal/media"
+    "emby-analytics/internal/queries"
+    "emby-analytics/internal/tasks"
+    "fmt"
+    "sort"
+    "strings"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -20,6 +21,10 @@ type TopItem struct {
 	Hours   float64 `json:"hours"`
 	Display string  `json:"display"`
 }
+
+var topItemsMultiMgr *media.MultiServerManager
+
+func SetMultiServerManager(mgr *media.MultiServerManager) { topItemsMultiMgr = mgr }
 
 func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
     return func(c fiber.Ctx) error {
@@ -64,8 +69,9 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 
         // 1. Get historical data (broad candidate set)
         historicalRows, err := queries.TopItemsByWatchSeconds(c, db, winStart, winEnd, 1000)
+        // If the primary query errors, don't fail hard; attempt fallback path below
         if err != nil {
-            return c.Status(500).JSON(fiber.Map{"error": "database query failed: " + err.Error()})
+            historicalRows = nil
         }
 
 		if err != nil || len(historicalRows) == 0 {
@@ -167,7 +173,9 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
         // 3. Compute exact, coalesced watch hours per candidate using per-session interval merging
         exactHours, err := computeExactItemHours(db, keys(candidateIDs), winStart, winEnd)
         if err != nil {
-            return c.Status(500).JSON(fiber.Map{"error": "failed to compute exact hours: " + err.Error()})
+            // Do not fail hard; log and continue with coarse hours
+            fmt.Printf("[WARN] TopItems exact hours computation failed: %v\n", err)
+            exactHours = map[string]float64{}
         }
         for id, hrs := range exactHours {
             combinedHours[id] = hrs
@@ -239,6 +247,10 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 
         // 7. Run your preserved enrichment logic on the final, combined list
         enrichItems(finalResult, em)
+        // Additional enrichment for non-Emby items (multi-server)
+        if topItemsMultiMgr != nil {
+            enrichItemsMulti(db, finalResult)
+        }
 
         return c.JSON(finalResult)
     }
@@ -407,4 +419,64 @@ func enrichItems(items []TopItem, em *emby.Client) {
 			}
 		}
 	}
+}
+
+// enrichItemsMulti resolves missing names/displays using the last-known server context and manager clients.
+func enrichItemsMulti(db *sql.DB, items []TopItem) {
+    // Build list of IDs needing enrichment
+    need := make([]string, 0)
+    for _, it := range items {
+        if it.Name == "Unknown" || it.Type == "Unknown" || strings.HasPrefix(it.Name, "Deleted Item") || strings.HasPrefix(it.Display, "Deleted Item") {
+            need = append(need, it.ItemID)
+        }
+    }
+    if len(need) == 0 { return }
+
+    type ctx struct{ serverID string }
+    ctxByID := make(map[string]ctx)
+    for _, id := range need {
+        var sid string
+        _ = db.QueryRow(`SELECT server_id FROM play_sessions WHERE item_id = ? ORDER BY started_at DESC LIMIT 1`, id).Scan(&sid)
+        if sid != "" { ctxByID[id] = ctx{serverID: sid} }
+    }
+    // Batch per server
+    byServer := make(map[string][]string)
+    for id, c := range ctxByID { byServer[c.serverID] = append(byServer[c.serverID], id) }
+    // Map for quick update
+    idx := make(map[string]*TopItem)
+    for i := range items { idx[items[i].ItemID] = &items[i] }
+    for sid, idlist := range byServer {
+        client, ok := topItemsMultiMgr.GetClient(sid)
+        if !ok || client == nil || len(idlist) == 0 { continue }
+        if mis, err := client.ItemsByIDs(idlist); err == nil {
+            for _, mi := range mis {
+                ti, ok := idx[mi.ID]; if !ok { continue }
+                if mi.Name != "" { ti.Name = mi.Name; ti.Display = mi.Name }
+                if mi.Type != "" { ti.Type = mi.Type }
+                if strings.EqualFold(mi.Type, "Episode") && mi.SeriesName != "" {
+                    epcode := ""
+                    if mi.ParentIndexNumber != nil && mi.IndexNumber != nil {
+                        epcode = fmt.Sprintf("S%02dE%02d", *mi.ParentIndexNumber, *mi.IndexNumber)
+                    }
+                    if epcode != "" && ti.Name != "" {
+                        ti.Display = fmt.Sprintf("%s - %s (%s)", mi.SeriesName, ti.Name, epcode)
+                    } else if ti.Name != "" {
+                        ti.Display = fmt.Sprintf("%s - %s", mi.SeriesName, ti.Name)
+                    } else {
+                        ti.Display = mi.SeriesName
+                    }
+                    ti.Type = "Episode"
+                }
+                // Upsert minimal metadata
+                _, _ = db.Exec(`
+                    INSERT INTO library_item (id, server_id, name, media_type, updated_at)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(id) DO UPDATE SET
+                        name = CASE WHEN excluded.name <> '' THEN excluded.name ELSE name END,
+                        media_type = CASE WHEN excluded.media_type <> '' THEN excluded.media_type ELSE media_type END,
+                        updated_at = CURRENT_TIMESTAMP
+                `, mi.ID, sid, ti.Name, ti.Type)
+            }
+        }
+    }
 }
