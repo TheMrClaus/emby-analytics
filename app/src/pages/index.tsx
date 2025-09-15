@@ -6,6 +6,7 @@ import QualitiesTable from "../components/QualitiesTable";
 import CodecsTable from "../components/CodecsTable";
 import ActiveUsersLifetime from "../components/ActiveUsersLifetime";
 import NowPlaying from "../components/NowPlaying";
+import MultiServerNowPlaying from "../components/MultiServerNowPlaying";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import DragDropDashboard from "../components/DragDropDashboard";
 
@@ -23,9 +24,9 @@ export default function Dashboard() {
             <OverviewCards />
           </ErrorBoundary>
 
-          {/* Live sessions */}
+          {/* Live sessions (multi-server) */}
           <ErrorBoundary>
-            <NowPlaying />
+            <MultiServerNowPlaying />
           </ErrorBoundary>
 
           {/* Dashboard cards with drag and drop functionality */}

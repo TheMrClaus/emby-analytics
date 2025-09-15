@@ -1,0 +1,47 @@
+export type MultiNowEntry = {
+  timestamp: number;
+  title: string;
+  user: string;
+  app: string;
+  device: string;
+  play_method: string;
+  video: string;
+  audio: string;
+  subs: string;
+  bitrate: number;
+  progress_pct: number;
+  position_sec?: number;
+  duration_sec?: number;
+  is_paused?: boolean;
+  poster: string;
+  session_id: string;
+  item_id: string;
+  item_type?: string;
+  container?: string;
+  width?: number;
+  height?: number;
+  dolby_vision?: boolean;
+  hdr10?: boolean;
+  audio_lang?: string;
+  audio_ch?: number;
+  sub_lang?: string;
+  sub_codec?: string;
+  trans_video_from?: string;
+  trans_video_to?: string;
+  trans_audio_from?: string;
+  trans_audio_to?: string;
+  video_method?: string;
+  audio_method?: string;
+  stream_path?: string;
+  stream_detail?: string;
+  trans_reason?: string;
+  trans_pct?: number;
+  trans_audio_bitrate?: number;
+  trans_video_bitrate?: number;
+  // multi-server
+  server_id?: string;
+  server_type?: "emby" | "plex" | "jellyfin";
+};
+
+export type ServerAlias = "all" | "emby" | "plex" | "jellyfin";
+
