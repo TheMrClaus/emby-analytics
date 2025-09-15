@@ -49,6 +49,9 @@ export type NowEntry = {
   trans_pct?: number;
   trans_audio_bitrate?: number;
   trans_video_bitrate?: number;
+  // Multi-server extras
+  server_id?: string;
+  server_type?: string;
 };
 
 interface NowPlayingContextType {
@@ -108,7 +111,7 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
 
   const loadSnapshot = useCallback(async () => {
     try {
-      const res = await fetch(`${apiBase}/now/snapshot`);
+      const res = await fetch(`${apiBase}/api/now/snapshot?server=all`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: NowEntry[] = await res.json();
       const arr = Array.isArray(data) ? data : [];
@@ -124,7 +127,7 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
     if (typeof window === "undefined") return;
 
     const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const wsURL = `${proto}://${window.location.host}/now/ws`;
+    const wsURL = `${proto}://${window.location.host}/api/now/ws?server=all`;
 
     try {
       const ws = new WebSocket(wsURL);

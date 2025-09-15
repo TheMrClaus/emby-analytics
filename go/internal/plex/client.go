@@ -49,11 +49,12 @@ func New(config media.ServerConfig) *Client {
 
 // Plex XML response structures
 type plexMediaContainer struct {
-	XMLName  xml.Name      `xml:"MediaContainer"`
-	Size     int           `xml:"size,attr"`
-	Metadata []plexSession `xml:"Metadata"`
-	Users    []plexUser    `xml:"User"`
-	Info     plexSystemInfo `xml:",any"`
+    XMLName  xml.Name      `xml:"MediaContainer"`
+    Size     int           `xml:"size,attr"`
+    Metadata []plexSession `xml:"Metadata"`
+    Videos   []plexSession `xml:"Video"`
+    Users    []plexUser    `xml:"User"`
+    Info     plexSystemInfo `xml:",any"`
 }
 
 type plexSession struct {
@@ -285,17 +286,22 @@ func (c *Client) GetActiveSessions() ([]media.Session, error) {
 		return nil, err
 	}
 	
-	var container plexMediaContainer
-	if err := readXML(resp, &container); err != nil {
-		return nil, err
-	}
-	
-	sessions := make([]media.Session, 0, len(container.Metadata))
-	
-	for _, plexSess := range container.Metadata {
-		session := c.convertSession(plexSess)
-		sessions = append(sessions, session)
-	}
+    var container plexMediaContainer
+    if err := readXML(resp, &container); err != nil {
+        return nil, err
+    }
+
+    sessions := make([]media.Session, 0, container.Size)
+
+    if len(container.Videos) > 0 {
+        for _, plexSess := range container.Videos {
+            sessions = append(sessions, c.convertSession(plexSess))
+        }
+    } else if len(container.Metadata) > 0 {
+        for _, plexSess := range container.Metadata {
+            sessions = append(sessions, c.convertSession(plexSess))
+        }
+    }
 	
 	return sessions, nil
 }

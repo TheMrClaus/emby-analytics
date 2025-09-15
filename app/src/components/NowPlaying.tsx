@@ -131,6 +131,18 @@ export default function NowPlaying() {
   };
 
   // ---------- UI helpers ----------
+  const theme = (serverType?: string) => {
+    const t = (serverType || "emby").toLowerCase();
+    switch (t) {
+      case "plex":
+        return { text: "text-[#e5a00d]", bar: "bg-[#e5a00d]" };
+      case "jellyfin":
+        return { text: "text-[#aa5cc8]", bar: "bg-[#aa5cc8]" };
+      case "emby":
+      default:
+        return { text: "text-[#52b54b]", bar: "bg-[#52b54b]" };
+    }
+  };
   const Chip = ({ tone, label }: { tone: "ok" | "warn"; label: string }) => (
     <span
       className={[
@@ -252,10 +264,10 @@ export default function NowPlaying() {
       {/* Foreground content */}
       <div className="hero-foreground space-y-5">
         <div className="flex items-center gap-3 flex-wrap">
-          <h2 className="ty-title text-emerald-400">Now Playing</h2>
+          <h2 className="ty-title">Now Playing</h2>
           <div className="flex items-center gap-2 text-xs">
             <span
-              className="px-2 py-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+              className="px-2 py-1 rounded-full border border-gray-500/30 bg-gray-500/10 text-gray-200"
               title="5s rolling average of all active session bitrates."
             >
               Outbound: {summary ? (summary.outbound_mbps ?? 0).toFixed(1) : "0.0"} Mbps
@@ -321,7 +333,7 @@ export default function NowPlaying() {
                       </h3>
                       <div className="text-xs text-gray-300 space-y-0.5 mb-2">
                         <div>
-                          <span className="font-medium text-emerald-400">{s.user}</span>
+                          <span className={`font-medium ${theme(s.server_type).text}`}>{s.user}</span>
                         </div>
                         <div>{s.app || s.device || "Unknown Client"}</div>
                       </div>
@@ -354,19 +366,19 @@ export default function NowPlaying() {
                         <span className="text-gray-400">Video: </span>
                         <span className="text-white">{s.video || "Unknown"}</span>
                         {" "}
-                        <span className={v.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{v.label}</span>
+                        <span className={v.tone === "warn" ? "text-orange-400" : theme(s.server_type).text}>{v.label}</span>
                       </div>
                       <div className="text-gray-300">
                         <span className="text-gray-400">Audio: </span>
                         <span className="text-white">{s.audio || "Unknown"}</span>
                         {" "}
-                        <span className={a.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{a.label}</span>
+                        <span className={a.tone === "warn" ? "text-orange-400" : theme(s.server_type).text}>{a.label}</span>
                       </div>
                       <div className="text-gray-300">
                         <span className="text-gray-400">Subtitles: </span>
                         <span className="text-white">{s.subs || "None"}</span>
                         {" "}
-                        <span className={sub.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{sub.label}</span>
+                        <span className={sub.tone === "warn" ? "text-orange-400" : theme(s.server_type).text}>{sub.label}</span>
                       </div>
                       {s.bitrate > 0 && (
                         <div className="text-gray-300">
@@ -386,7 +398,7 @@ export default function NowPlaying() {
                         </div>
                         <div className="h-1.5 bg-neutral-700 rounded-full overflow-hidden w-full">
                           <div
-                            className="h-full bg-emerald-500 transition-all duration-300"
+                            className={`h-full ${theme(s.server_type).bar} transition-all duration-300`}
                             style={{ width: `${progress}%` }}
                           />
                         </div>
