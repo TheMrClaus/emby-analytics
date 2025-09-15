@@ -214,7 +214,7 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
                         `, it.Id, it.Id, it.Id, it.Name, it.Type)
                     }
                 }
-                if name == "" { name = fmt.Sprintf("Unknown Item (%s)", itemID[:8]) }
+                if name == "" { name = fmt.Sprintf("Unknown Item (%s)", shortID(itemID)) }
                 if itemType == "" { itemType = "Unknown" }
                 itemDetails[itemID] = TopItem{ItemID: itemID, Name: name, Type: itemType}
             }
@@ -254,6 +254,15 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 
         return c.JSON(finalResult)
     }
+}
+
+// shortID returns a safe short prefix of an ID for display.
+// It never slices past the string length to avoid runtime panics.
+func shortID(id string) string {
+    if len(id) > 8 {
+        return id[:8]
+    }
+    return id
 }
 
 // keys returns the set keys as a slice
@@ -411,11 +420,11 @@ func enrichItems(items []TopItem, em *emby.Client) {
 							item.Type = it.Type
 						}
 					}
-				} else if item.Name == "Unknown" || item.Type == "Unknown" {
-					item.Name = fmt.Sprintf("Deleted Item (%s)", item.ItemID[:8])
-					item.Display = fmt.Sprintf("Deleted Item (%s)", item.ItemID[:8])
-					item.Type = "Deleted"
-				}
+                } else if item.Name == "Unknown" || item.Type == "Unknown" {
+                    item.Name = fmt.Sprintf("Deleted Item (%s)", shortID(item.ItemID))
+                    item.Display = fmt.Sprintf("Deleted Item (%s)", shortID(item.ItemID))
+                    item.Type = "Deleted"
+                }
 			}
 		}
 	}
