@@ -1,17 +1,16 @@
 package plex
 
 import (
-	"crypto/md5"
-	"encoding/xml"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
+    "crypto/md5"
+    "encoding/xml"
+    "fmt"
+    "io"
+    "net/http"
+    "net/url"
+    "sort"
+    "strings"
+    "sync"
+    "time"
 
 	"emby-analytics/internal/media"
 )
