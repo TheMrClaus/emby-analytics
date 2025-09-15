@@ -1,6 +1,8 @@
 package now
 
 import (
+    "fmt"
+    "strconv"
     "strings"
     "time"
 
@@ -24,21 +26,38 @@ func MultiSnapshot(c fiber.Ctx) error {
     sessions := make([]media.Session, 0)
 
     if multiServerMgr != nil {
-        if serverFilter != "" && serverFilter != "all" {
+        lf := strings.ToLower(serverFilter)
+        switch lf {
+        case "", "all":
+            if ss, err := multiServerMgr.GetAllSessions(); err == nil {
+                sessions = ss
+            }
+        case string(media.ServerTypeEmby), string(media.ServerTypePlex), string(media.ServerTypeJellyfin):
+            // Filter by server type
+            for _, client := range multiServerMgr.GetEnabledClients() {
+                if client != nil && strings.EqualFold(string(client.GetServerType()), lf) {
+                    if ss, err := client.GetActiveSessions(); err == nil {
+                        sessions = append(sessions, ss...)
+                    }
+                }
+            }
+        default:
+            // Treat as server ID
             if client, ok := multiServerMgr.GetClient(serverFilter); ok && client != nil {
                 if ss, err := client.GetActiveSessions(); err == nil {
                     sessions = ss
                 }
             }
-        } else {
-            if ss, err := multiServerMgr.GetAllSessions(); err == nil {
-                sessions = ss
-            }
         }
     }
 
-    // Fallback: if no sessions from multi-server, use legacy Emby snapshot
+    // Fallback: if no sessions and no specific non-Emby filter, try legacy Emby snapshot
     if len(sessions) == 0 {
+        lf := strings.ToLower(serverFilter)
+        if lf != "" && lf != "all" && lf != string(media.ServerTypeEmby) && lf != "default-emby" {
+            // Specific non-Emby filter requested; return empty
+            return c.JSON([]NowEntry{})
+        }
         if em, err := getEmbyClient(); err == nil {
             if es, err2 := em.GetActiveSessions(); err2 == nil && len(es) > 0 {
                 nowMs := time.Now().UnixMilli()
@@ -89,6 +108,12 @@ func MultiSnapshot(c fiber.Ctx) error {
                         AudioMethod: s.AudioMethod,
                         TransReason: reasonText(s.VideoMethod, s.AudioMethod, s.TransReasons),
                         TransPct:    s.TransCompletion,
+                        StreamPath:  streamPathLabel(s.TransContainer),
+                        StreamDetail: func() string {
+                            if !strings.EqualFold(s.PlayMethod, "Transcode") { return "" }
+                            // Best-effort bitrate view
+                            return fmt.Sprintf("%s (%s)", streamPathLabel(s.TransContainer), mbps(s.Bitrate))
+                        }(),
                         IsPaused:    s.IsPaused,
                         ServerID:    "default-emby",
                         ServerType:  "emby",
@@ -114,7 +139,7 @@ func MultiSnapshot(c fiber.Ctx) error {
         }
         subsText := "None"
         if s.SubtitleCount > 0 {
-            subsText = "1"
+            subsText = strconv.Itoa(s.SubtitleCount)
         }
         poster := ""
         if s.ItemID != "" {
@@ -156,8 +181,18 @@ func MultiSnapshot(c fiber.Ctx) error {
             VideoMethod:    s.VideoMethod,
             AudioMethod:    s.AudioMethod,
             TransReason:    reasonText(s.VideoMethod, s.AudioMethod, s.TranscodeReasons),
-            TransPct:       s.TranscodeProgress,
+            TransPct: func() float64 {
+                if s.TranscodeProgress > 0 { return s.TranscodeProgress }
+                if s.DurationMs > 0 { return (float64(s.PositionMs) / float64(s.DurationMs)) * 100 }
+                return 0
+            }(),
             IsPaused:       s.IsPaused,
+        }
+        // Streaming path and detail when transcoding
+        if strings.EqualFold(s.PlayMethod, "Transcode") {
+            entry.StreamPath = streamPathLabel(s.TranscodeContainer)
+            entry.StreamDetail = fmt.Sprintf("%s (%s)", entry.StreamPath, mbps(s.Bitrate))
+            entry.TransVideoBitrate = s.TranscodeBitrate
         }
         // Server metadata for UI filtering/coloring
         entry.ServerID = s.ServerID
