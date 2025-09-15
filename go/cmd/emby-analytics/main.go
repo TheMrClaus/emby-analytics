@@ -112,9 +112,7 @@ func main() {
         case media.ServerTypeJellyfin:
             multiMgr.AddServer(sc, jellyfin.New(sc))
         case media.ServerTypeEmby:
-            // TODO: add Emby adapter that implements media.MediaServerClient
-            // Legacy handlers will continue to serve Emby for now.
-            multiMgr.AddServer(sc, nil)
+            multiMgr.AddServer(sc, media.NewEmbyAdapter(sc))
         }
     }
 
