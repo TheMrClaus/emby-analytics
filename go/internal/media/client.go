@@ -71,13 +71,16 @@ func (m *MultiServerManager) GetAllClients() map[string]MediaServerClient {
 
 // GetEnabledClients returns only enabled clients
 func (m *MultiServerManager) GetEnabledClients() map[string]MediaServerClient {
-	enabled := make(map[string]MediaServerClient)
-	for serverID, client := range m.clients {
-		if config, exists := m.configs[serverID]; exists && config.Enabled {
-			enabled[serverID] = client
-		}
-	}
-	return enabled
+    enabled := make(map[string]MediaServerClient)
+    for serverID, client := range m.clients {
+        if client == nil {
+            continue
+        }
+        if config, exists := m.configs[serverID]; exists && config.Enabled {
+            enabled[serverID] = client
+        }
+    }
+    return enabled
 }
 
 // GetAllSessions aggregates sessions from all enabled servers
@@ -85,6 +88,9 @@ func (m *MultiServerManager) GetAllSessions() ([]Session, error) {
     var allSessions []Session
 
     for _, client := range m.GetEnabledClients() {
+        if client == nil {
+            continue
+        }
         sessions, err := client.GetActiveSessions()
         if err != nil {
             // Log error but continue with other servers
