@@ -7,22 +7,22 @@ type MediaServerClient interface {
 	GetServerID() string
 	GetServerType() ServerType
 	GetServerName() string
-	
+
 	// Core functionality
 	GetActiveSessions() ([]Session, error)
 	GetSystemInfo() (*SystemInfo, error)
 	GetUsers() ([]User, error)
-	
+
 	// Media item operations
 	ItemsByIDs(ids []string) ([]MediaItem, error)
 	GetUserPlayHistory(userID string, daysBack int) ([]PlayHistoryItem, error)
-	
+
 	// Session control operations
 	PauseSession(sessionID string) error
 	UnpauseSession(sessionID string) error
 	StopSession(sessionID string) error
 	SendMessage(sessionID, header, text string, timeoutMs int) error
-	
+
 	// Health check
 	CheckHealth() (*ServerHealth, error)
 }
@@ -82,18 +82,18 @@ func (m *MultiServerManager) GetEnabledClients() map[string]MediaServerClient {
 
 // GetAllSessions aggregates sessions from all enabled servers
 func (m *MultiServerManager) GetAllSessions() ([]Session, error) {
-	var allSessions []Session
-	
-	for serverID, client := range m.GetEnabledClients() {
-		sessions, err := client.GetActiveSessions()
-		if err != nil {
-			// Log error but continue with other servers
-			continue
-		}
-		allSessions = append(allSessions, sessions...)
-	}
-	
-	return allSessions, nil
+    var allSessions []Session
+
+    for _, client := range m.GetEnabledClients() {
+        sessions, err := client.GetActiveSessions()
+        if err != nil {
+            // Log error but continue with other servers
+            continue
+        }
+        allSessions = append(allSessions, sessions...)
+    }
+
+    return allSessions, nil
 }
 
 // GetServerConfigs returns all server configurations
@@ -103,33 +103,33 @@ func (m *MultiServerManager) GetServerConfigs() map[string]ServerConfig {
 
 // GetServerHealth checks health of all servers
 func (m *MultiServerManager) GetServerHealth() map[string]*ServerHealth {
-    health := make(map[string]*ServerHealth)
+	health := make(map[string]*ServerHealth)
 
-    // Iterate over configs so servers without clients are also reported
-    for serverID, cfg := range m.configs {
-        if client, ok := m.clients[serverID]; ok && client != nil {
-            serverHealth, err := client.CheckHealth()
-            if err != nil {
-                health[serverID] = &ServerHealth{
-                    ServerID:    serverID,
-                    ServerType:  cfg.Type,
-                    ServerName:  cfg.Name,
-                    IsReachable: false,
-                    Error:       err.Error(),
-                }
-                continue
-            }
-            health[serverID] = serverHealth
-            continue
-        }
-        // No client registered: mark as unavailable
-        health[serverID] = &ServerHealth{
-            ServerID:    serverID,
-            ServerType:  cfg.Type,
-            ServerName:  cfg.Name,
-            IsReachable: false,
-            Error:       "no client registered",
-        }
-    }
-    return health
+	// Iterate over configs so servers without clients are also reported
+	for serverID, cfg := range m.configs {
+		if client, ok := m.clients[serverID]; ok && client != nil {
+			serverHealth, err := client.CheckHealth()
+			if err != nil {
+				health[serverID] = &ServerHealth{
+					ServerID:    serverID,
+					ServerType:  cfg.Type,
+					ServerName:  cfg.Name,
+					IsReachable: false,
+					Error:       err.Error(),
+				}
+				continue
+			}
+			health[serverID] = serverHealth
+			continue
+		}
+		// No client registered: mark as unavailable
+		health[serverID] = &ServerHealth{
+			ServerID:    serverID,
+			ServerType:  cfg.Type,
+			ServerName:  cfg.Name,
+			IsReachable: false,
+			Error:       "no client registered",
+		}
+	}
+	return health
 }
