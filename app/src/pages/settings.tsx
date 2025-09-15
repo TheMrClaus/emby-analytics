@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import Head from "next/head";
 import Header from "../components/Header";
@@ -68,7 +68,7 @@ export default function SettingsPage() {
     return "";
   };
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     setBusyUsers(true);
     setUsersError(null);
     try {
@@ -79,7 +79,7 @@ export default function SettingsPage() {
     } finally {
       setBusyUsers(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (meRole && meRole.toLowerCase() === "admin") {

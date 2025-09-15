@@ -61,8 +61,9 @@ export function MultiServerProvider({ children }: { children: ReactNode }) {
       const data: MultiNowEntry[] = await res.json();
       setSessions(orderSessions(Array.isArray(data) ? data : []));
       setError(null);
-    } catch (e: any) {
-      setError(`Failed to load now playing: ${e?.message || String(e)}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Failed to load now playing: ${msg}`);
     }
   }, [orderSessions]);
 
@@ -119,4 +120,3 @@ export function useMultiServer() {
   if (!ctx) throw new Error("useMultiServer must be used within MultiServerProvider");
   return ctx;
 }
-
