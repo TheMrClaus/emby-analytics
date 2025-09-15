@@ -3,17 +3,27 @@ package config
 import (
     "crypto/rand"
     "encoding/hex"
+    "encoding/json"
     "fmt"
     "os"
     "path/filepath"
     "strconv"
     "strings"
+
+    "emby-analytics/internal/media"
 )
 
 type Config struct {
+	// Legacy single-server fields (backwards compatibility)
 	EmbyBaseURL     string
 	EmbyAPIKey      string
 	EmbyExternalURL string
+	
+	// Multi-server configuration
+	MediaServers      []media.ServerConfig
+	DefaultServerID   string
+	
+	// System paths
 	SQLitePath      string
 	WebPath         string
 
@@ -99,6 +109,10 @@ func Load() Config {
 		RefreshSseDebug:     envBool("REFRESH_SSE_DEBUG", false),
 		UserSyncIntervalSec: envInt("USERSYNC_INTERVAL", 43200), // Changed from 3600 to 43200 (12 hours)
 	}
+
+	// Load multi-server configuration
+	cfg.MediaServers = loadMediaServers(embyBase, embyKey, embyExternal)
+	cfg.DefaultServerID = env("DEFAULT_MEDIA_SERVER", getDefaultServerID(cfg.MediaServers))
 
 	// Auto-generate and persist admin token if not provided
 	if cfg.AdminToken == "" {
@@ -188,4 +202,48 @@ func envBool(key string, def bool) bool {
 	default:
 		return false
 	}
+}
+
+// loadMediaServers loads multi-server configuration with backwards compatibility
+func loadMediaServers(legacyEmbyBase, legacyEmbyKey, legacyEmbyExternal string) []media.ServerConfig {
+	// Check for new multi-server configuration first
+	mediaServersJSON := env("MEDIA_SERVERS", "")
+	if mediaServersJSON != "" {
+		var servers []media.ServerConfig
+		if err := json.Unmarshal([]byte(mediaServersJSON), &servers); err != nil {
+			fmt.Printf("[WARN] Failed to parse MEDIA_SERVERS JSON: %v\n", err)
+			fmt.Println("[INFO] Falling back to legacy single-server configuration")
+		} else {
+			fmt.Printf("[INFO] Loaded %d media servers from MEDIA_SERVERS configuration\n", len(servers))
+			return servers
+		}
+	}
+
+	// Fallback to legacy single-server configuration
+	if legacyEmbyKey != "" {
+		legacyServer := media.ServerConfig{
+			ID:          "default-emby",
+			Type:        media.ServerTypeEmby,
+			Name:        "Emby Server",
+			BaseURL:     legacyEmbyBase,
+			APIKey:      legacyEmbyKey,
+			ExternalURL: legacyEmbyExternal,
+			Enabled:     true,
+		}
+		fmt.Println("[INFO] Using legacy single-server configuration for Emby")
+		return []media.ServerConfig{legacyServer}
+	}
+
+	fmt.Println("[WARN] No media servers configured! Set MEDIA_SERVERS or EMBY_API_KEY")
+	return []media.ServerConfig{}
+}
+
+// getDefaultServerID returns the first enabled server ID or empty string
+func getDefaultServerID(servers []media.ServerConfig) string {
+	for _, server := range servers {
+		if server.Enabled {
+			return server.ID
+		}
+	}
+	return ""
 }
