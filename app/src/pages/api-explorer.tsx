@@ -427,7 +427,7 @@ const endpoints: Endpoint[] = [
     description: "Current active sessions across all configured servers.",
     usage: "Optionally filter by ?server=<server_id> (e.g., default-emby).",
     params: [
-      { key: "server", kind: "query", required: false, placeholder: "default-emby|default-plex|default-jellyfin" },
+      { key: "server", kind: "query", required: false, placeholder: "emby|plex|jellyfin|all" },
     ],
   },
   {
@@ -491,7 +491,7 @@ const endpoints: Endpoint[] = [
     description: "Pause or resume a session on a specific server.",
     usage: "Multi-server aware moderation.",
     params: [
-      { key: "server", kind: "path", required: true, placeholder: "default-emby|default-plex|default-jellyfin" },
+      { key: "server", kind: "path", required: true, placeholder: "emby|plex|jellyfin" },
       { key: "id", kind: "path", required: true, placeholder: "session-id" },
       { key: "paused", kind: "body", required: false, placeholder: "true|false" },
     ],
@@ -504,7 +504,7 @@ const endpoints: Endpoint[] = [
     description: "Stop a session on a specific server.",
     usage: "Multi-server aware moderation.",
     params: [
-      { key: "server", kind: "path", required: true, placeholder: "default-emby|default-plex|default-jellyfin" },
+      { key: "server", kind: "path", required: true, placeholder: "emby|plex|jellyfin" },
       { key: "id", kind: "path", required: true, placeholder: "session-id" },
     ],
   },
@@ -516,7 +516,7 @@ const endpoints: Endpoint[] = [
     description: "Send an on-screen message to a session on a specific server.",
     usage: "Inform users across servers.",
     params: [
-      { key: "server", kind: "path", required: true, placeholder: "default-emby|default-plex|default-jellyfin" },
+      { key: "server", kind: "path", required: true, placeholder: "emby|plex|jellyfin" },
       { key: "id", kind: "path", required: true, placeholder: "session-id" },
       { key: "header", kind: "body", required: false, placeholder: "Emby Analytics" },
       { key: "text", kind: "body", required: true, placeholder: "Hello there 👋" },

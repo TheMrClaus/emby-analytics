@@ -34,8 +34,8 @@ type ClientFactory interface {
 
 // MultiServerManager manages multiple media servers
 type MultiServerManager struct {
-	clients map[string]MediaServerClient
-	configs map[string]ServerConfig
+    clients map[string]MediaServerClient
+    configs map[string]ServerConfig
 }
 
 // NewMultiServerManager creates a new multi-server manager
@@ -66,7 +66,19 @@ func (m *MultiServerManager) GetClient(serverID string) (MediaServerClient, bool
 
 // GetAllClients returns all registered clients
 func (m *MultiServerManager) GetAllClients() map[string]MediaServerClient {
-	return m.clients
+    return m.clients
+}
+
+// ClientsByType returns enabled clients matching a given server type
+func (m *MultiServerManager) ClientsByType(t ServerType) []MediaServerClient {
+    out := []MediaServerClient{}
+    for id, client := range m.clients {
+        if client == nil { continue }
+        cfg, ok := m.configs[id]
+        if !ok || !cfg.Enabled { continue }
+        if cfg.Type == t { out = append(out, client) }
+    }
+    return out
 }
 
 // GetEnabledClients returns only enabled clients

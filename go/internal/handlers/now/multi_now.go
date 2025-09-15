@@ -33,21 +33,14 @@ func MultiSnapshot(c fiber.Ctx) error {
                 sessions = ss
             }
         case string(media.ServerTypeEmby), string(media.ServerTypePlex), string(media.ServerTypeJellyfin):
-            // Filter by server type
-            for _, client := range multiServerMgr.GetEnabledClients() {
-                if client != nil && strings.EqualFold(string(client.GetServerType()), lf) {
-                    if ss, err := client.GetActiveSessions(); err == nil {
-                        sessions = append(sessions, ss...)
-                    }
+            // Filter strictly by server type alias
+            for _, client := range multiServerMgr.ClientsByType(media.ServerType(lf)) {
+                if ss, err := client.GetActiveSessions(); err == nil {
+                    sessions = append(sessions, ss...)
                 }
             }
         default:
-            // Treat as server ID
-            if client, ok := multiServerMgr.GetClient(serverFilter); ok && client != nil {
-                if ss, err := client.GetActiveSessions(); err == nil {
-                    sessions = ss
-                }
-            }
+            // Unknown alias: return empty (no fallback to ID)
         }
     }
 
@@ -205,7 +198,7 @@ func MultiSnapshot(c fiber.Ctx) error {
 // MultiPauseSession pauses or resumes a session on a specific server
 // POST /api/now/sessions/:server/:id/pause  body: {"paused":true|false}
 func MultiPauseSession(c fiber.Ctx) error {
-    serverID := c.Params("server")
+    serverAlias := strings.ToLower(c.Params("server"))
     sessionID := c.Params("id")
     var body struct { Paused *bool `json:"paused"` }
     _ = c.Bind().Body(&body)
@@ -213,10 +206,8 @@ func MultiPauseSession(c fiber.Ctx) error {
     if multiServerMgr == nil {
         return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "multi-server not initialized"})
     }
-    client, ok := multiServerMgr.GetClient(serverID)
-    if !ok || client == nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "unknown server id"})
-    }
+    client, err := resolveServerClient(serverAlias)
+    if err != nil { return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()}) }
     if body.Paused != nil && !*body.Paused {
         if err := client.UnpauseSession(sessionID); err != nil {
             return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
@@ -232,15 +223,13 @@ func MultiPauseSession(c fiber.Ctx) error {
 // MultiStopSession stops a session on a specific server
 // POST /api/now/sessions/:server/:id/stop
 func MultiStopSession(c fiber.Ctx) error {
-    serverID := c.Params("server")
+    serverAlias := strings.ToLower(c.Params("server"))
     sessionID := c.Params("id")
     if multiServerMgr == nil {
         return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "multi-server not initialized"})
     }
-    client, ok := multiServerMgr.GetClient(serverID)
-    if !ok || client == nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "unknown server id"})
-    }
+    client, err := resolveServerClient(serverAlias)
+    if err != nil { return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()}) }
     if err := client.StopSession(sessionID); err != nil {
         return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
     }
@@ -250,15 +239,13 @@ func MultiStopSession(c fiber.Ctx) error {
 // MultiMessageSession sends a message to a session on a specific server
 // POST /api/now/sessions/:server/:id/message  body: {header?, text|message, timeout_ms?}
 func MultiMessageSession(c fiber.Ctx) error {
-    serverID := c.Params("server")
+    serverAlias := strings.ToLower(c.Params("server"))
     sessionID := c.Params("id")
     if multiServerMgr == nil {
         return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "multi-server not initialized"})
     }
-    client, ok := multiServerMgr.GetClient(serverID)
-    if !ok || client == nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "unknown server id"})
-    }
+    client, err := resolveServerClient(serverAlias)
+    if err != nil { return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()}) }
 
     var body struct {
         Header string `json:"header"`
@@ -290,6 +277,20 @@ func MultiMessageSession(c fiber.Ctx) error {
         return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
     }
     return c.SendStatus(fiber.StatusNoContent)
+}
+
+// resolveServerClient maps alias (emby|plex|jellyfin) to a single enabled client of that type
+func resolveServerClient(alias string) (media.MediaServerClient, error) {
+    if multiServerMgr == nil { return nil, fmt.Errorf("multi-server not initialized") }
+    switch alias {
+    case string(media.ServerTypeEmby), string(media.ServerTypePlex), string(media.ServerTypeJellyfin):
+        clients := multiServerMgr.ClientsByType(media.ServerType(alias))
+        if len(clients) == 0 { return nil, fmt.Errorf("no %s server configured", alias) }
+        if len(clients) > 1 { return nil, fmt.Errorf("multiple %s servers; specify a unique id (not yet supported)", alias) }
+        return clients[0], nil
+    default:
+        return nil, fmt.Errorf("unknown server alias: %s", alias)
+    }
 }
 
 

@@ -222,7 +222,7 @@ func (c *Client) GetServerName() string {
 
 // doRequest performs HTTP request with proper Plex authentication
 func (c *Client) doRequest(endpoint string) (*http.Response, error) {
-	u := fmt.Sprintf("%s%s", c.baseURL, endpoint)
+    u := fmt.Sprintf("%s%s", c.baseURL, endpoint)
 	
 	// Add token to URL parameters
 	parsedURL, err := url.Parse(u)
@@ -234,13 +234,18 @@ func (c *Client) doRequest(endpoint string) (*http.Response, error) {
 	q.Set("X-Plex-Token", c.token)
 	parsedURL.RawQuery = q.Encode()
 	
-	req, err := http.NewRequest("GET", parsedURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-	
-	req.Header.Set("X-Plex-Token", c.token)
-	req.Header.Set("Accept", "application/xml")
+    req, err := http.NewRequest("GET", parsedURL.String(), nil)
+    if err != nil {
+        return nil, err
+    }
+
+    req.Header.Set("X-Plex-Token", c.token)
+    // Helpful standard Plex headers for compatibility
+    req.Header.Set("X-Plex-Product", "emby-analytics")
+    req.Header.Set("X-Plex-Version", "1.0")
+    req.Header.Set("X-Plex-Client-Identifier", c.serverID)
+    req.Header.Set("X-Plex-Platform", "linux")
+    req.Header.Set("Accept", "application/xml")
 	
 	return c.http.Do(req)
 }
