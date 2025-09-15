@@ -14,19 +14,25 @@ import (
 	emby "emby-analytics/internal/emby"
     admin "emby-analytics/internal/handlers/admin"
     auth "emby-analytics/internal/handlers/auth"
-	configHandler "emby-analytics/internal/handlers/config"
-	verhandler "emby-analytics/internal/handlers/version"
-	health "emby-analytics/internal/handlers/health"
-	images "emby-analytics/internal/handlers/images"
-	items "emby-analytics/internal/handlers/items"
-	now "emby-analytics/internal/handlers/now"
-	settings "emby-analytics/internal/handlers/settings"
-	stats "emby-analytics/internal/handlers/stats"
-	"emby-analytics/internal/logging"
-	"emby-analytics/internal/middleware"
-	"emby-analytics/internal/monitors"
-	"emby-analytics/internal/sync"
-	tasks "emby-analytics/internal/tasks"
+    configHandler "emby-analytics/internal/handlers/config"
+    verhandler "emby-analytics/internal/handlers/version"
+    health "emby-analytics/internal/handlers/health"
+    images "emby-analytics/internal/handlers/images"
+    items "emby-analytics/internal/handlers/items"
+    now "emby-analytics/internal/handlers/now"
+    serversHandler "emby-analytics/internal/handlers/servers"
+    settings "emby-analytics/internal/handlers/settings"
+    stats "emby-analytics/internal/handlers/stats"
+    "emby-analytics/internal/logging"
+    "emby-analytics/internal/middleware"
+    "emby-analytics/internal/monitors"
+    "emby-analytics/internal/sync"
+    tasks "emby-analytics/internal/tasks"
+
+    // Multi-server clients
+    "emby-analytics/internal/media"
+    "emby-analytics/internal/plex"
+    "emby-analytics/internal/jellyfin"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/recover"
@@ -95,7 +101,22 @@ func main() {
 	logger.Info("=====================================================")
 	logger.Info("        Starting Emby Analytics Application")
 	logger.Info("=====================================================")
-	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
+    em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
+
+    // Build MultiServerManager (Plex/Jellyfin for now; Emby support via legacy paths)
+    multiMgr := media.NewMultiServerManager()
+    for _, sc := range cfg.MediaServers {
+        switch sc.Type {
+        case media.ServerTypePlex:
+            multiMgr.AddServer(sc, plex.New(sc))
+        case media.ServerTypeJellyfin:
+            multiMgr.AddServer(sc, jellyfin.New(sc))
+        case media.ServerTypeEmby:
+            // TODO: add Emby adapter that implements media.MediaServerClient
+            // Legacy handlers will continue to serve Emby for now.
+            multiMgr.AddServer(sc, nil)
+        }
+    }
 
     // ---- Database Initialization & Migration ----
     absPath, err := filepath.Abs(cfg.SQLitePath)
@@ -173,16 +194,18 @@ func main() {
 	logger.Info("Initial user sync completed")
 
 	// ---- Session Processing (Hybrid State-Polling Approach) ----
-	sessionProcessor := tasks.NewSessionProcessor(sqlDB)
+    sessionProcessor := tasks.NewSessionProcessor(sqlDB, multiMgr)
 	logger.Info("Session processor initialized")
 
 	pollInterval := time.Duration(cfg.NowPollSec) * time.Second
 	if pollInterval <= 0 {
 		pollInterval = 5 * time.Second
 	}
-	broadcaster := now.NewBroadcaster(em, pollInterval)
-	broadcaster.SessionProcessor = sessionProcessor.ProcessActiveSessions // Connect session processing
-	now.SetBroadcaster(broadcaster)
+    broadcaster := now.NewBroadcaster(em, pollInterval)
+    broadcaster.SessionProcessor = sessionProcessor.ProcessActiveSessions
+    now.SetBroadcaster(broadcaster)
+    now.SetMultiServerManager(multiMgr)
+    serversHandler.SetManager(multiMgr)
 	broadcaster.Start()
 	logger.Info("REST API session polling started", "interval", pollInterval)
 	defer broadcaster.Stop()
@@ -272,8 +295,10 @@ func main() {
 	app.Get("/img/primary/:id", images.Primary(imgOpts))
 	app.Get("/img/backdrop/:id", images.Backdrop(imgOpts))
 	// Now Playing Routes
-	app.Get("/api/now-playing/summary", now.Summary)
-	app.Get("/now/snapshot", now.Snapshot)
+    app.Get("/api/now-playing/summary", now.Summary)
+    // Multi-server snapshot on both legacy and new paths
+    app.Get("/now/snapshot", now.MultiSnapshot)
+    app.Get("/api/now/snapshot", now.MultiSnapshot)
 	app.Get("/now/ws", func(c fiber.Ctx) error {
 		if ws.IsWebSocketUpgrade(c) {
 			return c.Next()
@@ -283,7 +308,10 @@ func main() {
 	app.Post("/now/:id/pause", now.PauseSession)
 	app.Post("/now/:id/stop", now.StopSession)
 	app.Post("/now/:id/message", now.MessageSession)
-	// Admin Routes with Authentication
+    // Server list/health
+    app.Get("/api/servers", serversHandler.List())
+
+    // Admin Routes with Authentication
 	rm := admin.NewRefreshManager()
 
     // Protected admin endpoints (admin session OR ADMIN_TOKEN)

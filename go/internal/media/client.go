@@ -103,23 +103,33 @@ func (m *MultiServerManager) GetServerConfigs() map[string]ServerConfig {
 
 // GetServerHealth checks health of all servers
 func (m *MultiServerManager) GetServerHealth() map[string]*ServerHealth {
-	health := make(map[string]*ServerHealth)
-	
-	for serverID, client := range m.clients {
-		serverHealth, err := client.CheckHealth()
-		if err != nil {
-			// Create failed health status
-			config := m.configs[serverID]
-			serverHealth = &ServerHealth{
-				ServerID:    serverID,
-				ServerType:  config.Type,
-				ServerName:  config.Name,
-				IsReachable: false,
-				Error:       err.Error(),
-			}
-		}
-		health[serverID] = serverHealth
-	}
-	
-	return health
+    health := make(map[string]*ServerHealth)
+
+    // Iterate over configs so servers without clients are also reported
+    for serverID, cfg := range m.configs {
+        if client, ok := m.clients[serverID]; ok && client != nil {
+            serverHealth, err := client.CheckHealth()
+            if err != nil {
+                health[serverID] = &ServerHealth{
+                    ServerID:    serverID,
+                    ServerType:  cfg.Type,
+                    ServerName:  cfg.Name,
+                    IsReachable: false,
+                    Error:       err.Error(),
+                }
+                continue
+            }
+            health[serverID] = serverHealth
+            continue
+        }
+        // No client registered: mark as unavailable
+        health[serverID] = &ServerHealth{
+            ServerID:    serverID,
+            ServerType:  cfg.Type,
+            ServerName:  cfg.Name,
+            IsReachable: false,
+            Error:       "no client registered",
+        }
+    }
+    return health
 }
