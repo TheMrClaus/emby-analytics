@@ -20,23 +20,83 @@ func SetMultiServerManager(mgr *media.MultiServerManager) {
 // MultiSnapshot aggregates sessions from all enabled servers.
 // Optional query: ?server=<server_id> to filter by server.
 func MultiSnapshot(c fiber.Ctx) error {
-    if multiServerMgr == nil {
-        return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "multi-server not initialized"})
-    }
-
     serverFilter := strings.TrimSpace(c.Query("server"))
     sessions := make([]media.Session, 0)
 
-    if serverFilter != "" && serverFilter != "all" {
-        if client, ok := multiServerMgr.GetClient(serverFilter); ok {
-            ss, err := client.GetActiveSessions()
-            if err == nil {
+    if multiServerMgr != nil {
+        if serverFilter != "" && serverFilter != "all" {
+            if client, ok := multiServerMgr.GetClient(serverFilter); ok && client != nil {
+                if ss, err := client.GetActiveSessions(); err == nil {
+                    sessions = ss
+                }
+            }
+        } else {
+            if ss, err := multiServerMgr.GetAllSessions(); err == nil {
                 sessions = ss
             }
         }
-    } else {
-        ss, _ := multiServerMgr.GetAllSessions()
-        sessions = ss
+    }
+
+    // Fallback: if no sessions from multi-server, use legacy Emby snapshot
+    if len(sessions) == 0 {
+        if em, err := getEmbyClient(); err == nil {
+            if es, err2 := em.GetActiveSessions(); err2 == nil && len(es) > 0 {
+                nowMs := time.Now().UnixMilli()
+                out := make([]NowEntry, 0, len(es))
+                for _, s := range es {
+                    var progressPct float64
+                    if s.DurationTicks > 0 {
+                        progressPct = (float64(s.PosTicks) / float64(s.DurationTicks)) * 100.0
+                        if progressPct < 0 { progressPct = 0 }
+                        if progressPct > 100 { progressPct = 100 }
+                    }
+                    subsText := "None"
+                    if s.SubsCount > 0 { subsText = "1" }
+                    poster := ""
+                    if s.ItemID != "" { poster = "/img/primary/" + s.ItemID }
+                    out = append(out, NowEntry{
+                        Timestamp:   nowMs,
+                        Title:       s.ItemName,
+                        User:        s.UserName,
+                        App:         s.App,
+                        Device:      s.Device,
+                        PlayMethod:  s.PlayMethod,
+                        Video:       videoDetailFromSession(s),
+                        Audio:       audioDetailFromSession(s),
+                        Subs:        subsText,
+                        Bitrate:     s.Bitrate,
+                        ProgressPct: progressPct,
+                        PositionSec: func() int64 { if s.PosTicks > 0 { return s.PosTicks / 10_000_000 }; return 0 }(),
+                        DurationSec: func() int64 { if s.DurationTicks > 0 { return s.DurationTicks / 10_000_000 }; return 0 }(),
+                        Poster:      poster,
+                        SessionID:   s.SessionID,
+                        ItemID:      s.ItemID,
+                        ItemType:    s.ItemType,
+                        Container:   s.Container,
+                        Width:       s.Width,
+                        Height:      s.Height,
+                        DolbyVision: s.DolbyVision,
+                        HDR10:       s.HDR10,
+                        AudioLang:   s.AudioLang,
+                        AudioCh:     s.AudioCh,
+                        SubLang:     s.SubLang,
+                        SubCodec:    s.SubCodec,
+                        TransVideoFrom: s.TransVideoFrom,
+                        TransVideoTo:   s.TransVideoTo,
+                        TransAudioFrom: s.TransAudioFrom,
+                        TransAudioTo:   s.TransAudioTo,
+                        VideoMethod: s.VideoMethod,
+                        AudioMethod: s.AudioMethod,
+                        TransReason: reasonText(s.VideoMethod, s.AudioMethod, s.TransReasons),
+                        TransPct:    s.TransCompletion,
+                        IsPaused:    s.IsPaused,
+                        ServerID:    "default-emby",
+                        ServerType:  "emby",
+                    })
+                }
+                return c.JSON(out)
+            }
+        }
     }
 
     nowMs := time.Now().UnixMilli()
@@ -166,4 +226,3 @@ func audioDetailFromNormalized(s media.Session) string {
     }
     return strings.TrimSpace(strings.Join(parts, " "))
 }
-
