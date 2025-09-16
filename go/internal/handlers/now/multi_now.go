@@ -136,7 +136,7 @@ func MultiSnapshot(c fiber.Ctx) error {
         }
         poster := ""
         if s.ItemID != "" {
-            poster = "/img/primary/" + s.ItemID
+            poster = "/img/primary/" + string(s.ServerType) + "/" + s.ItemID
         }
 
         entry := NowEntry{

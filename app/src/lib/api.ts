@@ -318,6 +318,9 @@ export async function fetchItemsByQuality(
 export interface ConfigResponse {
   emby_external_url: string;
   emby_server_id: string;
+  plex_external_url?: string;
+  jellyfin_external_url?: string;
+  plex_server_id?: string;
 }
 
 export const fetchConfig = async (): Promise<ConfigResponse> => {

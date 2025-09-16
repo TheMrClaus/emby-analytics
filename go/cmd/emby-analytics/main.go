@@ -262,7 +262,9 @@ func main() {
 	app.Get("/stats/usage", stats.Usage(sqlDB))
 	app.Get("/stats/top/users", stats.TopUsers(sqlDB))
 
-	app.Get("/stats/top/items", stats.TopItems(sqlDB, em))
+    app.Get("/stats/top/items", stats.TopItems(sqlDB, em))
+    // Inject manager so TopItems can enrich non-Emby items
+    stats.SetMultiServerManager(multiMgr)
 	app.Get("/stats/qualities", stats.Qualities(sqlDB))
 	app.Get("/stats/codecs", stats.Codecs(sqlDB))
 	app.Get("/stats/active-users", stats.ActiveUsersLifetime(sqlDB))
@@ -288,10 +290,13 @@ func main() {
 	app.Get("/config", configHandler.GetConfig(cfg))
 
 	// Item & Image Routes
-	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
+    // Multi-server-aware items lookup (falls back to legacy where needed)
+    app.Get("/items/by-ids", items.ByIDsMS(sqlDB, multiMgr))
 	imgOpts := images.NewOpts(cfg)
 	app.Get("/img/primary/:id", images.Primary(imgOpts))
 	app.Get("/img/backdrop/:id", images.Backdrop(imgOpts))
+	// Multi-server image routes
+	app.Get("/img/primary/:server/:id", images.MultiServerPrimary(multiMgr))
 	// Now Playing Routes
     app.Get("/api/now-playing/summary", now.Summary)
     // Legacy single-Emby snapshot remains for compatibility with current UI
@@ -331,7 +336,8 @@ func main() {
 	app.Put("/api/settings/:key", adminAuth, settings.UpdateSetting(sqlDB))
 
 	app.Post("/admin/refresh/start", adminAuth, admin.StartPostHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
-	app.Post("/admin/refresh/incremental", adminAuth, admin.StartIncrementalHandler(rm, sqlDB, em))
+    app.Post("/admin/refresh/incremental", adminAuth, admin.StartIncrementalHandler(rm, sqlDB, em))
+    app.Post("/admin/enrich/missing-items", adminAuth, admin.EnrichMissingItems(sqlDB, multiMgr))
 	app.Get("/admin/refresh/status", adminAuth, admin.StatusHandler(rm))
 	app.Get("/admin/webhook/stats", adminAuth, admin.GetWebhookStats())
 	app.Post("/admin/reset-all", adminAuth, admin.ResetAllData(sqlDB, em))
@@ -364,7 +370,9 @@ func main() {
 	app.Get("/admin/debug/sessions", adminAuth, admin.DebugSessions(sqlDB))
 
 	// Backfill playback methods for historical sessions (reason/codec-based)
-	app.Post("/admin/cleanup/backfill-playmethods", adminAuth, admin.BackfillPlayMethods(sqlDB))
+    app.Post("/admin/cleanup/backfill-playmethods", adminAuth, admin.BackfillPlayMethods(sqlDB))
+    // Enrich missing usernames for Plex/Jellyfin sessions
+    app.Post("/admin/enrich/user-names", adminAuth, admin.EnrichUserNames(sqlDB, multiMgr))
 
 	// Admin: backfill started_at from events/intervals
 	app.Post("/admin/cleanup/backfill-started-at", adminAuth, admin.BackfillStartedAt(sqlDB))

@@ -58,7 +58,7 @@ type plexMediaContainer struct {
 }
 
 type plexSession struct {
-	XMLName      xml.Name `xml:"Metadata"`
+	XMLName      xml.Name `xml:"Video"`
 	SessionKey   string   `xml:"sessionKey,attr"`
 	RatingKey    string   `xml:"ratingKey,attr"`
 	Key          string   `xml:"key,attr"`
@@ -326,16 +326,40 @@ func (c *Client) convertSession(plexSess plexSession) media.Session {
 		LastUpdate:     time.Now(),
 	}
 	
-	// Extract media information
-	if len(plexSess.Media) > 0 {
-		media := plexSess.Media[0]
-		session.VideoCodec = strings.ToUpper(media.VideoCodec)
-		session.AudioCodec = strings.ToUpper(media.AudioCodec)
-		session.Container = strings.ToUpper(media.Container)
-		session.Width = media.Width
-		session.Height = media.Height
-		session.Bitrate = media.Bitrate
-		session.AudioChannels = media.AudioChannels
+    // Extract media information
+    if len(plexSess.Media) > 0 {
+        media := plexSess.Media[0]
+        session.VideoCodec = strings.ToUpper(media.VideoCodec)
+        session.AudioCodec = strings.ToUpper(media.AudioCodec)
+        session.Container = strings.ToUpper(media.Container)
+        session.Width = media.Width
+        session.Height = media.Height
+        // Plex reports bitrate in kbps for both Media and Stream entries. Convert to bps.
+        var bps int64 = 0
+        if media.Bitrate > 0 {
+            bps = media.Bitrate * 1000
+        }
+        // If missing, derive from selected streams (sum of selected video+audio); fallback to max per type
+        var selVideoKbps, selAudioKbps int64
+        var maxVideoKbps, maxAudioKbps int64
+        if len(media.Part) > 0 {
+            for _, part := range media.Part {
+                for _, stream := range part.Stream {
+                    if stream.StreamType == 1 { // video
+                        if stream.Bitrate > maxVideoKbps { maxVideoKbps = stream.Bitrate }
+                        if stream.Selected && stream.Bitrate > selVideoKbps { selVideoKbps = stream.Bitrate }
+                    } else if stream.StreamType == 2 { // audio
+                        if stream.Bitrate > maxAudioKbps { maxAudioKbps = stream.Bitrate }
+                        if stream.Selected && stream.Bitrate > selAudioKbps { selAudioKbps = stream.Bitrate }
+                    }
+                }
+            }
+        }
+        v := selVideoKbps + selAudioKbps
+        if v <= 0 { v = maxVideoKbps + maxAudioKbps }
+        if bps <= 0 && v > 0 { bps = v * 1000 }
+        session.Bitrate = bps
+        session.AudioChannels = media.AudioChannels
 		
 		// Determine play method based on decision
 		if len(media.Part) > 0 {
@@ -542,13 +566,14 @@ func (c *Client) UnpauseSession(sessionID string) error {
 
 // StopSession stops a Plex session
 func (c *Client) StopSession(sessionID string) error {
-	endpoint := fmt.Sprintf("/player/playback/stop?sessionId=%s", sessionID)
-	resp, err := c.doRequest(endpoint)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
-	return nil
+    // Prefer server-side terminate endpoint for active sessions
+    endpoint := fmt.Sprintf("/status/sessions/terminate?sessionId=%s&reason=%s", url.QueryEscape(sessionID), url.QueryEscape("Stopped by admin"))
+    resp, err := c.doRequest(endpoint)
+    if err != nil {
+        return err
+    }
+    resp.Body.Close()
+    return nil
 }
 
 // SendMessage sends a message to a Plex session

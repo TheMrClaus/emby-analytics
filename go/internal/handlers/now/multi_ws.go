@@ -49,11 +49,6 @@ func MultiWS() func(*ws.Conn) {
             select {
             case <-ticker.C:
                 if !send() { return }
-            default:
-                // Read to detect close
-                if _, _, err := conn.ReadMessage(); err != nil {
-                    return
-                }
             }
         }
     }
@@ -95,7 +90,7 @@ func fetchMultiNowEntries(filter string) ([]NowEntry, error) {
         subsText := "None"
         if s.SubtitleCount > 0 { subsText = fmt.Sprintf("%d", s.SubtitleCount) }
         poster := ""
-        if s.ItemID != "" { poster = "/img/primary/" + s.ItemID }
+        if s.ItemID != "" { poster = "/img/primary/" + string(s.ServerType) + "/" + s.ItemID }
 
         e := NowEntry{
             Timestamp:   nowMs,
@@ -148,4 +143,3 @@ func fetchMultiNowEntries(filter string) ([]NowEntry, error) {
     }
     return out, nil
 }
-

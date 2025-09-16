@@ -562,6 +562,26 @@ const endpoints: Endpoint[] = [
     usage: "Lightweight maintenance. Protected.",
   },
   {
+    id: "admin-enrich-user-names",
+    category: "Admin",
+    method: "POST",
+    path: "/admin/enrich/user-names",
+    description: "Backfill user_name in play_sessions for Plex/Jellyfin from server user lists.",
+    usage: "Fixes GUID/numeric usernames in Playback Methods. Protected.",
+  },
+  {
+    id: "admin-enrich-missing-items",
+    category: "Admin",
+    method: "POST",
+    path: "/admin/enrich/missing-items",
+    description: "Enrich items with missing/placeholder names by consulting the last-known server context.",
+    usage: "Fix Unknown/Deleted placeholders in Top Items. Protected.",
+    params: [
+      { key: "days", kind: "query", placeholder: "30" },
+      { key: "limit", kind: "query", placeholder: "200" },
+    ],
+  },
+  {
     id: "admin-refresh-status",
     category: "Admin",
     method: "GET",

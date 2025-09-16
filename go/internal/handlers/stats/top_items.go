@@ -9,22 +9,37 @@ import (
     "fmt"
     "sort"
     "strings"
-	"time"
+    "time"
 
 	"github.com/gofiber/fiber/v3"
 )
 
 type TopItem struct {
-	ItemID  string  `json:"item_id"`
-	Name    string  `json:"name"`
-	Type    string  `json:"type"`
-	Hours   float64 `json:"hours"`
-	Display string  `json:"display"`
+    ItemID  string  `json:"item_id"`
+    Name    string  `json:"name"`
+    Type    string  `json:"type"`
+    Hours   float64 `json:"hours"`
+    Display string  `json:"display"`
+    ServerType string `json:"server_type,omitempty"`
 }
 
 var topItemsMultiMgr *media.MultiServerManager
 
 func SetMultiServerManager(mgr *media.MultiServerManager) { topItemsMultiMgr = mgr }
+
+// isDisallowedTopItemType filters out non-content entity types from Top Items.
+// We allow movies/episodes (and unknowns to be enriched), and explicitly exclude people and library containers.
+func isDisallowedTopItemType(t string) bool {
+    if t == "" { return false }
+    tt := strings.ToLower(strings.TrimSpace(t))
+    switch tt {
+    case "person", "artist", "musicartist", "album", "musicalbum", "boxset", "collectionfolder", "folder", "playlist":
+        return true
+    // Live TV types are filtered separately in existing logic
+    default:
+        return false
+    }
+}
 
 func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
     return func(c fiber.Ctx) error {
@@ -113,6 +128,8 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
             if strings.EqualFold(row.Type, "TvChannel") || strings.EqualFold(row.Type, "LiveTv") || strings.EqualFold(row.Type, "Channel") || strings.EqualFold(row.Type, "TvProgram") {
                 continue
             }
+            // Exclude obviously invalid content types (e.g., Person)
+            if isDisallowedTopItemType(row.Type) { continue }
             itemDetails[row.ItemID] = TopItem{ItemID: row.ItemID, Name: row.Name, Type: row.Type}
             candidateIDs[row.ItemID] = struct{}{}
         }
@@ -151,19 +168,11 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 					}
 				}
 
-				// Fetch missing items from Emby in batch for display + persist to library_item
+				// Fetch missing items from Emby in batch for display (do not persist here; server_id context is unknown)
 				if len(missingItemIDs) > 0 && em != nil {
 					if embyItems, fetchErr := em.ItemsByIDs(missingItemIDs); fetchErr == nil {
 						for _, item := range embyItems {
 							itemDetails[item.Id] = TopItem{ItemID: item.Id, Name: item.Name, Type: item.Type}
-							_, _ = db.Exec(`
-                                INSERT INTO library_item (id, server_id, item_id, name, media_type, created_at, updated_at)
-                                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                                ON CONFLICT(id) DO UPDATE SET
-                                    name = excluded.name,
-                                    media_type = excluded.media_type,
-                                    updated_at = CURRENT_TIMESTAMP
-                            `, item.Id, item.Id, item.Id, item.Name, item.Type)
 						}
 					}
 				}
@@ -204,14 +213,6 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
                         it := embyItems[0]
                         name = it.Name
                         itemType = it.Type
-                        _, _ = db.Exec(`
-                            INSERT INTO library_item (id, server_id, item_id, name, media_type, created_at, updated_at)
-                            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                            ON CONFLICT(id) DO UPDATE SET
-                                name = excluded.name,
-                                media_type = excluded.media_type,
-                                updated_at = CURRENT_TIMESTAMP
-                        `, it.Id, it.Id, it.Id, it.Name, it.Type)
                     }
                 }
                 if name == "" { name = fmt.Sprintf("Unknown Item (%s)", shortID(itemID)) }
@@ -228,12 +229,17 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
             if strings.EqualFold(details.Type, "TvChannel") || strings.EqualFold(details.Type, "LiveTv") || strings.EqualFold(details.Type, "Channel") || strings.EqualFold(details.Type, "TvProgram") {
                 continue
             }
+            // Exclude disallowed entity types (e.g., Person, Album)
+            if isDisallowedTopItemType(details.Type) { continue }
+            // Resolve server_type for image routing in UI
+            stype := resolveServerType(db, itemID)
             finalResult = append(finalResult, TopItem{
                 ItemID:  itemID,
                 Name:    details.Name,
                 Type:    details.Type,
                 Hours:   hours,
                 Display: details.Name, // Default display before enrichment
+                ServerType: stype,
             })
         }
 
@@ -245,11 +251,61 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
             finalResult = finalResult[:limit]
         }
 
-        // 7. Run your preserved enrichment logic on the final, combined list
-        enrichItems(finalResult, em)
-        // Additional enrichment for non-Emby items (multi-server)
+        // 7. Enrichment: prefer multi-server resolution first, then Emby fallback for display
         if topItemsMultiMgr != nil {
             enrichItemsMulti(db, finalResult)
+        }
+        enrichItems(finalResult, em)
+
+        // 7.5. Ensure sane display fallbacks after enrichment
+        for i := range finalResult {
+            if strings.TrimSpace(finalResult[i].Display) == "" {
+                if strings.TrimSpace(finalResult[i].Name) != "" {
+                    finalResult[i].Display = finalResult[i].Name
+                } else {
+                    finalResult[i].Display = fmt.Sprintf("Unknown Item (%s)", shortID(finalResult[i].ItemID))
+                }
+            }
+            if strings.TrimSpace(finalResult[i].Type) == "" {
+                finalResult[i].Type = "Unknown"
+            }
+        }
+
+        // 7.6. Final DB-based polish: for any remaining Unknown placeholders, try library_item one more time
+        for i := range finalResult {
+            if strings.HasPrefix(finalResult[i].Name, "Unknown Item (") || strings.HasPrefix(finalResult[i].Display, "Unknown Item (") {
+                var n, t string
+                _ = db.QueryRow("SELECT name, media_type FROM library_item WHERE id = ?", finalResult[i].ItemID).Scan(&n, &t)
+                if strings.TrimSpace(n) != "" && !strings.HasPrefix(n, "Unknown Item (") {
+                    finalResult[i].Name = n
+                    if strings.TrimSpace(finalResult[i].Display) == "" || strings.HasPrefix(finalResult[i].Display, "Unknown Item (") {
+                        finalResult[i].Display = n
+                    }
+                }
+                if strings.TrimSpace(t) != "" && !strings.EqualFold(t, "Unknown") {
+                    finalResult[i].Type = t
+                }
+                // If still unknown, use most recent session name/type as a last resort
+                if strings.HasPrefix(finalResult[i].Name, "Unknown Item (") || strings.TrimSpace(finalResult[i].Name) == "" {
+                    var sn, st string
+                    _ = db.QueryRow(`
+                        SELECT item_name, item_type
+                        FROM play_sessions
+                        WHERE item_id = ?
+                        ORDER BY started_at DESC
+                        LIMIT 1
+                    `, finalResult[i].ItemID).Scan(&sn, &st)
+                    if strings.TrimSpace(sn) != "" {
+                        finalResult[i].Name = sn
+                        if strings.TrimSpace(finalResult[i].Display) == "" || strings.HasPrefix(finalResult[i].Display, "Unknown Item (") {
+                            finalResult[i].Display = sn
+                        }
+                    }
+                    if strings.TrimSpace(st) != "" && !strings.EqualFold(st, "Unknown") {
+                        finalResult[i].Type = st
+                    }
+                }
+            }
         }
 
         return c.JSON(finalResult)
@@ -263,6 +319,23 @@ func shortID(id string) string {
         return id[:8]
     }
     return id
+}
+
+// resolveServerType attempts to determine the canonical server type for an item.
+// Order: library_item.server_type -> latest interval's session.server_type -> empty string.
+func resolveServerType(db *sql.DB, itemID string) string {
+    var st string
+    _ = db.QueryRow("SELECT server_type FROM library_item WHERE id = ?", itemID).Scan(&st)
+    if strings.TrimSpace(st) != "" { return st }
+    _ = db.QueryRow(`
+        SELECT ps.server_type
+        FROM play_intervals pi
+        JOIN play_sessions ps ON ps.id = pi.session_fk
+        WHERE pi.item_id = ?
+        ORDER BY pi.end_ts DESC
+        LIMIT 1
+    `, itemID).Scan(&st)
+    return st
 }
 
 // keys returns the set keys as a slice
@@ -371,12 +444,15 @@ func computeExactItemHours(db *sql.DB, itemIDs []string, winStart, winEnd int64)
 
 // Your original enrichment logic, now in a helper function for clarity.
 func enrichItems(items []TopItem, em *emby.Client) {
-	allEnrichIDs := make([]string, 0)
-	for _, item := range items {
-		if strings.EqualFold(item.Type, "Episode") || item.Name == "Unknown" || item.Type == "Unknown" {
-			allEnrichIDs = append(allEnrichIDs, item.ItemID)
-		}
-	}
+    allEnrichIDs := make([]string, 0)
+    for _, item := range items {
+        nameBlank := strings.TrimSpace(item.Name) == ""
+        typeBlank := strings.TrimSpace(item.Type) == ""
+        displayBlank := strings.TrimSpace(item.Display) == ""
+        if strings.EqualFold(item.Type, "Episode") || item.Name == "Unknown" || item.Type == "Unknown" || nameBlank || typeBlank || displayBlank {
+            allEnrichIDs = append(allEnrichIDs, item.ItemID)
+        }
+    }
 
 	if len(allEnrichIDs) > 0 && em != nil {
 		if embyItems, err := em.ItemsByIDs(allEnrichIDs); err == nil {
@@ -411,19 +487,22 @@ func enrichItems(items []TopItem, em *emby.Client) {
 							item.Display = item.Name
 							item.Type = "Episode"
 						}
-					} else {
-						if it.Name != "" && (item.Name == "Unknown" || item.Name == "") {
-							item.Name = it.Name
-							item.Display = it.Name
-						}
-						if it.Type != "" && (item.Type == "Unknown" || item.Type == "") {
-							item.Type = it.Type
-						}
-					}
-                } else if item.Name == "Unknown" || item.Type == "Unknown" {
-                    item.Name = fmt.Sprintf("Deleted Item (%s)", shortID(item.ItemID))
-                    item.Display = fmt.Sprintf("Deleted Item (%s)", shortID(item.ItemID))
-                    item.Type = "Deleted"
+                } else {
+                    if it.Name != "" && (item.Name == "Unknown" || strings.TrimSpace(item.Name) == "") {
+                        item.Name = it.Name
+                        item.Display = it.Name
+                    }
+                    if it.Type != "" && (item.Type == "Unknown" || strings.TrimSpace(item.Type) == "") {
+                        item.Type = it.Type
+                    }
+                }
+                } else if item.Name == "Unknown" || item.Type == "Unknown" || strings.TrimSpace(item.Name) == "" || strings.TrimSpace(item.Type) == "" || strings.TrimSpace(item.Display) == "" {
+                    // Avoid labeling as Deleted; use an Unknown placeholder and let multi-server enrichment resolve later
+                    item.Name = fmt.Sprintf("Unknown Item (%s)", shortID(item.ItemID))
+                    item.Display = item.Name
+                    if strings.TrimSpace(item.Type) == "" || strings.EqualFold(item.Type, "Unknown") {
+                        item.Type = "Unknown"
+                    }
                 }
 			}
 		}
@@ -435,7 +514,10 @@ func enrichItemsMulti(db *sql.DB, items []TopItem) {
     // Build list of IDs needing enrichment
     need := make([]string, 0)
     for _, it := range items {
-        if it.Name == "Unknown" || it.Type == "Unknown" || strings.HasPrefix(it.Name, "Deleted Item") || strings.HasPrefix(it.Display, "Deleted Item") {
+        if it.Name == "Unknown" || it.Type == "Unknown" ||
+           strings.HasPrefix(it.Name, "Deleted Item") || strings.HasPrefix(it.Display, "Deleted Item") ||
+           strings.HasPrefix(it.Name, "Unknown Item") || strings.HasPrefix(it.Display, "Unknown Item") ||
+           it.Name == "" || it.Type == "" {
             need = append(need, it.ItemID)
         }
     }
@@ -445,7 +527,18 @@ func enrichItemsMulti(db *sql.DB, items []TopItem) {
     ctxByID := make(map[string]ctx)
     for _, id := range need {
         var sid string
-        _ = db.QueryRow(`SELECT server_id FROM play_sessions WHERE item_id = ? ORDER BY started_at DESC LIMIT 1`, id).Scan(&sid)
+        // Prefer resolving server via intervals->sessions linkage (more robust)
+        _ = db.QueryRow(`
+            SELECT ps.server_id
+            FROM play_intervals pi
+            JOIN play_sessions ps ON ps.id = pi.session_fk
+            WHERE pi.item_id = ?
+            ORDER BY pi.end_ts DESC
+            LIMIT 1
+        `, id).Scan(&sid)
+        if sid == "" {
+            _ = db.QueryRow(`SELECT server_id FROM play_sessions WHERE item_id = ? ORDER BY started_at DESC LIMIT 1`, id).Scan(&sid)
+        }
         if sid != "" { ctxByID[id] = ctx{serverID: sid} }
     }
     // Batch per server
@@ -487,5 +580,60 @@ func enrichItemsMulti(db *sql.DB, items []TopItem) {
                 `, mi.ID, sid, ti.Name, ti.Type)
             }
         }
+    }
+
+    // Fallback: for remaining unresolved IDs, try all enabled clients and use the first match
+    unresolved := make([]string, 0)
+    for _, it := range items {
+        if it.Name == "Unknown" || it.Type == "Unknown" || strings.HasPrefix(it.Name, "Unknown Item") || strings.HasPrefix(it.Display, "Unknown Item") || strings.TrimSpace(it.Name) == "" || strings.TrimSpace(it.Type) == "" {
+            unresolved = append(unresolved, it.ItemID)
+        }
+    }
+    if len(unresolved) == 0 { return }
+
+    // Deduplicate
+    seen := make(map[string]struct{})
+    dedup := make([]string, 0, len(unresolved))
+    for _, id := range unresolved { if _, ok := seen[id]; !ok { seen[id] = struct{}{}; dedup = append(dedup, id) } }
+
+    // Try each client for each ID until a hit
+    clients := topItemsMultiMgr.GetEnabledClients()
+    for id := range seen {
+        var found bool
+        for sid, client := range clients {
+            if client == nil { continue }
+            mis, err := client.ItemsByIDs([]string{id})
+            if err != nil || len(mis) == 0 { continue }
+            mi := mis[0]
+            ti, ok := idx[mi.ID]; if !ok { break }
+            if mi.Name != "" { ti.Name = mi.Name; ti.Display = mi.Name }
+            if mi.Type != "" { ti.Type = mi.Type }
+            if strings.EqualFold(mi.Type, "Episode") && mi.SeriesName != "" {
+                epcode := ""
+                if mi.ParentIndexNumber != nil && mi.IndexNumber != nil {
+                    epcode = fmt.Sprintf("S%02dE%02d", *mi.ParentIndexNumber, *mi.IndexNumber)
+                }
+                if epcode != "" && ti.Name != "" {
+                    ti.Display = fmt.Sprintf("%s - %s (%s)", mi.SeriesName, ti.Name, epcode)
+                } else if ti.Name != "" {
+                    ti.Display = fmt.Sprintf("%s - %s", mi.SeriesName, ti.Name)
+                } else {
+                    ti.Display = mi.SeriesName
+                }
+                ti.Type = "Episode"
+            }
+            // Upsert minimal metadata with detected server
+            _, _ = db.Exec(`
+                INSERT INTO library_item (id, server_id, name, media_type, updated_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = CASE WHEN excluded.name <> '' THEN excluded.name ELSE name END,
+                    media_type = CASE WHEN excluded.media_type <> '' THEN excluded.media_type ELSE media_type END,
+                    updated_at = CURRENT_TIMESTAMP
+            `, mi.ID, sid, ti.Name, ti.Type)
+            found = true
+            break
+        }
+        _ = found
     }
 }

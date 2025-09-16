@@ -106,3 +106,39 @@ func Backdrop(opts Opts) fiber.Handler {
 		return proxyImage(c, opts.HTTPClient, u+"?"+q.Encode())
 	}
 }
+
+// MultiServerPrimary handles image requests with server routing: /img/primary/:server/:id
+func MultiServerPrimary(multiServerMgr interface{}) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		serverType := c.Params("server", "")
+		id := c.Params("id", "")
+
+		if serverType == "" || id == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "missing server or item id"})
+		}
+
+		var imageURL string
+
+		// Use environment variable values (same as configured in the multi-server manager)
+		switch serverType {
+		case "plex":
+			// Plex image URL format - use photo transcode endpoint
+			imageURL = fmt.Sprintf("http://plex:32400/photo/:/transcode?width=300&height=450&minSize=1&upscale=1&url=/library/metadata/%s/thumb&X-Plex-Token=2V3pSLipwDso8ziMyxYj",
+				url.PathEscape(id))
+		case "emby":
+			// Emby image URL format
+			imageURL = fmt.Sprintf("http://emby:8096/emby/Items/%s/Images/Primary?api_key=9bcb8efb00244f889a78e5878ab89b41&quality=90&maxWidth=300",
+				url.PathEscape(id))
+    case "jellyfin":
+        // Jellyfin image URL format (no "/jellyfin" prefix)
+        imageURL = fmt.Sprintf("http://jellyfin:8096/Items/%s/Images/Primary?api_key=0528a4ed9fc34d669ce4bea9c17d7f69&quality=90&maxWidth=300",
+                url.PathEscape(id))
+		default:
+			return c.Status(404).JSON(fiber.Map{"error": "unsupported server type"})
+		}
+
+		// Create HTTP client and proxy the request
+		httpClient := &http.Client{Timeout: 20 * time.Second}
+		return proxyImage(c, httpClient, imageURL)
+	}
+}

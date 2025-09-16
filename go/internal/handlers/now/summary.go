@@ -56,26 +56,63 @@ func (r *mbpsRing) avgOr(v float64) float64 {
 
 var summaryRing = newMbpsRing(5)
 
+// minimal shape used within this file for aggregation
+type embySessionLite struct {
+    IsPaused      bool
+    VideoMethod   string
+    AudioMethod   string
+    TransReasons  []string
+    Bitrate       int64
+    TransVideoBit int64
+    TransAudioBit int64
+}
+
 // Summary computes the lightweight metrics for the Now Playing header.
 // GET /api/now-playing/summary
 func Summary(c fiber.Ctx) error {
-    em, err := getEmbyClient()
-    if err != nil {
-        // If server is not configured, return zeros gracefully
-        return c.Status(fiber.StatusOK).JSON(NowPlayingSummary{})
+    // Prefer multi-server aggregation when available
+    var sessionsEmb []embySessionLite
+    if multiServerMgr != nil {
+        if ss, err := multiServerMgr.GetAllSessions(); err == nil {
+            // Convert normalized sessions to a minimal shape
+            for _, s := range ss {
+                sessionsEmb = append(sessionsEmb, embySessionLite{
+                    IsPaused:      s.IsPaused,
+                    VideoMethod:   s.VideoMethod,
+                    AudioMethod:   s.AudioMethod,
+                    TransReasons:  s.TranscodeReasons,
+                    Bitrate:       s.Bitrate,
+                    TransVideoBit: s.TranscodeBitrate,
+                    TransAudioBit: 0, // not currently tracked per-audio in normalized type
+                })
+            }
+        }
     }
-
-    sessions, err := em.GetActiveSessions()
-    if err != nil {
-        // On upstream error, still return zeros to avoid breaking UI
-        return c.Status(fiber.StatusOK).JSON(NowPlayingSummary{})
+    if len(sessionsEmb) == 0 {
+        // Fallback to legacy Emby-only
+        em, err := getEmbyClient()
+        if err == nil {
+            if ss, err2 := em.GetActiveSessions(); err2 == nil {
+                for _, s := range ss {
+                    sessionsEmb = append(sessionsEmb, embySessionLite{
+                        IsPaused:      s.IsPaused,
+                        VideoMethod:   s.VideoMethod,
+                        AudioMethod:   s.AudioMethod,
+                        TransReasons:  s.TransReasons,
+                        Bitrate:       s.Bitrate,
+                        TransVideoBit: s.TransVideoBitrate,
+                        TransAudioBit: s.TransAudioBitrate,
+                    })
+                }
+            }
+        }
     }
 
     active := 0
     transcodes := 0
     var sumBps int64
 
-    for _, s := range sessions {
+    for _, s := range sessionsEmb {
         // Active stream: not paused (buffering isn't exposed; best effort)
         if s.IsPaused {
             continue
@@ -104,8 +141,8 @@ func Summary(c fiber.Ctx) error {
         // Bitrate selection: prefer overall session bitrate; fallback to target A/V bitrates
         bps := s.Bitrate
         if bps <= 0 {
-            if s.TransVideoBitrate > 0 || s.TransAudioBitrate > 0 {
-                bps = s.TransVideoBitrate + s.TransAudioBitrate
+            if s.TransVideoBit > 0 || s.TransAudioBit > 0 {
+                bps = s.TransVideoBit + s.TransAudioBit
             }
         }
         if bps > 0 {

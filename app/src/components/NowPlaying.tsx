@@ -16,6 +16,7 @@ export default function NowPlaying() {
   const [summary, setSummary] = useState<{ outbound_mbps: number; active_streams: number; active_transcodes: number } | null>(null);
   const [msgOpen, setMsgOpen] = useState<Record<string, boolean>>({});
   const [msgText, setMsgText] = useState<Record<string, string>>({});
+  const keyFor = (s: NowEntry) => `${(s.server_type || 'emby').toLowerCase()}|${s.session_id}`;
 
   // Poll summary every 5s
   useEffect(() => {
@@ -90,22 +91,24 @@ export default function NowPlaying() {
     return () => clearInterval(id);
   }, []);
 
-  const send = async (
-    sessionId: string,
+  const sendServer = async (
+    entry: NowEntry,
     action: "pause" | "unpause" | "stop" | "message",
     messageText?: string
   ) => {
+    const alias = (entry.server_type || "emby").toLowerCase();
+    const sid = entry.session_id;
     try {
       if (action === "pause" || action === "unpause") {
-        await fetch(`${apiBase}/now/${sessionId}/pause`, {
+        await fetch(`${apiBase}/api/now/sessions/${alias}/${sid}/pause`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ paused: action === "pause" }),
         });
       } else if (action === "stop") {
-        await fetch(`${apiBase}/now/${sessionId}/stop`, { method: "POST" });
+        await fetch(`${apiBase}/api/now/sessions/${alias}/${sid}/stop`, { method: "POST" });
       } else if (action === "message") {
-        await fetch(`${apiBase}/now/${sessionId}/message`, {
+        await fetch(`${apiBase}/api/now/sessions/${alias}/${sid}/message`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -121,13 +124,22 @@ export default function NowPlaying() {
   };
 
   const toggleMsg = (id: string) => {
-    setMsgOpen((prev) => ({ ...prev, [id]: !prev[id] }));
+    const s = sessions.find((x) => x.session_id === id);
+    const k = s ? keyFor(s) : id;
+    setMsgOpen((prev) => ({ ...prev, [k]: !prev[k] }));
   };
-  const setMsg = (id: string, v: string) => setMsgText((prev) => ({ ...prev, [id]: v }));
+  const setMsg = (id: string, v: string) => {
+    const s = sessions.find((x) => x.session_id === id);
+    const k = s ? keyFor(s) : id;
+    setMsgText((prev) => ({ ...prev, [k]: v }));
+  };
   const sendMsg = async (id: string) => {
     const text = (msgText[id] ?? "").trim() || "Hello from Emby Analytics";
-    await send(id, "message", text);
-    setMsgOpen((prev) => ({ ...prev, [id]: false }));
+    const entry = sessions.find((x) => x.session_id === id);
+    if (!entry) return;
+    await sendServer(entry, "message", text);
+    const k = keyFor(entry);
+    setMsgOpen((prev) => ({ ...prev, [k]: false }));
   };
 
   // ---------- UI helpers ----------
@@ -135,13 +147,19 @@ export default function NowPlaying() {
     const t = (serverType || "emby").toLowerCase();
     switch (t) {
       case "plex":
-        return { text: "text-[#e5a00d]", bar: "bg-[#e5a00d]" };
+        return { text: "text-[#e5a00d]", bar: "bg-[#e5a00d]", hex: "#e5a00d" };
       case "jellyfin":
-        return { text: "text-[#aa5cc8]", bar: "bg-[#aa5cc8]" };
+        return { text: "text-[#aa5cc8]", bar: "bg-[#aa5cc8]", hex: "#aa5cc8" };
       case "emby":
       default:
-        return { text: "text-[#52b54b]", bar: "bg-[#52b54b]" };
+        return { text: "text-[#52b54b]", bar: "bg-[#52b54b]", hex: "#52b54b" };
     }
+  };
+
+  const hexToRgb = (hex: string): { r: number; g: number; b: number } => {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!m) return { r: 82, g: 181, b: 75 };
+    return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
   };
   const Chip = ({ tone, label }: { tone: "ok" | "warn"; label: string }) => (
     <span
@@ -264,21 +282,35 @@ export default function NowPlaying() {
       {/* Foreground content */}
       <div className="hero-foreground space-y-5">
         <div className="flex items-center gap-3 flex-wrap">
-          <h2 className="ty-title">Now Playing</h2>
-          <div className="flex items-center gap-2 text-xs">
-            <span
-              className="px-2 py-1 rounded-full border border-gray-500/30 bg-gray-500/10 text-gray-200"
-              title="5s rolling average of all active session bitrates."
-            >
-              Outbound: {summary ? (summary.outbound_mbps ?? 0).toFixed(1) : "0.0"} Mbps
-            </span>
-            <span className="px-2 py-1 rounded-full border border-gray-500/30 bg-gray-500/10 text-gray-200">
-              Streams: {summary ? summary.active_streams : 0}
-            </span>
-            <span className="px-2 py-1 rounded-full border border-orange-500/30 bg-orange-500/10 text-orange-300">
-              Transcodes: {summary ? summary.active_transcodes : 0}
-            </span>
-          </div>
+          {(() => {
+            const first = sessions[0];
+            const th = theme(first?.server_type);
+            const rgb = hexToRgb(th.hex);
+            return (
+              <>
+                <h2 className="ty-title" style={{ color: th.hex }}>Now Playing</h2>
+                <div className="flex items-center gap-2 text-xs">
+                  <span
+                    className="px-2 py-1 rounded-full border"
+                    style={{
+                      borderColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)`,
+                      backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1)`,
+                      color: th.hex,
+                    }}
+                    title="5s rolling average of all active session bitrates."
+                  >
+                    Outbound: {summary ? (summary.outbound_mbps ?? 0).toFixed(1) : "0.0"} Mbps
+                  </span>
+                  <span className="px-2 py-1 rounded-full border border-gray-500/30 bg-gray-500/10 text-gray-200">
+                    Streams: {summary ? summary.active_streams : 0}
+                  </span>
+                  <span className="px-2 py-1 rounded-full border border-orange-500/30 bg-orange-500/10 text-orange-300">
+                    Transcodes: {summary ? summary.active_transcodes : 0}
+                  </span>
+                </div>
+              </>
+            );
+          })()}
         </div>
 
         {error && <div className="text-red-400 text-sm">{error}</div>}
@@ -290,7 +322,8 @@ export default function NowPlaying() {
             {sessions.map((s) => {
               const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
               const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
-              const progress = pct(s.progress_pct);
+              // Use server-reported progress by default; freeze when paused; live-tick when playing
+              const progressServer = pct(s.progress_pct);
               const hasTime = (s.duration_sec ?? 0) > 0;
               // Derive client-side ticking position using server timestamp
               const deltaSec = Math.max(0, Math.floor((Date.now() - s.timestamp) / 1000));
@@ -300,13 +333,21 @@ export default function NowPlaying() {
                     (s.position_sec || 0) + (s.is_paused ? 0 : deltaSec)
                   )
                 : undefined;
+              const progress = hasTime
+                ? Math.max(0, Math.min(100, ((s.is_paused ? (s.position_sec || 0) : (livePos || 0)) / (s.duration_sec || 1)) * 100))
+                : progressServer;
               const top = topBadge(s);
               const v = videoStatus(s);
               const a = audioStatus(s);
               const sub = subsStatus(s);
 
+              const th = theme(s.server_type);
               return (
-                <article key={s.session_id} className="card overflow-hidden flex flex-col p-3 flex-none w-auto">
+                <article
+                  key={s.session_id}
+                  className="card overflow-hidden flex flex-col p-3 flex-none w-auto rounded-lg"
+                  style={{ borderColor: th.hex, borderWidth: 3, borderStyle: "solid" }}
+                >
                   {/* Top row: poster + title/meta arranged symmetrically */}
                   <div className="flex gap-3">
                     {/* Poster column - fixed size to align all cards */}
@@ -328,7 +369,10 @@ export default function NowPlaying() {
 
                     {/* Content column - variable width to balance card design */}
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-base text-white leading-snug mb-1.5 line-clamp-2">
+                      <h3
+                        className="font-semibold text-base text-white leading-snug mb-1.5 line-clamp-2 break-words break-all whitespace-normal"
+                        style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
+                      >
                         {s.title || "Unknown Title"}
                       </h3>
                       <div className="text-xs text-gray-300 space-y-0.5 mb-2">
@@ -366,19 +410,19 @@ export default function NowPlaying() {
                         <span className="text-gray-400">Video: </span>
                         <span className="text-white">{s.video || "Unknown"}</span>
                         {" "}
-                        <span className={v.tone === "warn" ? "text-orange-400" : theme(s.server_type).text}>{v.label}</span>
+                        <span className={v.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{v.label}</span>
                       </div>
                       <div className="text-gray-300">
                         <span className="text-gray-400">Audio: </span>
                         <span className="text-white">{s.audio || "Unknown"}</span>
                         {" "}
-                        <span className={a.tone === "warn" ? "text-orange-400" : theme(s.server_type).text}>{a.label}</span>
+                        <span className={a.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{a.label}</span>
                       </div>
                       <div className="text-gray-300">
                         <span className="text-gray-400">Subtitles: </span>
                         <span className="text-white">{s.subs || "None"}</span>
                         {" "}
-                        <span className={sub.tone === "warn" ? "text-orange-400" : theme(s.server_type).text}>{sub.label}</span>
+                        <span className={sub.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{sub.label}</span>
                       </div>
                       {s.bitrate > 0 && (
                         <div className="text-gray-300">
@@ -446,32 +490,38 @@ export default function NowPlaying() {
                     {/* Admin controls - icon-only, tight spacing; width bound to same block */}
                     <div className="pt-2 w-max">
                       <div className="flex items-center gap-2">
+                        {(() => { const isPlex = (s.server_type || '').toLowerCase() === 'plex'; return (
                         <button
-                          onClick={() => send(s.session_id, "pause")}
-                          className="p-2 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
+                          onClick={() => { if (!isPlex) void sendServer(s, "pause") }}
+                          className={`p-2 rounded transition-colors ${isPlex ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' : 'bg-neutral-700 hover:bg-neutral-600'}`}
                           aria-label="Pause"
-                          title="Pause"
+                          title={isPlex ? "Not supported" : "Pause"}
+                          disabled={isPlex}
                         >
                           <Icon name="pause" />
-                        </button>
+                        </button>); })()}
+                        {(() => { const isPlex = (s.server_type || '').toLowerCase() === 'plex'; return (
                         <button
-                          onClick={() => send(s.session_id, "unpause")}
-                          className="p-2 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
+                          onClick={() => { if (!isPlex) void sendServer(s, "unpause") }}
+                          className={`p-2 rounded transition-colors ${isPlex ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' : 'bg-neutral-700 hover:bg-neutral-600'}`}
                           aria-label="Resume"
-                          title="Resume"
+                          title={isPlex ? "Not supported" : "Resume"}
+                          disabled={isPlex}
                         >
                           <Icon name="play" />
-                        </button>
+                        </button>); })()}
+                        {(() => { const isPlex = (s.server_type || '').toLowerCase() === 'plex'; return (
                         <button
-                          onClick={() => toggleMsg(s.session_id)}
-                          className="p-2 bg-neutral-700 hover:bg-neutral-600 rounded transition-colors"
+                          onClick={() => { if (!isPlex) toggleMsg(s.session_id) }}
+                          className={`p-2 rounded transition-colors ${isPlex ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' : 'bg-neutral-700 hover:bg-neutral-600'}`}
                           aria-label="Message"
-                          title="Message"
+                          title={isPlex ? "Not supported" : "Message"}
+                          disabled={isPlex}
                         >
                           <Icon name="message" />
-                        </button>
+                        </button>); })()}
                         <button
-                          onClick={() => send(s.session_id, "stop")}
+                          onClick={() => sendServer(s, "stop")}
                           className="p-2 bg-red-700 hover:bg-red-600 rounded transition-colors"
                           aria-label="Stop"
                           title="Stop"
@@ -479,12 +529,12 @@ export default function NowPlaying() {
                           <Icon name="stop" />
                         </button>
                       </div>
-                      {msgOpen[s.session_id] && (
+                      {msgOpen[keyFor(s)] && (
                         <div className="mt-2 flex items-center gap-2">
                           <input
                             autoFocus
                             type="text"
-                            value={msgText[s.session_id] ?? ""}
+                            value={msgText[keyFor(s)] ?? ""}
                             onChange={(e) => setMsg(s.session_id, e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
@@ -496,10 +546,10 @@ export default function NowPlaying() {
                               }
                             }}
                             placeholder="Type a message…"
-                            className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-600 rounded text-white placeholder:text-neutral-400 min-w-[180px]"
+                            className="px-2 py-1 text-sm bg-neutral-800 border border-neutral-600 rounded text-white placeholder:text-neutral-400 min-w-[180px] z-10 relative"
                           />
                           <button
-                            onClick={() => void sendMsg(s.session_id)}
+                            onClick={() => void sendServer(s, "message", msgText[keyFor(s)])}
                             className="px-2 py-1 text-xs rounded bg-emerald-600 hover:bg-emerald-500 text-white"
                           >
                             Send

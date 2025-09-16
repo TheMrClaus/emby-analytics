@@ -165,6 +165,9 @@ func (sp *SessionProcessor) startNewSession(session media.Session, startTime tim
     }
 
     log.Printf("[session-processor] Started tracking session %s (FK: %d)", session.SessionID, sessionFK)
+
+    // Write-through enrichment: ensure library_item has basic metadata for this item
+    go sp.enrichLibraryItem(session)
 }
 
 // updateSessionDuration updates the session duration in the database
@@ -231,8 +234,8 @@ func (sp *SessionProcessor) createOrUpdateInterval(tracked *TrackedSession, endT
 
     res, ierr := sp.DB.Exec(`
         INSERT INTO play_intervals 
-        (session_fk, item_id, user_id, start_ts, end_ts, start_pos_ticks, end_pos_ticks, duration_seconds, seeked)
-        SELECT id, item_id, user_id, ?, ?, 0, 0, ?, 0
+        (session_fk, item_id, user_id, start_ts, end_ts, start_pos_ticks, end_pos_ticks, duration_seconds, seeked, server_id)
+        SELECT id, item_id, user_id, ?, ?, 0, 0, ?, 0, server_id
         FROM play_sessions
         WHERE id = ?
     `, tracked.StartTime.Unix(), endTime.Unix(), duration, tracked.SessionFK)
@@ -281,12 +284,12 @@ func (sp *SessionProcessor) createPlaySession(session media.Session, startTime t
     audioTo := strings.ToUpper(session.TranscodeAudioCodec)
     res, ierr := sp.DB.Exec(`
         INSERT INTO play_sessions
-        (user_id, session_id, device_id, client_name, item_id, item_name, item_type,
+        (user_id, user_name, session_id, device_id, client_name, item_id, item_name, item_type,
          play_method, started_at, is_active, transcode_reasons, remote_address,
          video_method, audio_method, video_codec_from, video_codec_to,
          audio_codec_from, audio_codec_to, server_id, server_type)
-        VALUES(?,?,?,?,?,?,?,?,?,true,?,?,?,?, ?, ?, ?, ?, ?, ?)
-    `, session.UserID, session.SessionID, session.DeviceName, session.ClientApp,
+        VALUES(?,?,?,?,?,?,?,?,?, ?,true,?,?,?,?, ?, ?, ?, ?, ?, ?)
+    `, session.UserID, session.UserName, session.SessionID, session.DeviceName, session.ClientApp,
         session.ItemID, session.ItemName, session.ItemType, session.PlayMethod,
         startTime.Unix(), transcodeReasons, session.RemoteAddress,
         session.VideoMethod, session.AudioMethod, videoFrom, videoTo, audioFrom, audioTo,
@@ -305,4 +308,34 @@ func msToTicks(ms int64) int64 {
         return 0
     }
     return ms * 10_000
+}
+
+// enrichLibraryItem upserts minimal metadata for the item's name/type using the proper server client.
+func (sp *SessionProcessor) enrichLibraryItem(s media.Session) {
+    if sp.MultiServerMgr == nil || s.ItemID == "" {
+        return
+    }
+    client, ok := sp.MultiServerMgr.GetClient(s.ServerID)
+    if !ok || client == nil {
+        return
+    }
+    items, err := client.ItemsByIDs([]string{s.ItemID})
+    if err != nil || len(items) == 0 {
+        return
+    }
+    it := items[0]
+    name := it.Name
+    mtype := it.Type
+    if name == "" && s.ItemName != "" { name = s.ItemName }
+    if mtype == "" && s.ItemType != "" { mtype = s.ItemType }
+    if name == "" && mtype == "" { return }
+    // Upsert into library_item (keep it minimal and non-destructive)
+    _, _ = sp.DB.Exec(`
+        INSERT INTO library_item (id, server_id, name, media_type, updated_at)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(id) DO UPDATE SET
+            name = CASE WHEN excluded.name <> '' THEN excluded.name ELSE name END,
+            media_type = CASE WHEN excluded.media_type <> '' THEN excluded.media_type ELSE media_type END,
+            updated_at = CURRENT_TIMESTAMP
+    `, s.ItemID, s.ServerID, name, mtype)
 }
