@@ -1,14 +1,15 @@
 package items
 
 import (
-	"database/sql"
-	"fmt"
-	"log"
-	"strings"
+    "database/sql"
+    "fmt"
+    "log"
+    "strings"
 
-	"github.com/gofiber/fiber/v3"
+    "github.com/gofiber/fiber/v3"
 
-	"emby-analytics/internal/emby"
+    "emby-analytics/internal/emby"
+    "emby-analytics/internal/media"
 )
 
 type ItemRow struct {
@@ -215,6 +216,96 @@ func ByIDs(db *sql.DB, em *emby.Client) fiber.Handler {
 		}
 		return c.JSON(out)
 	}
+}
+
+// ByIDsMS uses the MultiServerManager to enrich items by consulting the most recent server context per item.
+func ByIDsMS(db *sql.DB, mgr *media.MultiServerManager) fiber.Handler {
+    return func(c fiber.Ctx) error {
+        raw := c.Query("ids", "")
+        if strings.TrimSpace(raw) == "" { return c.JSON([]ItemRow{}) }
+        parts := strings.Split(raw, ",")
+        ids := make([]string, 0, len(parts))
+        for _, p := range parts { p = strings.TrimSpace(p); if p != "" { ids = append(ids, p) } }
+        if len(ids) == 0 { return c.JSON([]ItemRow{}) }
+
+        // Base rows from DB
+        placeholders := strings.Repeat("?,", len(ids))
+        placeholders = placeholders[:len(placeholders)-1]
+        args := make([]any, len(ids)); for i, v := range ids { args[i] = v }
+        rows, err := db.Query(`SELECT id, name, media_type FROM library_item WHERE id IN (`+placeholders+`)`, args...)
+        if err != nil { return c.Status(500).JSON(fiber.Map{"error": err.Error()}) }
+        defer rows.Close()
+        base := make(map[string]ItemRow, len(ids))
+        for rows.Next() {
+            var r ItemRow
+            if err := rows.Scan(&r.ID, &r.Name, &r.Type); err != nil { return c.Status(500).JSON(fiber.Map{"error": err.Error()}) }
+            r.Display = r.Name
+            base[r.ID] = r
+        }
+
+        // Resolve server context for missing/placeholder items
+        type ctx struct{ serverID string; serverType media.ServerType }
+        ctxByID := make(map[string]ctx)
+        for _, id := range ids {
+            r, ok := base[id]
+            if ok && r.Name != "" && r.Name != "Unknown" && r.Name != "Missing" { continue }
+            var sid, stype string
+            _ = db.QueryRow(`SELECT server_id, server_type FROM play_sessions WHERE item_id = ? ORDER BY started_at DESC LIMIT 1`, id).Scan(&sid, &stype)
+            if sid != "" { ctxByID[id] = ctx{serverID: sid, serverType: media.ServerType(stype)} }
+        }
+
+        // Batch per server client
+        batch := make(map[string][]string)
+        for id, cxt := range ctxByID { batch[cxt.serverID] = append(batch[cxt.serverID], id) }
+        for serverID, idlist := range batch {
+            client, ok := mgr.GetClient(serverID)
+            if !ok || client == nil || len(idlist) == 0 { continue }
+            if items, err := client.ItemsByIDs(idlist); err == nil {
+                for _, it := range items {
+                    rec := base[it.ID]
+                    if it.Name != "" { rec.Name = it.Name }
+                    if it.Type != "" { rec.Type = it.Type }
+                    // Display for episodes
+                    if strings.EqualFold(it.Type, "Episode") && it.SeriesName != "" {
+                        epcode := ""
+                        if it.ParentIndexNumber != nil && it.IndexNumber != nil {
+                            epcode = fmt.Sprintf("S%02dE%02d", *it.ParentIndexNumber, *it.IndexNumber)
+                        }
+                        if epcode != "" && rec.Name != "" {
+                            rec.Display = fmt.Sprintf("%s - %s (%s)", it.SeriesName, rec.Name, epcode)
+                        } else if rec.Name != "" {
+                            rec.Display = fmt.Sprintf("%s - %s", it.SeriesName, rec.Name)
+                        } else { rec.Display = it.SeriesName }
+                    } else {
+                        if rec.Name != "" { rec.Display = rec.Name } else { rec.Display = fmt.Sprintf("Unknown Item (%s)", it.ID) }
+                    }
+                    base[it.ID] = rec
+                    // Upsert minimal metadata
+                    _, _ = db.Exec(`
+                        INSERT INTO library_item (id, server_id, name, media_type, updated_at)
+                        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        ON CONFLICT(id) DO UPDATE SET
+                            name = CASE WHEN excluded.name <> '' THEN excluded.name ELSE name END,
+                            media_type = CASE WHEN excluded.media_type <> '' THEN excluded.media_type ELSE media_type END,
+                            updated_at = CURRENT_TIMESTAMP
+                    `, it.ID, serverID, rec.Name, rec.Type)
+                }
+            }
+        }
+
+        // Build output in request order
+        out := make([]ItemRow, 0, len(ids))
+        for _, id := range ids {
+            if r, ok := base[id]; ok {
+                if r.Display == "" { if r.Name != "" { r.Display = r.Name } else { r.Display = fmt.Sprintf("Unknown Item (%s)", id) } }
+                if r.Type == "" { r.Type = "Unknown" }
+                out = append(out, r)
+            } else {
+                out = append(out, ItemRow{ ID: id, Name: fmt.Sprintf("Missing Item (%s)", id), Type: "Unknown", Display: fmt.Sprintf("Missing Item (%s)", id) })
+            }
+        }
+        return c.JSON(out)
+    }
 }
 
 // zero-pad to 2 digits

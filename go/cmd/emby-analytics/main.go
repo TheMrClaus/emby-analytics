@@ -14,19 +14,25 @@ import (
 	emby "emby-analytics/internal/emby"
     admin "emby-analytics/internal/handlers/admin"
     auth "emby-analytics/internal/handlers/auth"
-	configHandler "emby-analytics/internal/handlers/config"
-	verhandler "emby-analytics/internal/handlers/version"
-	health "emby-analytics/internal/handlers/health"
-	images "emby-analytics/internal/handlers/images"
-	items "emby-analytics/internal/handlers/items"
-	now "emby-analytics/internal/handlers/now"
-	settings "emby-analytics/internal/handlers/settings"
-	stats "emby-analytics/internal/handlers/stats"
-	"emby-analytics/internal/logging"
-	"emby-analytics/internal/middleware"
-	"emby-analytics/internal/monitors"
-	"emby-analytics/internal/sync"
-	tasks "emby-analytics/internal/tasks"
+    configHandler "emby-analytics/internal/handlers/config"
+    verhandler "emby-analytics/internal/handlers/version"
+    health "emby-analytics/internal/handlers/health"
+    images "emby-analytics/internal/handlers/images"
+    items "emby-analytics/internal/handlers/items"
+    now "emby-analytics/internal/handlers/now"
+    serversHandler "emby-analytics/internal/handlers/servers"
+    settings "emby-analytics/internal/handlers/settings"
+    stats "emby-analytics/internal/handlers/stats"
+    "emby-analytics/internal/logging"
+    "emby-analytics/internal/middleware"
+    "emby-analytics/internal/monitors"
+    "emby-analytics/internal/sync"
+    tasks "emby-analytics/internal/tasks"
+
+    // Multi-server clients
+    "emby-analytics/internal/media"
+    "emby-analytics/internal/plex"
+    "emby-analytics/internal/jellyfin"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/recover"
@@ -95,7 +101,20 @@ func main() {
 	logger.Info("=====================================================")
 	logger.Info("        Starting Emby Analytics Application")
 	logger.Info("=====================================================")
-	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
+    em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
+
+    // Build MultiServerManager (Plex/Jellyfin for now; Emby support via legacy paths)
+    multiMgr := media.NewMultiServerManager()
+    for _, sc := range cfg.MediaServers {
+        switch sc.Type {
+        case media.ServerTypePlex:
+            multiMgr.AddServer(sc, plex.New(sc))
+        case media.ServerTypeJellyfin:
+            multiMgr.AddServer(sc, jellyfin.New(sc))
+        case media.ServerTypeEmby:
+            multiMgr.AddServer(sc, media.NewEmbyAdapter(sc))
+        }
+    }
 
     // ---- Database Initialization & Migration ----
     absPath, err := filepath.Abs(cfg.SQLitePath)
@@ -173,16 +192,18 @@ func main() {
 	logger.Info("Initial user sync completed")
 
 	// ---- Session Processing (Hybrid State-Polling Approach) ----
-	sessionProcessor := tasks.NewSessionProcessor(sqlDB)
+    sessionProcessor := tasks.NewSessionProcessor(sqlDB, multiMgr)
 	logger.Info("Session processor initialized")
 
 	pollInterval := time.Duration(cfg.NowPollSec) * time.Second
 	if pollInterval <= 0 {
 		pollInterval = 5 * time.Second
 	}
-	broadcaster := now.NewBroadcaster(em, pollInterval)
-	broadcaster.SessionProcessor = sessionProcessor.ProcessActiveSessions // Connect session processing
-	now.SetBroadcaster(broadcaster)
+    broadcaster := now.NewBroadcaster(em, pollInterval)
+    broadcaster.SessionProcessor = sessionProcessor.ProcessActiveSessions
+    now.SetBroadcaster(broadcaster)
+    now.SetMultiServerManager(multiMgr)
+    serversHandler.SetManager(multiMgr)
 	broadcaster.Start()
 	logger.Info("REST API session polling started", "interval", pollInterval)
 	defer broadcaster.Stop()
@@ -241,7 +262,9 @@ func main() {
 	app.Get("/stats/usage", stats.Usage(sqlDB))
 	app.Get("/stats/top/users", stats.TopUsers(sqlDB))
 
-	app.Get("/stats/top/items", stats.TopItems(sqlDB, em))
+    app.Get("/stats/top/items", stats.TopItems(sqlDB, em))
+    // Inject manager so TopItems can enrich non-Emby items
+    stats.SetMultiServerManager(multiMgr)
 	app.Get("/stats/qualities", stats.Qualities(sqlDB))
 	app.Get("/stats/codecs", stats.Codecs(sqlDB))
 	app.Get("/stats/active-users", stats.ActiveUsersLifetime(sqlDB))
@@ -267,13 +290,24 @@ func main() {
 	app.Get("/config", configHandler.GetConfig(cfg))
 
 	// Item & Image Routes
-	app.Get("/items/by-ids", items.ByIDs(sqlDB, em))
+    // Multi-server-aware items lookup (falls back to legacy where needed)
+    app.Get("/items/by-ids", items.ByIDsMS(sqlDB, multiMgr))
 	imgOpts := images.NewOpts(cfg)
 	app.Get("/img/primary/:id", images.Primary(imgOpts))
 	app.Get("/img/backdrop/:id", images.Backdrop(imgOpts))
+	// Multi-server image routes
+	app.Get("/img/primary/:server/:id", images.MultiServerPrimary(multiMgr))
 	// Now Playing Routes
-	app.Get("/api/now-playing/summary", now.Summary)
-	app.Get("/now/snapshot", now.Snapshot)
+    app.Get("/api/now-playing/summary", now.Summary)
+    // Legacy single-Emby snapshot remains for compatibility with current UI
+    app.Get("/now/snapshot", now.Snapshot)
+    // New multi-server snapshot for updated UI/clients
+    app.Get("/api/now/snapshot", now.MultiSnapshot)
+    // Multi-server WebSocket stream (optional ?server=emby|plex|jellyfin|all)
+    app.Get("/api/now/ws", func(c fiber.Ctx) error {
+        if ws.IsWebSocketUpgrade(c) { return c.Next() }
+        return fiber.ErrUpgradeRequired
+    }, ws.New(now.MultiWS()))
 	app.Get("/now/ws", func(c fiber.Ctx) error {
 		if ws.IsWebSocketUpgrade(c) {
 			return c.Next()
@@ -283,7 +317,15 @@ func main() {
 	app.Post("/now/:id/pause", now.PauseSession)
 	app.Post("/now/:id/stop", now.StopSession)
 	app.Post("/now/:id/message", now.MessageSession)
-	// Admin Routes with Authentication
+    // Server list/health
+    app.Get("/api/servers", serversHandler.List())
+
+    // Server-aware now controls
+    app.Post("/api/now/sessions/:server/:id/pause", now.MultiPauseSession)
+    app.Post("/api/now/sessions/:server/:id/stop", now.MultiStopSession)
+    app.Post("/api/now/sessions/:server/:id/message", now.MultiMessageSession)
+
+    // Admin Routes with Authentication
 	rm := admin.NewRefreshManager()
 
     // Protected admin endpoints (admin session OR ADMIN_TOKEN)
@@ -294,7 +336,8 @@ func main() {
 	app.Put("/api/settings/:key", adminAuth, settings.UpdateSetting(sqlDB))
 
 	app.Post("/admin/refresh/start", adminAuth, admin.StartPostHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
-	app.Post("/admin/refresh/incremental", adminAuth, admin.StartIncrementalHandler(rm, sqlDB, em))
+    app.Post("/admin/refresh/incremental", adminAuth, admin.StartIncrementalHandler(rm, sqlDB, em))
+    app.Post("/admin/enrich/missing-items", adminAuth, admin.EnrichMissingItems(sqlDB, multiMgr))
 	app.Get("/admin/refresh/status", adminAuth, admin.StatusHandler(rm))
 	app.Get("/admin/webhook/stats", adminAuth, admin.GetWebhookStats())
 	app.Post("/admin/reset-all", adminAuth, admin.ResetAllData(sqlDB, em))
@@ -327,7 +370,9 @@ func main() {
 	app.Get("/admin/debug/sessions", adminAuth, admin.DebugSessions(sqlDB))
 
 	// Backfill playback methods for historical sessions (reason/codec-based)
-	app.Post("/admin/cleanup/backfill-playmethods", adminAuth, admin.BackfillPlayMethods(sqlDB))
+    app.Post("/admin/cleanup/backfill-playmethods", adminAuth, admin.BackfillPlayMethods(sqlDB))
+    // Enrich missing usernames for Plex/Jellyfin sessions
+    app.Post("/admin/enrich/user-names", adminAuth, admin.EnrichUserNames(sqlDB, multiMgr))
 
 	// Admin: backfill started_at from events/intervals
 	app.Post("/admin/cleanup/backfill-started-at", adminAuth, admin.BackfillStartedAt(sqlDB))

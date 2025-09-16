@@ -23,7 +23,7 @@ export default function Dashboard() {
             <OverviewCards />
           </ErrorBoundary>
 
-          {/* Live sessions */}
+          {/* Live sessions (multi-server data, legacy card UI) */}
           <ErrorBoundary>
             <NowPlaying />
           </ErrorBoundary>

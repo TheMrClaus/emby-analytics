@@ -19,6 +19,9 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
   const [timeframe, setTimeframe] = useState("14d");
   const [embyExternalUrl, setEmbyExternalUrl] = useState<string>("");
   const [embyServerId, setEmbyServerId] = useState<string>("");
+  const [plexExternalUrl, setPlexExternalUrl] = useState<string>("");
+  const [jfExternalUrl,   setJfExternalUrl] = useState<string>("");
+  const [plexServerId, setPlexServerId] = useState<string>("");
 
   // Convert timeframe to days for the API (backwards compatibility)
   const days = timeframe === "all-time" ? 0 : parseInt(timeframe.replace("d", "")) || 14;
@@ -31,6 +34,9 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
       .then((cfg) => {
         setEmbyExternalUrl(cfg.emby_external_url);
         setEmbyServerId(cfg.emby_server_id);
+        setPlexExternalUrl(cfg.plex_external_url || "");
+        setJfExternalUrl(cfg.jellyfin_external_url || "");
+        setPlexServerId(cfg.plex_server_id || "");
       })
       .catch(() => {
         /* best-effort; keep links disabled if it fails */
@@ -88,7 +94,7 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
                 <td className="py-3">
                   <div className="flex items-center gap-3">
                     <Image
-                      src={imgPrimary(r.item_id)}
+                      src={r.server_type ? `${process.env.NEXT_PUBLIC_API_BASE ?? ""}/img/primary/${r.server_type}/${r.item_id}` : imgPrimary(r.item_id)}
                       alt={displayName}
                       width={32}
                       height={48}
@@ -98,8 +104,28 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
                       className="cursor-pointer hover:text-blue-400 transition-colors"
                       title={embyExternalUrl ? "Click to open in Emby" : undefined}
                       onClick={() => {
-                        if (!embyExternalUrl) return;
-                        openInEmby(r.item_id, embyExternalUrl, embyServerId);
+                        const st = (r.server_type || "").toLowerCase();
+                        if (st === "emby") {
+                          if (!embyExternalUrl) return;
+                          openInEmby(r.item_id, embyExternalUrl, embyServerId);
+                          return;
+                        }
+                        if (st === "plex") {
+                          if (!plexExternalUrl) return;
+                          const base = plexExternalUrl.replace(/\/$/, "");
+                          const sid = plexServerId || "";
+                          const url = sid
+                            ? `${base}/web/index.html#!/server/${encodeURIComponent(sid)}/details?key=${encodeURIComponent("/library/metadata/" + r.item_id)}`
+                            : `${base}/web/index.html#!/details?key=${encodeURIComponent("/library/metadata/" + r.item_id)}`;
+                          window.open(url, "_blank", "noopener,noreferrer");
+                          return;
+                        }
+                        if (st === "jellyfin") {
+                          if (!jfExternalUrl) return;
+                          const url = `${jfExternalUrl.replace(/\/$/, "")}/web/#/details?id=${encodeURIComponent(r.item_id)}`;
+                          window.open(url, "_blank", "noopener,noreferrer");
+                          return;
+                        }
                       }}
                     >
                       {displayName}

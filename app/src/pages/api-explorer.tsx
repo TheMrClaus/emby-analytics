@@ -420,6 +420,17 @@ const endpoints: Endpoint[] = [
 
   // Now Playing
   {
+    id: "now-snapshot-multi",
+    category: "Now",
+    method: "GET",
+    path: "/api/now/snapshot",
+    description: "Current active sessions across all configured servers.",
+    usage: "Optionally filter by ?server=<server_id> (e.g., default-emby).",
+    params: [
+      { key: "server", kind: "query", required: false, placeholder: "emby|plex|jellyfin|all" },
+    ],
+  },
+  {
     id: "now-snapshot",
     category: "Now",
     method: "GET",
@@ -435,6 +446,15 @@ const endpoints: Endpoint[] = [
     description: "WebSocket stream of active sessions.",
     usage: "Live updates every poll.",
     note: "Open in a WS client or via the UI card. Not runnable here.",
+  },
+  {
+    id: "now-ws-multi",
+    category: "Now",
+    method: "GET",
+    path: "/api/now/ws",
+    description: "WebSocket stream of active sessions across servers.",
+    usage: "Live updates with optional ?server=emby|plex|jellyfin|all.",
+    note: "Open in a WS client or via updated UI. Not runnable here.",
   },
   {
     id: "now-pause",
@@ -471,6 +491,58 @@ const endpoints: Endpoint[] = [
     ],
   },
 
+  // Now Playing (multi-server controls)
+  {
+    id: "now-pause-server",
+    category: "Now",
+    method: "POST",
+    path: "/api/now/sessions/:server/:id/pause",
+    description: "Pause or resume a session on a specific server.",
+    usage: "Multi-server aware moderation.",
+    params: [
+      { key: "server", kind: "path", required: true, placeholder: "emby|plex|jellyfin" },
+      { key: "id", kind: "path", required: true, placeholder: "session-id" },
+      { key: "paused", kind: "body", required: false, placeholder: "true|false" },
+    ],
+  },
+  {
+    id: "now-stop-server",
+    category: "Now",
+    method: "POST",
+    path: "/api/now/sessions/:server/:id/stop",
+    description: "Stop a session on a specific server.",
+    usage: "Multi-server aware moderation.",
+    params: [
+      { key: "server", kind: "path", required: true, placeholder: "emby|plex|jellyfin" },
+      { key: "id", kind: "path", required: true, placeholder: "session-id" },
+    ],
+  },
+  {
+    id: "now-message-server",
+    category: "Now",
+    method: "POST",
+    path: "/api/now/sessions/:server/:id/message",
+    description: "Send an on-screen message to a session on a specific server.",
+    usage: "Inform users across servers.",
+    params: [
+      { key: "server", kind: "path", required: true, placeholder: "emby|plex|jellyfin" },
+      { key: "id", kind: "path", required: true, placeholder: "session-id" },
+      { key: "header", kind: "body", required: false, placeholder: "Emby Analytics" },
+      { key: "text", kind: "body", required: true, placeholder: "Hello there 👋" },
+      { key: "timeout_ms", kind: "body", required: false, placeholder: "5000" },
+    ],
+  },
+
+  // Servers
+  {
+    id: "servers-list",
+    category: "Servers",
+    method: "GET",
+    path: "/api/servers",
+    description: "List configured media servers with health status.",
+    usage: "Verify connectivity and IDs for server filtering.",
+  },
+
   // Admin - Refresh & scheduler
   {
     id: "admin-refresh-start",
@@ -488,6 +560,26 @@ const endpoints: Endpoint[] = [
     path: "/admin/refresh/incremental",
     description: "Incremental refresh (new/changed).",
     usage: "Lightweight maintenance. Protected.",
+  },
+  {
+    id: "admin-enrich-user-names",
+    category: "Admin",
+    method: "POST",
+    path: "/admin/enrich/user-names",
+    description: "Backfill user_name in play_sessions for Plex/Jellyfin from server user lists.",
+    usage: "Fixes GUID/numeric usernames in Playback Methods. Protected.",
+  },
+  {
+    id: "admin-enrich-missing-items",
+    category: "Admin",
+    method: "POST",
+    path: "/admin/enrich/missing-items",
+    description: "Enrich items with missing/placeholder names by consulting the last-known server context.",
+    usage: "Fix Unknown/Deleted placeholders in Top Items. Protected.",
+    params: [
+      { key: "days", kind: "query", placeholder: "30" },
+      { key: "limit", kind: "query", placeholder: "200" },
+    ],
   },
   {
     id: "admin-refresh-status",

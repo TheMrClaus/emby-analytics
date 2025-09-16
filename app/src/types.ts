@@ -40,6 +40,7 @@ export type TopItem = {
   type: string;
   hours: number;
   display?: string;
+  server_type?: string;
 };
 
 export type ItemRow = { id: string; name?: string; type?: string; display?: string };

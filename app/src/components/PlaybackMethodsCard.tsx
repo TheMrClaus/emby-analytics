@@ -22,6 +22,7 @@ type SessionDetail = {
   ended_at?: number | null;
   session_id: string;
   play_method: string;
+  server_type?: string;
 };
 
 type PlayMethodResponse = {
@@ -57,6 +58,9 @@ export default function PlaybackMethodsCard() {
   const [timeframe, setTimeframe] = useState("30d");
   const [embyExternalUrl, setEmbyExternalUrl] = useState<string>("");
   const [embyServerId, setEmbyServerId] = useState<string>("");
+  const [plexExternalUrl, setPlexExternalUrl] = useState<string>("");
+  const [plexServerId, setPlexServerId] = useState<string>("");
+  const [jfExternalUrl, setJfExternalUrl] = useState<string>("");
 
   // Enhanced state for detailed view
   const [currentPage, setCurrentPage] = useState(1);
@@ -151,9 +155,26 @@ export default function PlaybackMethodsCard() {
       .then((config) => {
         setEmbyExternalUrl(config.emby_external_url);
         setEmbyServerId(config.emby_server_id);
+        setPlexExternalUrl(config.plex_external_url || "");
+        setPlexServerId(config.plex_server_id || "");
+        setJfExternalUrl(config.jellyfin_external_url || "");
       })
       .catch((e) => console.error("Failed to fetch config:", e));
   }, []);
+
+  // Server color theme (match NowPlaying)
+  const theme = (serverType?: string) => {
+    const t = (serverType || "emby").toLowerCase();
+    switch (t) {
+      case "plex":
+        return { text: "text-[#e5a00d]", dot: "bg-[#e5a00d]" };
+      case "jellyfin":
+        return { text: "text-[#aa5cc8]", dot: "bg-[#aa5cc8]" };
+      case "emby":
+      default:
+        return { text: "text-[#52b54b]", dot: "bg-[#52b54b]" };
+    }
+  };
 
   // Summary chart data using additive mode
   const summaryChartData = useMemo(() => {
@@ -610,19 +631,59 @@ export default function PlaybackMethodsCard() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div
-                        className="font-medium text-white truncate cursor-pointer hover:text-blue-400 transition-colors mb-1"
-                        onClick={() => openInEmby(session.item_id, embyExternalUrl, embyServerId)}
-                        title="Click to open in Emby"
-                      >
-                        {session.item_name || "Unknown Media"}
+                      <div className="flex items-center gap-2 mb-1 min-w-0">
+                        <div
+                          className="font-medium text-white truncate cursor-pointer hover:text-blue-400 transition-colors"
+                          onClick={() => {
+                            const st = (session.server_type || "").toLowerCase();
+                            if (st === "emby") {
+                              if (!embyExternalUrl) return;
+                              openInEmby(session.item_id, embyExternalUrl, embyServerId);
+                              return;
+                            }
+                            if (st === "plex") {
+                              if (!plexExternalUrl) return;
+                              const base = plexExternalUrl.replace(/\/$/, "");
+                              const sid = plexServerId || "";
+                              const url = sid
+                                ? `${base}/web/index.html#!/server/${encodeURIComponent(sid)}/details?key=${encodeURIComponent("/library/metadata/" + session.item_id)}`
+                                : `${base}/web/index.html#!/details?key=${encodeURIComponent("/library/metadata/" + session.item_id)}`;
+                              window.open(url, "_blank", "noopener,noreferrer");
+                              return;
+                            }
+                            if (st === "jellyfin") {
+                              if (!jfExternalUrl) return;
+                              const url = `${jfExternalUrl.replace(/\/$/, "")}/web/#/details?id=${encodeURIComponent(session.item_id)}`;
+                              window.open(url, "_blank", "noopener,noreferrer");
+                              return;
+                            }
+                            // Default: assume Emby
+                            if (embyExternalUrl) {
+                              openInEmby(session.item_id, embyExternalUrl, embyServerId);
+                            }
+                          }}
+                          title="Click to open in media server"
+                        >
+                          {session.item_name || "Unknown Media"}
+                        </div>
+                        <span
+                          className={`shrink-0 px-1.5 py-0.5 rounded-full border text-[10px] leading-none ${theme(session.server_type).text} border-current`}
+                        >
+                          {(session.server_type || 'emby').toUpperCase()}
+                        </span>
                       </div>
 
                       <div className="text-xs text-gray-400 space-y-1">
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2 items-center">
                           <span>{session.item_type}</span>
                           <span>•</span>
-                          <span>{session.user_name || session.user_id}</span>
+                          <span className="flex items-center gap-1">
+                            {session.user_name || session.user_id}
+                            <span
+                              className={`inline-block w-2 h-2 rounded-full ${theme(session.server_type).dot}`}
+                              aria-label={(session.server_type || 'emby').toUpperCase()}
+                            />
+                          </span>
                           <span>•</span>
                           <span>
                             {session.client_name || session.device_name || session.device_id}

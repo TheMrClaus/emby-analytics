@@ -1,28 +1,31 @@
 package tasks
 
 import (
-	"database/sql"
-	"log"
-	"sync"
-	"time"
+    "database/sql"
+    "log"
+    "sync"
+    "time"
 
-	"emby-analytics/internal/emby"
-	"emby-analytics/internal/logging"
-	"strings"
+    "emby-analytics/internal/media"
+    "emby-analytics/internal/logging"
+    "strings"
 )
 
 // SessionProcessor implements the hybrid state-polling approach used by playback_reporting plugin
 type SessionProcessor struct {
-	DB              *sql.DB
-	trackedSessions map[string]*TrackedSession // Internal "live list"
-	mu              sync.Mutex
-	Intervalizer    *Intervalizer
+    DB              *sql.DB
+    MultiServerMgr  *media.MultiServerManager
+    trackedSessions map[string]*TrackedSession // Internal "live list"
+    mu              sync.Mutex
+    Intervalizer    *Intervalizer
 }
 
 // TrackedSession represents a session we're tracking internally
 type TrackedSession struct {
     SessionFK  int64
     SessionID  string
+    ServerID   string
+    ServerType media.ServerType
     UserID     string
     ItemID     string
     StartTime  time.Time
@@ -36,9 +39,10 @@ type TrackedSession struct {
 }
 
 // NewSessionProcessor creates a new session processor
-func NewSessionProcessor(db *sql.DB) *SessionProcessor {
+func NewSessionProcessor(db *sql.DB, multiServerMgr *media.MultiServerManager) *SessionProcessor {
 	return &SessionProcessor{
 		DB:              db,
+		MultiServerMgr:  multiServerMgr,
 		trackedSessions: make(map[string]*TrackedSession),
 		Intervalizer: &Intervalizer{
 			DB: db,
@@ -50,9 +54,19 @@ func NewSessionProcessor(db *sql.DB) *SessionProcessor {
 }
 
 // ProcessActiveSessions implements the core algorithm from playback_reporting plugin
-func (sp *SessionProcessor) ProcessActiveSessions(activeSessions []emby.EmbySession) {
-	sp.mu.Lock()
-	defer sp.mu.Unlock()
+func (sp *SessionProcessor) ProcessActiveSessions() {
+    // Get sessions from all enabled servers
+    var activeSessions []media.Session
+    if sp.MultiServerMgr != nil {
+        sessions, err := sp.MultiServerMgr.GetAllSessions()
+        if err != nil {
+            logging.Error("Failed to get sessions from multi-server manager", "error", err)
+            return
+        }
+        activeSessions = sessions
+    }
+    sp.mu.Lock()
+    defer sp.mu.Unlock()
 
 	logging.Debug("Session processor running", "active_sessions", len(activeSessions), "tracked_sessions", len(sp.trackedSessions))
 
@@ -61,7 +75,8 @@ func (sp *SessionProcessor) ProcessActiveSessions(activeSessions []emby.EmbySess
 
 	// Step B: Process Active Sessions
     for _, session := range activeSessions {
-        sessionKey := session.SessionID // Track by Emby SessionID
+        // Composite key to avoid collisions across servers
+        sessionKey := session.ServerID + "|" + session.SessionID
         activeSessionMap[sessionKey] = true
 
         // Skip Live TV completely
@@ -71,26 +86,28 @@ func (sp *SessionProcessor) ProcessActiveSessions(activeSessions []emby.EmbySess
         }
 
         if tracked, exists := sp.trackedSessions[sessionKey]; exists {
-            // Detect item change within the same Emby session
+            // Detect item change within the same session
             if tracked.ItemID != session.ItemID {
-				log.Printf("[session-processor] Item changed within session %s: %s -> %s; rotating session row",
-					sessionKey, tracked.ItemID, session.ItemID)
-				// Finalize previous item session
-				sp.finalizeSession(tracked, currentTime)
-				delete(sp.trackedSessions, sessionKey)
-				// Start new session for the new item
-				sp.startNewSession(session, currentTime)
-				continue
-			}
+                log.Printf("[session-processor] Item changed within session %s: %s -> %s; rotating session row",
+                    sessionKey, tracked.ItemID, session.ItemID)
+                // Finalize previous item session
+                sp.finalizeSession(tracked, currentTime)
+                delete(sp.trackedSessions, sessionKey)
+                // Start new session for the new item
+                sp.startNewSession(session, currentTime)
+                continue
+            }
             // Same item: accumulate only when playing (not paused) and position advanced
             advancedSec := 0
             if !session.IsPaused {
-                if session.PosTicks > 0 && tracked.LastPosTicks > 0 {
-                    deltaTicks := session.PosTicks - tracked.LastPosTicks
+                // Prefer player position delta when available
+                curTicks := msToTicks(session.PositionMs)
+                if curTicks > 0 && tracked.LastPosTicks > 0 {
+                    deltaTicks := curTicks - tracked.LastPosTicks
                     if deltaTicks < 0 { deltaTicks = 0 }
                     advancedSec = int(deltaTicks / 10_000_000)
                 }
-                // Fallback: if ticks missing but not paused, approximate using wall time since last update
+                // Fallback: if position missing but not paused, approximate using wall time since last update
                 if advancedSec == 0 && !tracked.LastUpdate.IsZero() {
                     advancedSec = int(currentTime.Sub(tracked.LastUpdate).Seconds())
                     if advancedSec < 0 { advancedSec = 0 }
@@ -98,53 +115,59 @@ func (sp *SessionProcessor) ProcessActiveSessions(activeSessions []emby.EmbySess
             }
             tracked.AccumulatedSec += advancedSec
             tracked.LastUpdate = currentTime
-            tracked.LastPosTicks = session.PosTicks
+            tracked.LastPosTicks = msToTicks(session.PositionMs)
             tracked.LastPaused = session.IsPaused
 
             // Persist: end_ts reflects last seen; duration_seconds is accumulated active seconds
             sp.updateSessionDuration(tracked, currentTime)
         } else {
             // New session - add to tracked list and create database entry
-            log.Printf("[session-processor] New session detected: %s (user: %s, item: %s)", sessionKey, session.UserID, session.ItemName)
+            log.Printf("[session-processor] New session detected: %s (server:%s user:%s item:%s)", sessionKey, session.ServerID, session.UserID, session.ItemName)
             sp.startNewSession(session, currentTime)
         }
-	}
+    }
 
 	// Step C: Find What's Missing (The Crucial Part)
-	for sessionKey, tracked := range sp.trackedSessions {
-		if !activeSessionMap[sessionKey] {
-			// Session has stopped - perform final update and remove from tracked list
-			log.Printf("[session-processor] Session stopped: %s (user: %s)", sessionKey, tracked.UserID)
-			sp.finalizeSession(tracked, currentTime)
-			delete(sp.trackedSessions, sessionKey)
-		}
-	}
+    for sessionKey, tracked := range sp.trackedSessions {
+        if !activeSessionMap[sessionKey] {
+            // Session has stopped - perform final update and remove from tracked list
+            log.Printf("[session-processor] Session stopped: %s (user: %s)", sessionKey, tracked.UserID)
+            sp.finalizeSession(tracked, currentTime)
+            delete(sp.trackedSessions, sessionKey)
+        }
+    }
 }
 
 // startNewSession creates a new session in the database and adds it to tracked sessions
-func (sp *SessionProcessor) startNewSession(session emby.EmbySession, startTime time.Time) {
-	// Create play_session record
-	sessionFK, err := sp.createPlaySession(session, startTime)
-	if err != nil {
-		log.Printf("[session-processor] Failed to create play session: %v", err)
-		return
-	}
+func (sp *SessionProcessor) startNewSession(session media.Session, startTime time.Time) {
+    // Create play_session record
+    sessionFK, err := sp.createPlaySession(session, startTime)
+    if err != nil {
+        log.Printf("[session-processor] Failed to create play session: %v", err)
+        return
+    }
 
-	// Add to tracked sessions
-    sp.trackedSessions[session.SessionID] = &TrackedSession{
+    // Add to tracked sessions
+    key := session.ServerID + "|" + session.SessionID
+    sp.trackedSessions[key] = &TrackedSession{
         SessionFK:  sessionFK,
         SessionID:  session.SessionID,
+        ServerID:   session.ServerID,
+        ServerType: session.ServerType,
         UserID:     session.UserID,
         ItemID:     session.ItemID,
         StartTime:  startTime,
         LastUpdate: startTime,
-        LastPosTicks: session.PosTicks,
+        LastPosTicks: msToTicks(session.PositionMs),
         AccumulatedSec: 0,
         LastPaused: session.IsPaused,
         CurrentIntervalID: 0,
     }
 
-	log.Printf("[session-processor] Started tracking session %s (FK: %d)", session.SessionID, sessionFK)
+    log.Printf("[session-processor] Started tracking session %s (FK: %d)", session.SessionID, sessionFK)
+
+    // Write-through enrichment: ensure library_item has basic metadata for this item
+    go sp.enrichLibraryItem(session)
 }
 
 // updateSessionDuration updates the session duration in the database
@@ -211,8 +234,8 @@ func (sp *SessionProcessor) createOrUpdateInterval(tracked *TrackedSession, endT
 
     res, ierr := sp.DB.Exec(`
         INSERT INTO play_intervals 
-        (session_fk, item_id, user_id, start_ts, end_ts, start_pos_ticks, end_pos_ticks, duration_seconds, seeked)
-        SELECT id, item_id, user_id, ?, ?, 0, 0, ?, 0
+        (session_fk, item_id, user_id, start_ts, end_ts, start_pos_ticks, end_pos_ticks, duration_seconds, seeked, server_id)
+        SELECT id, item_id, user_id, ?, ?, 0, 0, ?, 0, server_id
         FROM play_sessions
         WHERE id = ?
     `, tracked.StartTime.Unix(), endTime.Unix(), duration, tracked.SessionFK)
@@ -225,13 +248,18 @@ func (sp *SessionProcessor) createOrUpdateInterval(tracked *TrackedSession, endT
 }
 
 // createPlaySession creates a new play_session record in the database
-func (sp *SessionProcessor) createPlaySession(session emby.EmbySession, startTime time.Time) (int64, error) {
-	// Check if a session already exists for this SessionID+ItemID
-	var existingID int64
-	err := sp.DB.QueryRow(`SELECT id FROM play_sessions WHERE session_id=? AND item_id=?`, session.SessionID, session.ItemID).Scan(&existingID)
-	if err == nil {
-		// Reactivate existing row and refresh transcode details (best effort)
-		transcodeReasons := strings.Join(session.TransReasons, ",")
+func (sp *SessionProcessor) createPlaySession(session media.Session, startTime time.Time) (int64, error) {
+    // Check if a session already exists for this (server_id, session_id, item_id)
+    var existingID int64
+    err := sp.DB.QueryRow(`SELECT id FROM play_sessions WHERE server_id=? AND session_id=? AND item_id=?`, session.ServerID, session.SessionID, session.ItemID).Scan(&existingID)
+    if err == nil {
+        // Reactivate existing row and refresh transcode details (best effort)
+        transcodeReasons := strings.Join(session.TranscodeReasons, ",")
+        // Derive codec from/to
+        videoFrom := strings.ToUpper(session.VideoCodec)
+        videoTo := strings.ToUpper(session.TranscodeVideoCodec)
+        audioFrom := strings.ToUpper(session.AudioCodec)
+        audioTo := strings.ToUpper(session.TranscodeAudioCodec)
         _, _ = sp.DB.Exec(`
             UPDATE play_sessions 
             SET is_active = true, ended_at = NULL,
@@ -245,26 +273,69 @@ func (sp *SessionProcessor) createPlaySession(session emby.EmbySession, startTim
                 audio_codec_to   = COALESCE(NULLIF(?, ''), audio_codec_to)
             WHERE id = ?
         `, session.PlayMethod, transcodeReasons, session.VideoMethod, session.AudioMethod,
-            session.TransVideoFrom, session.TransVideoTo, session.TransAudioFrom, session.TransAudioTo, existingID)
+            videoFrom, videoTo, audioFrom, audioTo, existingID)
         return existingID, nil
-	}
+    }
 
-	transcodeReasons := strings.Join(session.TransReasons, ",")
-	res, ierr := sp.DB.Exec(`
+    transcodeReasons := strings.Join(session.TranscodeReasons, ",")
+    videoFrom := strings.ToUpper(session.VideoCodec)
+    videoTo := strings.ToUpper(session.TranscodeVideoCodec)
+    audioFrom := strings.ToUpper(session.AudioCodec)
+    audioTo := strings.ToUpper(session.TranscodeAudioCodec)
+    res, ierr := sp.DB.Exec(`
         INSERT INTO play_sessions
-        (user_id, session_id, device_id, client_name, item_id, item_name, item_type, 
+        (user_id, user_name, session_id, device_id, client_name, item_id, item_name, item_type,
          play_method, started_at, is_active, transcode_reasons, remote_address,
-         video_method, audio_method, video_codec_from, video_codec_to, 
-         audio_codec_from, audio_codec_to)
-        VALUES(?,?,?,?,?,?,?,?,?,true,?,?,?,?, ?, ?, ?, ?)
-    `, session.UserID, session.SessionID, session.Device, session.App,
-		session.ItemID, session.ItemName, session.ItemType, session.PlayMethod,
-		startTime.Unix(), transcodeReasons, session.RemoteAddress,
-		session.VideoMethod, session.AudioMethod, session.TransVideoFrom, session.TransVideoTo, session.TransAudioFrom, session.TransAudioTo)
+         video_method, audio_method, video_codec_from, video_codec_to,
+         audio_codec_from, audio_codec_to, server_id, server_type)
+        VALUES(?,?,?,?,?,?,?,?,?, ?,true,?,?,?,?, ?, ?, ?, ?, ?, ?)
+    `, session.UserID, session.UserName, session.SessionID, session.DeviceName, session.ClientApp,
+        session.ItemID, session.ItemName, session.ItemType, session.PlayMethod,
+        startTime.Unix(), transcodeReasons, session.RemoteAddress,
+        session.VideoMethod, session.AudioMethod, videoFrom, videoTo, audioFrom, audioTo,
+        session.ServerID, string(session.ServerType))
 
-	if ierr != nil {
-		return 0, ierr
-	}
+    if ierr != nil {
+        return 0, ierr
+    }
 
-	return res.LastInsertId()
+    return res.LastInsertId()
+}
+
+// msToTicks converts milliseconds to 100-nanosecond ticks
+func msToTicks(ms int64) int64 {
+    if ms <= 0 {
+        return 0
+    }
+    return ms * 10_000
+}
+
+// enrichLibraryItem upserts minimal metadata for the item's name/type using the proper server client.
+func (sp *SessionProcessor) enrichLibraryItem(s media.Session) {
+    if sp.MultiServerMgr == nil || s.ItemID == "" {
+        return
+    }
+    client, ok := sp.MultiServerMgr.GetClient(s.ServerID)
+    if !ok || client == nil {
+        return
+    }
+    items, err := client.ItemsByIDs([]string{s.ItemID})
+    if err != nil || len(items) == 0 {
+        return
+    }
+    it := items[0]
+    name := it.Name
+    mtype := it.Type
+    if name == "" && s.ItemName != "" { name = s.ItemName }
+    if mtype == "" && s.ItemType != "" { mtype = s.ItemType }
+    if name == "" && mtype == "" { return }
+    // Upsert into library_item (keep it minimal and non-destructive)
+    _, _ = sp.DB.Exec(`
+        INSERT INTO library_item (id, server_id, name, media_type, updated_at)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(id) DO UPDATE SET
+            name = CASE WHEN excluded.name <> '' THEN excluded.name ELSE name END,
+            media_type = CASE WHEN excluded.media_type <> '' THEN excluded.media_type ELSE media_type END,
+            updated_at = CURRENT_TIMESTAMP
+    `, s.ItemID, s.ServerID, name, mtype)
 }

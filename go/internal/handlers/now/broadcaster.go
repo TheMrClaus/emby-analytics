@@ -19,7 +19,8 @@ type Broadcaster struct {
 	interval         time.Duration
 	ctx              context.Context
 	cancel           context.CancelFunc
-	SessionProcessor func(activeSessions []emby.EmbySession) // NEW: callback for hybrid session processing
+    // Optional callback to run server-side processing each poll
+    SessionProcessor func()
 }
 
 // NewBroadcaster creates a new broadcaster instance
@@ -140,11 +141,10 @@ func (b *Broadcaster) fetchNowPlayingEntries() ([]NowEntry, error) {
 		return nil, err // Return the error instead of an empty slice
 	}
 
-	// NEW: Process sessions using hybrid state-polling approach (like playback_reporting plugin)
-	if b.SessionProcessor != nil {
-		logging.Debug("Found active sessions from Emby API", "count", len(sessions))
-		b.SessionProcessor(sessions) // Pass the full session list for processing
-	}
+    // Run any server-side processing callback (multi-server processor pulls its own data)
+    if b.SessionProcessor != nil {
+        b.SessionProcessor()
+    }
 
 	nowTime := time.Now().UnixMilli()
 	entries := make([]NowEntry, 0, len(sessions))
