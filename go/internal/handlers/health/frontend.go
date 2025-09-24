@@ -29,7 +29,7 @@ func FrontendHealth(db *sql.DB) fiber.Handler {
 
 		// Test overview data (what OverviewCards component needs)
 		var userCount, itemCount, sessionCount int
-        err := db.QueryRow(`SELECT 
+		err := db.QueryRow(`SELECT 
             (SELECT COUNT(*) FROM emby_user),
             (SELECT COUNT(*) FROM library_item WHERE media_type NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')),
             (SELECT COUNT(*) FROM play_sessions WHERE started_at IS NOT NULL AND COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram'))
@@ -49,13 +49,13 @@ func FrontendHealth(db *sql.DB) fiber.Handler {
 		// Quick check for recent data activity
 		if status.Overview {
 			var recentSessions int
-            err = db.QueryRow(`SELECT COUNT(*) FROM play_sessions WHERE started_at > datetime('now', '-24 hours') AND COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')`).Scan(&recentSessions)
+			err = db.QueryRow(`SELECT COUNT(*) FROM play_sessions WHERE started_at > datetime('now', '-24 hours') AND COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')`).Scan(&recentSessions)
 			if err == nil {
 				status.SessionsData = recentSessions > 0
 			}
 
 			var activeUsers int
-            err = db.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM play_sessions WHERE started_at > datetime('now', '-7 days') AND COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')`).Scan(&activeUsers)
+			err = db.QueryRow(`SELECT COUNT(DISTINCT user_id) FROM play_sessions WHERE started_at > datetime('now', '-7 days') AND COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')`).Scan(&activeUsers)
 			if err == nil {
 				status.UsersData = activeUsers > 0
 			}

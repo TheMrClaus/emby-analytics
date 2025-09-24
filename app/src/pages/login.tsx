@@ -63,7 +63,13 @@ export default function LoginPage() {
       }
       // Only allow internal relative redirects to avoid open-redirect or injection
       const rawNext = (router.query?.next as string) || "/";
-      const safeNext = typeof rawNext === "string" && rawNext.startsWith("/") && !rawNext.startsWith("/auth") && rawNext !== "/login" ? rawNext : "/";
+      const safeNext =
+        typeof rawNext === "string" &&
+        rawNext.startsWith("/") &&
+        !rawNext.startsWith("/auth") &&
+        rawNext !== "/login"
+          ? rawNext
+          : "/";
       router.replace(safeNext);
     } catch (err: unknown) {
       setError(getErrorMessage(err) || "Login failed");
@@ -90,7 +96,13 @@ export default function LoginPage() {
         return;
       }
       const rawNext = (router.query?.next as string) || "/";
-      const safeNext = typeof rawNext === "string" && rawNext.startsWith("/") && !rawNext.startsWith("/auth") && rawNext !== "/login" ? rawNext : "/";
+      const safeNext =
+        typeof rawNext === "string" &&
+        rawNext.startsWith("/") &&
+        !rawNext.startsWith("/auth") &&
+        rawNext !== "/login"
+          ? rawNext
+          : "/";
       router.replace(safeNext);
     } catch (err: unknown) {
       setError(getErrorMessage(err) || "Failed to create account");
@@ -185,7 +197,9 @@ export default function LoginPage() {
                   disabled={busy}
                   required
                 />
-                <p className="text-xs text-gray-400 mt-1">Registration requires a valid invite code.</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Registration requires a valid invite code.
+                </p>
               </div>
             )}
 
@@ -213,7 +227,9 @@ export default function LoginPage() {
                 onClick={handleCreate}
                 disabled={busy || !cfg?.registration_open}
                 className="flex-1 bg-neutral-700 hover:bg-neutral-600 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-md border border-neutral-600"
-                title={cfg?.registration_open ? "Create a new local account" : "Registration is closed"}
+                title={
+                  cfg?.registration_open ? "Create a new local account" : "Registration is closed"
+                }
               >
                 Create Account
               </button>
@@ -221,7 +237,8 @@ export default function LoginPage() {
 
             {!cfg?.registration_open && (
               <p className="text-xs text-gray-400">
-                Registration is currently closed. Ask an admin to enable invites or create your account.
+                Registration is currently closed. Ask an admin to enable invites or create your
+                account.
               </p>
             )}
           </form>

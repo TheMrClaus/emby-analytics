@@ -179,14 +179,14 @@ export default function PlaybackMethodsCard() {
   // Summary chart data using additive mode
   const summaryChartData = useMemo(() => {
     if (!data) return [];
-    
+
     const details = data.transcodeDetails || {};
     return [
       { name: "Direct", value: details.Direct || 0, color: "#22c55e" },
       { name: "Video Transcode", value: details.TranscodeVideo || 0, color: "#f97316" },
       { name: "Audio Transcode", value: details.TranscodeAudio || 0, color: "#ea580c" },
       { name: "Subtitle Transcode", value: details.TranscodeSubtitle || 0, color: "#dc2626" },
-    ].filter(d => d.value > 0);
+    ].filter((d) => d.value > 0);
   }, [data]);
 
   // Detailed transcode breakdown
@@ -444,8 +444,8 @@ export default function PlaybackMethodsCard() {
                 tickSize: 5,
                 tickPadding: 5,
                 tickRotation: 0,
-                legend: 'Sessions',
-                legendPosition: 'middle',
+                legend: "Sessions",
+                legendPosition: "middle",
                 legendOffset: -40,
               }}
               enableLabel={false}
@@ -507,7 +507,7 @@ export default function PlaybackMethodsCard() {
                       },
                     },
                   ],
-                }
+                },
               ]}
               theme={{
                 axis: {
@@ -669,7 +669,7 @@ export default function PlaybackMethodsCard() {
                         <span
                           className={`shrink-0 px-1.5 py-0.5 rounded-full border text-[10px] leading-none ${theme(session.server_type).text} border-current`}
                         >
-                          {(session.server_type || 'emby').toUpperCase()}
+                          {(session.server_type || "emby").toUpperCase()}
                         </span>
                       </div>
 
@@ -681,7 +681,7 @@ export default function PlaybackMethodsCard() {
                             {session.user_name || session.user_id}
                             <span
                               className={`inline-block w-2 h-2 rounded-full ${theme(session.server_type).dot}`}
-                              aria-label={(session.server_type || 'emby').toUpperCase()}
+                              aria-label={(session.server_type || "emby").toUpperCase()}
                             />
                           </span>
                           <span>•</span>

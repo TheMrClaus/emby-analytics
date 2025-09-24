@@ -8,6 +8,7 @@ import ActiveUsersLifetime from "../components/ActiveUsersLifetime";
 import NowPlaying from "../components/NowPlaying";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import DragDropDashboard from "../components/DragDropDashboard";
+import LibraryServerSelector from "../components/LibraryServerSelector";
 
 export default function Dashboard() {
   return (
@@ -23,10 +24,15 @@ export default function Dashboard() {
             <OverviewCards />
           </ErrorBoundary>
 
-          {/* Live sessions (multi-server data, legacy card UI) */}
+          {/* Live sessions */}
           <ErrorBoundary>
             <NowPlaying />
           </ErrorBoundary>
+
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <h2 className="text-lg font-semibold text-gray-200">Library Server Filter</h2>
+            <LibraryServerSelector />
+          </div>
 
           {/* Dashboard cards with drag and drop functionality */}
           <DragDropDashboard />

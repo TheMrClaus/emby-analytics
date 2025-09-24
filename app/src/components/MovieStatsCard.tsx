@@ -4,10 +4,23 @@ import { fmtInt } from "../lib/format";
 import { fmtLongSpanFromMinutes, fmtLongSpanFromHours } from "../lib/format";
 import Card from "./ui/Card";
 import Link from "next/link";
+import { useLibraryServer } from "../contexts/LibraryServerContext";
 
 export default function MovieStatsCard() {
-  const swrResponse = useMovieStats();
+  const { server } = useLibraryServer();
+  const swrResponse = useMovieStats(server);
   const { data, error, isLoading, hasData } = useDataState(swrResponse);
+
+  const serverLabel = server === "all" ? "" : server.charAt(0).toUpperCase() + server.slice(1);
+
+  const title = (
+    <div className="flex items-center gap-2">
+      <span>Movie Statistics</span>
+      {serverLabel && (
+        <span className="text-xs text-gray-400 uppercase tracking-wide">{serverLabel}</span>
+      )}
+    </div>
+  );
 
   return (
     <DataState
@@ -15,13 +28,13 @@ export default function MovieStatsCard() {
       error={error}
       data={data}
       errorFallback={
-        <Card title="Movie Statistics">
+        <Card title={title}>
           <div className="text-red-300 text-sm">Unable to load movie stats</div>
           <div className="text-xs text-red-400 mt-1">Check server connection</div>
         </Card>
       }
       loadingFallback={
-        <Card title="Movie Statistics">
+        <Card title={title}>
           <div className="animate-pulse">
             <div className="grid grid-cols-2 gap-4">
               {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -36,7 +49,7 @@ export default function MovieStatsCard() {
       }
     >
       {hasData && (
-        <Card title="Movie Statistics">
+        <Card title={title}>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Align ordering with Series card */}
             <StatItem

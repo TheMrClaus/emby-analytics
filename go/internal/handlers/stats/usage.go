@@ -26,7 +26,7 @@ func Usage(db *sql.DB) fiber.Handler {
 
 		// CORRECTED & SIMPLIFIED: This query correctly calculates the overlap
 		// duration for each interval within the window and then sums it up per day and user.
-        query := `
+		query := `
             SELECT
                 strftime('%Y-%m-%d', datetime(pi.start_ts, 'unixepoch')) AS day,
                 u.name,

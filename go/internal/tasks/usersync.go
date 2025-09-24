@@ -2,141 +2,156 @@ package tasks
 
 import (
 	"database/sql"
-	"emby-analytics/internal/logging"
+	"strings"
 	"time"
 
 	"emby-analytics/internal/config"
-	"emby-analytics/internal/emby"
 	"emby-analytics/internal/handlers/settings"
+	"emby-analytics/internal/logging"
+	"emby-analytics/internal/media"
 )
 
-// StartUserSyncLoop now ONLY handles the periodic background syncs.
-func StartUserSyncLoop(db *sql.DB, em *emby.Client, cfg config.Config) {
+// StartUserSyncLoop handles the periodic background user sync across servers.
+func StartUserSyncLoop(db *sql.DB, mgr *media.MultiServerManager, cfg config.Config) {
 	if cfg.UserSyncIntervalSec <= 0 {
-		logging.Debug("Periodic sync disabled (interval <= 0).")
+		logging.Debug("user sync loop disabled (interval <= 0)")
 		return
 	}
-
 	interval := time.Duration(cfg.UserSyncIntervalSec) * time.Second
-	logging.Debug("Starting periodic loop with interval %v.", interval)
+	logging.Debug("Starting user sync loop with interval %v", interval)
 
 	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		<-ticker.C // This will wait for the first interval before running.
-		runUserSync(db, em)
-	}
+	go func() {
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			runUserSync(db, mgr)
+		}
+	}()
 }
 
-// runUserSync is a private helper to perform the sync logic.
-func runUserSync(db *sql.DB, em *emby.Client) {
-	logging.Debug("starting periodic user sync...")
-	startTime := time.Now()
+// RunUserSyncOnce executes a single user sync cycle immediately.
+func RunUserSyncOnce(db *sql.DB, mgr *media.MultiServerManager) {
+	runUserSync(db, mgr)
+}
 
-	// DEBUG: Test the API connection first
-	logging.Debug("Attempting to fetch users from Emby API...")
-
-	users, err := em.GetUsers()
-	if err != nil {
-		logging.Debug("ERROR fetching users from Emby API: %v", err)
+func runUserSync(db *sql.DB, mgr *media.MultiServerManager) {
+	configs := mgr.GetServerConfigs()
+	clients := mgr.GetAllClients()
+	if len(clients) == 0 {
+		logging.Debug("user sync skipped: no media servers registered")
 		return
 	}
 
-	logging.Debug("Successfully fetched %d users from Emby API", len(users))
+	start := time.Now()
+	totalUsers := 0
 
-	// DEBUG: Print details of each user
-	for i, user := range users {
-		logging.Debug("User %d: ID=%s, Name=%s", i+1, user.Id, user.Name)
-	}
-
-	upserted := 0
-	for _, user := range users {
-		logging.Debug("Processing user: %s (ID: %s)", user.Name, user.Id)
-
-		res, err := db.Exec(`INSERT INTO emby_user (id, name) VALUES (?, ?)
-		                   ON CONFLICT(id) DO UPDATE SET name=excluded.name`,
-			user.Id, user.Name)
-		if err != nil {
-			logging.Debug("ERROR upserting user %s: %v", user.Name, err)
+	for serverID, client := range clients {
+		if client == nil {
 			continue
 		}
-		if rows, _ := res.RowsAffected(); rows > 0 {
-			upserted++
-			logging.Debug("Successfully upserted user: %s", user.Name)
+		sc, ok := configs[serverID]
+		if !ok {
+			continue
 		}
-		syncUserWatchData(db, em, user.Id, user.Name)
+		if !shouldSyncServer(db, sc) {
+			logging.Debug("user sync disabled for server", "server", sc.Name, "server_id", sc.ID)
+			continue
+		}
+
+		processed := syncServerUsers(db, client, sc)
+		totalUsers += processed
 	}
 
-	var totalInDB int
-	_ = db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&totalInDB)
-	logging.Debug("periodic sync completed in %v: upserted %d users, total in DB: %d", time.Since(startTime), upserted, totalInDB)
+	logging.Debug("user sync completed", "duration", time.Since(start).Round(time.Millisecond), "servers", len(clients), "users_processed", totalUsers)
 }
 
-func syncUserWatchData(db *sql.DB, em *emby.Client, userID, userName string) {
-	userDataItems, err := em.GetUserData(userID)
+func syncServerUsers(db *sql.DB, client media.MediaServerClient, sc media.ServerConfig) int {
+	users, err := client.GetUsers()
 	if err != nil {
-		logging.Debug("failed to get watch data for %s: %v", userName, err)
+		logging.Debug("user sync: failed to fetch users", "server", sc.Name, "error", err)
+		return 0
+	}
+
+	processed := 0
+	for _, u := range users {
+		remoteID := strings.TrimSpace(u.ID)
+		if remoteID == "" {
+			continue
+		}
+		storedID := storageUserID(sc.ID, remoteID)
+		_, err := db.Exec(`
+			INSERT INTO emby_user (id, server_id, server_type, name)
+			VALUES (?, ?, ?, ?)
+			ON CONFLICT(id) DO UPDATE SET
+				name = excluded.name,
+				server_id = excluded.server_id,
+				server_type = excluded.server_type
+		`, storedID, sc.ID, string(sc.Type), u.Name)
+		if err != nil {
+			logging.Debug("user sync: failed to upsert user", "server", sc.Name, "user", u.Name, "error", err)
+			continue
+		}
+		processed++
+		syncUserWatchData(db, client, sc, remoteID, storedID, u.Name)
+	}
+	return processed
+}
+
+func syncUserWatchData(db *sql.DB, client media.MediaServerClient, sc media.ServerConfig, remoteUserID, storedUserID, userName string) {
+	items, err := client.GetUserData(remoteUserID)
+	if err != nil {
+		logging.Debug("user sync: failed to get watch data", "server", sc.Name, "user", userName, "error", err)
 		return
 	}
 
-	// Check if Trakt-synced items should be included for backward compatibility
 	includeTrakt := settings.GetSettingBool(db, "include_trakt_items", false)
 
 	var embyWatchMs, traktWatchMs, totalWatchMs int64
 	var traktItems, embyItems int
 
-	for _, item := range userDataItems {
-		if item.UserData.Played && item.RunTimeTicks > 0 {
-			// Better Trakt detection: Trakt-synced items typically have:
-			// - Played=true (marked as watched)
-			// - PlayCount=0 (never actually streamed through Emby)
-			// - LastPlayedDate="" (no actual playback timestamp)
-			// - PlaybackPositionTicks=0 (no resume position)
+	for _, item := range items {
+		if !item.Played || item.RuntimeMs <= 0 {
+			continue
+		}
+		// Detect Trakt-synced entries (no playback evidence)
+		hasLastPlayed := strings.TrimSpace(item.LastPlayed) != ""
+		hasPlaybackPosition := item.PlaybackPositionMs > 0
+		hasPlayCount := item.PlayCount > 0
+		isTrakt := !hasLastPlayed && !hasPlaybackPosition && !hasPlayCount
 
-			hasLastPlayedDate := item.UserData.LastPlayedDate != ""
-			hasPlaybackPosition := item.UserData.PlaybackPos > 0
-			hasPlayCount := item.UserData.PlayCount > 0
+		watchTimeMs := item.RuntimeMs
 
-			// Consider it Trakt-synced if it's marked played but has no Emby streaming evidence
-			isTraktSynced := !hasLastPlayedDate && !hasPlaybackPosition && !hasPlayCount
-
-			watchTimeMs := item.RunTimeTicks / 10000
-
-			if isTraktSynced {
-				traktItems++
-				traktWatchMs += watchTimeMs
-				if includeTrakt {
-					totalWatchMs += watchTimeMs
-				}
-			} else {
-				embyItems++
-				embyWatchMs += watchTimeMs
+		if isTrakt {
+			traktItems++
+			traktWatchMs += watchTimeMs
+			if includeTrakt {
 				totalWatchMs += watchTimeMs
 			}
+		} else {
+			embyItems++
+			embyWatchMs += watchTimeMs
+			totalWatchMs += watchTimeMs
 		}
+
+		// Ensure library item metadata is present for aggregated stats
+		upsertUserAndItem(db, sc.ID, sc.Type, remoteUserID, userName, item.ID, item.Name, item.Type)
 	}
 
-	// Log the breakdown for debugging
 	if traktItems > 0 || embyItems > 0 {
-		logging.Debug("[usersync] %s: %d Emby items (%dms), %d Trakt items (%dms), includeTrakt=%v",
-			userName, embyItems, embyWatchMs, traktItems, traktWatchMs, includeTrakt)
+		logging.Debug("[usersync] %s: server=%s emby_items=%d trakt_items=%d include_trakt=%v",
+			userName, sc.Name, embyItems, traktItems, includeTrakt)
 	}
 
-	// Store all three values: separate breakdown plus total for backward compatibility
-	_, err = db.Exec(`INSERT INTO lifetime_watch (user_id, total_ms, emby_ms, trakt_ms)
-	                  VALUES (?, ?, ?, ?)
-	                  ON CONFLICT(user_id) DO UPDATE SET 
-	                      total_ms = excluded.total_ms,
-	                      emby_ms = excluded.emby_ms,
-	                      trakt_ms = excluded.trakt_ms`,
-		userID, totalWatchMs, embyWatchMs, traktWatchMs)
+	_, err = db.Exec(`
+		INSERT INTO lifetime_watch (user_id, total_ms, emby_ms, trakt_ms)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(user_id) DO UPDATE SET
+			total_ms = excluded.total_ms,
+			emby_ms = excluded.emby_ms,
+			trakt_ms = excluded.trakt_ms
+	`, storedUserID, totalWatchMs, embyWatchMs, traktWatchMs)
 	if err != nil {
-		logging.Debug("failed to update lifetime watch for %s: %v", userName, err)
+		logging.Debug("user sync: failed to update lifetime watch", "server", sc.Name, "user", userName, "error", err)
 	}
-}
-
-// RunUserSyncOnce is the exported function for synchronous, on-demand syncs.
-func RunUserSyncOnce(db *sql.DB, em *emby.Client) {
-	runUserSync(db, em)
 }

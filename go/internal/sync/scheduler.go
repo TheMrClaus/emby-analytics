@@ -120,7 +120,7 @@ func (s *Scheduler) runFullSync() {
 
 // runActiveSessionIngest ensures a play_sessions row exists for each active Emby session.
 func (s *Scheduler) runActiveSessionIngest() {
-    sessions, err := s.em.GetActiveSessions()
+	sessions, err := s.em.GetActiveSessions()
 	if err != nil {
 		logging.Warn("Active ingest failed to fetch sessions", "error", err)
 		return
@@ -135,7 +135,7 @@ func (s *Scheduler) runActiveSessionIngest() {
 		selErr := s.db.QueryRow(`SELECT id FROM play_sessions WHERE session_id=? AND item_id=?`, es.SessionID, es.ItemID).Scan(&id)
 		if selErr == nil {
 			// Update existing row to active and refresh details
-            _, _ = s.db.Exec(`
+			_, _ = s.db.Exec(`
                 UPDATE play_sessions 
                 SET user_id=?, device_id=?, client_name=?, item_name=?, item_type=?, play_method=?,
                     ended_at=NULL, is_active=true, transcode_reasons=?, remote_address=?,
@@ -143,8 +143,8 @@ func (s *Scheduler) runActiveSessionIngest() {
                     audio_codec_from=?, audio_codec_to=?
                 WHERE id=?
             `, es.UserID, es.Device, es.App, es.ItemName, es.ItemType, es.PlayMethod,
-                joinReasons(es.TransReasons), es.RemoteAddress,
-                es.VideoMethod, es.AudioMethod, es.TransVideoFrom, es.TransVideoTo, es.TransAudioFrom, es.TransAudioTo, id)
+				joinReasons(es.TransReasons), es.RemoteAddress,
+				es.VideoMethod, es.AudioMethod, es.TransVideoFrom, es.TransVideoTo, es.TransAudioFrom, es.TransAudioTo, id)
 			updated++
 			continue
 		}
@@ -157,12 +157,12 @@ func (s *Scheduler) runActiveSessionIngest() {
 			joinReasons(es.TransReasons), es.RemoteAddress, es.VideoMethod, es.AudioMethod, es.TransVideoFrom, es.TransVideoTo, es.TransAudioFrom, es.TransAudioTo)
 		inserted++
 	}
-    if inserted+updated > 0 {
-        logging.Debug("Active ingest completed", "upserted", inserted+updated, "inserted", inserted, "updated", updated)
-    }
+	if inserted+updated > 0 {
+		logging.Debug("Active ingest completed", "upserted", inserted+updated, "inserted", inserted, "updated", updated)
+	}
 
-    // After ingest, auto-close stale sessions with no recent updates
-    s.runIdleAutoClose()
+	// After ingest, auto-close stale sessions with no recent updates
+	s.runIdleAutoClose()
 }
 
 func joinReasons(rs []string) string {
@@ -179,20 +179,20 @@ func joinReasons(rs []string) string {
 // runIdleAutoClose marks sessions as inactive if they haven't updated in a while.
 // We rely on play_sessions.ended_at being updated on each poll; if it's too old, close the session.
 func (s *Scheduler) runIdleAutoClose() {
-    // 15 minute default idle timeout
-    cutoff := time.Now().Add(-15 * time.Minute).Unix()
-    res, err := s.db.Exec(`
+	// 15 minute default idle timeout
+	cutoff := time.Now().Add(-15 * time.Minute).Unix()
+	res, err := s.db.Exec(`
         UPDATE play_sessions
         SET is_active = false
         WHERE is_active = true AND ended_at IS NOT NULL AND ended_at < ?
     `, cutoff)
-    if err != nil {
-        logging.Warn("Idle auto-close update failed", "error", err)
-        return
-    }
-    if n, _ := res.RowsAffected(); n > 0 {
-        logging.Debug("Idle auto-closed sessions", "count", n)
-    }
+	if err != nil {
+		logging.Warn("Idle auto-close update failed", "error", err)
+		return
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		logging.Debug("Idle auto-closed sessions", "count", n)
+	}
 }
 
 // shouldRunDailySync checks if it's time for the daily full sync (around 3 AM)

@@ -1,8 +1,8 @@
 package admin
 
 import (
-	"emby-analytics/internal/logging"
 	"database/sql"
+	"emby-analytics/internal/logging"
 	"fmt"
 	"time"
 
@@ -37,7 +37,7 @@ func ResetLifetimeWatch(db *sql.DB) fiber.Handler {
 		}
 
 		// Use play_intervals table for more accurate calculation
-        rows, err := db.Query(`
+		rows, err := db.Query(`
             SELECT 
                 pi.user_id,
                 SUM(pi.duration_seconds * 1000) AS total_watch_ms,

@@ -3,15 +3,43 @@ import Link from "next/link";
 import Head from "next/head";
 import Header from "../components/Header";
 import { useSettings } from "../hooks/useSettings";
-import { Settings, RotateCcw, Check, AlertCircle, Info, ArrowLeft, UserPlus, Shield, User, Trash2, Pencil, Save, X } from "lucide-react";
-import { fetchAppUsers, createAppUser, updateAppUser, deleteAppUser, AppUser } from "../lib/api";
+import {
+  Settings,
+  RotateCcw,
+  RefreshCcw,
+  Check,
+  AlertCircle,
+  Info,
+  ArrowLeft,
+  UserPlus,
+  Shield,
+  User,
+  Trash2,
+  Pencil,
+  Save,
+  X,
+} from "lucide-react";
+import {
+  fetchAppUsers,
+  createAppUser,
+  updateAppUser,
+  deleteAppUser,
+  AppUser,
+  fetchServers,
+  MediaServerInfo,
+  syncServer,
+} from "../lib/api";
+import useSWR from "swr";
 
 export default function SettingsPage() {
   const { data: settings, error, isLoading, updateSetting } = useSettings();
+  const { data: servers } = useSWR<MediaServerInfo[]>("/api/servers", fetchServers);
   const [saving, setSaving] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<{ key: string; status: "success" | "error" } | null>(
     null
   );
+  const [syncingServer, setSyncingServer] = useState<string | null>(null);
+  const [serverSyncStatus, setServerSyncStatus] = useState<Record<string, "success" | "error">>({});
 
   const handleToggleChange = async (key: string, currentValue: string) => {
     const newValue = currentValue === "true" ? "false" : "true";
@@ -32,17 +60,22 @@ export default function SettingsPage() {
   };
 
   const includeTrakt = settings?.find((s) => s.key === "include_trakt_items")?.value || "false";
-  const prevent4kTranscoding = settings?.find((s) => s.key === "prevent_4k_video_transcoding")?.value || "false";
+  const prevent4kTranscoding =
+    settings?.find((s) => s.key === "prevent_4k_video_transcoding")?.value || "false";
   const [meRole, setMeRole] = useState<string | null>(null);
   const [users, setUsers] = useState<AppUser[] | null>(null);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [busyUsers, setBusyUsers] = useState(false);
 
-  const [newUser, setNewUser] = useState<{ username: string; password: string; role: "admin" | "user" }>(
-    { username: "", password: "", role: "user" }
-  );
+  const [newUser, setNewUser] = useState<{
+    username: string;
+    password: string;
+    role: "admin" | "user";
+  }>({ username: "", password: "", role: "user" });
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editDraft, setEditDraft] = useState<Partial<{ username: string; password: string; role: "admin" | "user" }>>({});
+  const [editDraft, setEditDraft] = useState<
+    Partial<{ username: string; password: string; role: "admin" | "user" }>
+  >({});
 
   useEffect(() => {
     (async () => {
@@ -62,7 +95,12 @@ export default function SettingsPage() {
 
   const getErrMessage = (e: unknown): string => {
     if (typeof e === "string") return e;
-    if (e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string") {
+    if (
+      e &&
+      typeof e === "object" &&
+      "message" in e &&
+      typeof (e as { message: unknown }).message === "string"
+    ) {
       return (e as { message: string }).message;
     }
     return "";
@@ -80,6 +118,33 @@ export default function SettingsPage() {
       setBusyUsers(false);
     }
   }, []);
+
+  const clearServerSyncStatus = useCallback((serverId: string) => {
+    setServerSyncStatus((prev) => {
+      const next = { ...prev };
+      delete next[serverId];
+      return next;
+    });
+  }, []);
+
+  const handleServerSync = useCallback(
+    async (serverId: string) => {
+      setSyncingServer(serverId);
+      clearServerSyncStatus(serverId);
+      try {
+        await syncServer(serverId);
+        setServerSyncStatus((prev) => ({ ...prev, [serverId]: "success" }));
+        setTimeout(() => clearServerSyncStatus(serverId), 4000);
+      } catch (error) {
+        console.error("Failed to start server sync:", error);
+        setServerSyncStatus((prev) => ({ ...prev, [serverId]: "error" }));
+        setTimeout(() => clearServerSyncStatus(serverId), 6000);
+      } finally {
+        setSyncingServer(null);
+      }
+    },
+    [clearServerSyncStatus]
+  );
 
   useEffect(() => {
     if (meRole && meRole.toLowerCase() === "admin") {
@@ -260,13 +325,102 @@ export default function SettingsPage() {
             </div>
 
             <div className="bg-neutral-800 rounded-lg p-6 mt-6">
+              <h2 className="text-lg font-semibold mb-4">Media Server Sync</h2>
+              <p className="text-sm text-gray-400 mb-4">
+                Enable or disable background sync for each configured media server. Disabling sync
+                stops library and watch history imports for that server while keeping existing data.
+              </p>
+              <div className="space-y-3">
+                {servers?.map((server) => {
+                  const key = `sync_enabled_${server.id}`;
+                  const currentSetting = settings?.find((s) => s.key === key)?.value;
+                  const isEnabled =
+                    (currentSetting ?? (server.enabled ? "true" : "false")) === "true";
+                  const busy = saving === key;
+                  return (
+                    <div
+                      key={server.id}
+                      className="flex items-center justify-between p-4 bg-neutral-700/50 rounded-lg border border-neutral-700/70"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-medium">{server.name}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full border border-neutral-600 text-neutral-300 uppercase">
+                            {server.type}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-400 mt-1">
+                          Sync {isEnabled ? "enabled" : "disabled"}
+                          {server.health?.is_reachable === false && (
+                            <span className="ml-2 text-red-400">
+                              ({server.health.error || "unreachable"})
+                            </span>
+                          )}
+                          {serverSyncStatus[server.id] === "success" && (
+                            <span className="ml-2 text-green-400">Sync started</span>
+                          )}
+                          {serverSyncStatus[server.id] === "error" && (
+                            <span className="ml-2 text-red-400">Failed to start sync</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleServerSync(server.id)}
+                          disabled={syncingServer === server.id}
+                          className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors border border-neutral-600 ${
+                            syncingServer === server.id
+                              ? "bg-neutral-700 text-neutral-300 cursor-wait"
+                              : "bg-neutral-700 hover:bg-neutral-600 text-neutral-200"
+                          }`}
+                          title="Run a one-time sync for this server"
+                        >
+                          {syncingServer === server.id ? (
+                            <RotateCcw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <RefreshCcw className="w-4 h-4" />
+                          )}
+                          <span>{syncingServer === server.id ? "Syncing" : "Sync"}</span>
+                        </button>
+                        {busy && <RotateCcw className="w-4 h-4 text-gray-400 animate-spin" />}
+                        <button
+                          onClick={() =>
+                            handleToggleChange(
+                              key,
+                              currentSetting ?? (server.enabled ? "true" : "false")
+                            )
+                          }
+                          disabled={busy}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-neutral-900 ${
+                            isEnabled ? "bg-amber-600" : "bg-neutral-600"
+                          } ${busy ? "opacity-50 cursor-not-allowed" : ""}`}
+                        >
+                          <span
+                            className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${isEnabled ? "translate-x-5" : "translate-x-1"}`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {!servers && <div className="text-sm text-gray-500">Loading servers…</div>}
+                {servers && servers.length === 0 && (
+                  <div className="text-sm text-gray-500">No media servers configured.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-neutral-800 rounded-lg p-6 mt-6">
               <h2 className="text-lg font-semibold mb-4">Performance Settings</h2>
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between p-4 bg-neutral-700/50 rounded-lg">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <label htmlFor="prevent_4k_video_transcoding" className="text-white font-medium">
+                      <label
+                        htmlFor="prevent_4k_video_transcoding"
+                        className="text-white font-medium"
+                      >
                         Prevent 4K Video Transcoding
                       </label>
                       {saveStatus?.key === "prevent_4k_video_transcoding" && (
@@ -290,16 +444,18 @@ export default function SettingsPage() {
                       )}
                     </div>
                     <p className="text-gray-400 text-sm mb-3">
-                      Automatically stops sessions when 4K video transcoding is detected to prevent server overload.
-                      Audio and subtitle transcoding on 4K content will continue normally as they have minimal performance impact.
+                      Automatically stops sessions when 4K video transcoding is detected to prevent
+                      server overload. Audio and subtitle transcoding on 4K content will continue
+                      normally as they have minimal performance impact.
                     </p>
                     <div className="flex items-start gap-2 text-xs text-blue-300 bg-blue-900/20 border border-blue-500/30 rounded p-3">
                       <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-400" />
                       <div>
-                        <strong>How it works:</strong> This setting monitors active sessions and automatically stops 
-                        those transcoding 4K video content. Users will receive a standard Emby &quot;session stopped&quot; 
-                        notification. Only video transcoding is blocked - audio conversion and subtitle burn-in 
-                        continue to work normally for better user experience.
+                        <strong>How it works:</strong> This setting monitors active sessions and
+                        automatically stops those transcoding 4K video content. Users will receive a
+                        standard Emby &quot;session stopped&quot; notification. Only video
+                        transcoding is blocked - audio conversion and subtitle burn-in continue to
+                        work normally for better user experience.
                       </div>
                     </div>
                   </div>
@@ -310,7 +466,9 @@ export default function SettingsPage() {
                     )}
                     <button
                       id="prevent_4k_video_transcoding"
-                      onClick={() => handleToggleChange("prevent_4k_video_transcoding", prevent4kTranscoding)}
+                      onClick={() =>
+                        handleToggleChange("prevent_4k_video_transcoding", prevent4kTranscoding)
+                      }
                       disabled={saving === "prevent_4k_video_transcoding"}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-neutral-900 ${
                         prevent4kTranscoding === "true" ? "bg-amber-600" : "bg-neutral-600"
@@ -329,9 +487,10 @@ export default function SettingsPage() {
               <div className="mt-6 p-4 bg-neutral-700/30 rounded-lg border border-neutral-600">
                 <h3 className="text-sm font-medium text-gray-300 mb-2">Performance Impact</h3>
                 <p className="text-sm text-gray-400">
-                  4K video transcoding can consume significant CPU/GPU resources and impact server performance 
-                  for all users. This setting helps maintain server stability by preventing the most 
-                  resource-intensive transcoding operations while preserving user experience for audio and subtitle features.
+                  4K video transcoding can consume significant CPU/GPU resources and impact server
+                  performance for all users. This setting helps maintain server stability by
+                  preventing the most resource-intensive transcoding operations while preserving
+                  user experience for audio and subtitle features.
                 </p>
               </div>
             </div>
@@ -392,7 +551,11 @@ export default function SettingsPage() {
                         onClick={async () => {
                           try {
                             setBusyUsers(true);
-                            await createAppUser(newUser.username.trim(), newUser.password, newUser.role);
+                            await createAppUser(
+                              newUser.username.trim(),
+                              newUser.password,
+                              newUser.role
+                            );
                             setNewUser({ username: "", password: "", role: "user" });
                             await loadUsers();
                           } catch (e: unknown) {
@@ -423,12 +586,16 @@ export default function SettingsPage() {
                     <tbody>
                       {usersError && (
                         <tr>
-                          <td colSpan={4} className="text-red-400 py-2">{usersError}</td>
+                          <td colSpan={4} className="text-red-400 py-2">
+                            {usersError}
+                          </td>
                         </tr>
                       )}
                       {!usersError && (!users || users.length === 0) && (
                         <tr>
-                          <td colSpan={4} className="text-gray-400 py-2">No users</td>
+                          <td colSpan={4} className="text-gray-400 py-2">
+                            No users
+                          </td>
                         </tr>
                       )}
                       {users?.map((u) => (
@@ -438,7 +605,9 @@ export default function SettingsPage() {
                               <input
                                 className="w-full px-2 py-1 rounded bg-neutral-900 border border-neutral-700"
                                 defaultValue={u.username}
-                                onChange={(e) => setEditDraft((s) => ({ ...s, username: e.target.value }))}
+                                onChange={(e) =>
+                                  setEditDraft((s) => ({ ...s, username: e.target.value }))
+                                }
                               />
                             ) : (
                               <span className="text-white">{u.username}</span>
@@ -448,14 +617,21 @@ export default function SettingsPage() {
                             {editingId === u.id ? (
                               <select
                                 defaultValue={u.role}
-                                onChange={(e) => setEditDraft((s) => ({ ...s, role: e.target.value as "admin" | "user" }))}
+                                onChange={(e) =>
+                                  setEditDraft((s) => ({
+                                    ...s,
+                                    role: e.target.value as "admin" | "user",
+                                  }))
+                                }
                                 className="px-2 py-1 rounded bg-neutral-900 border border-neutral-700"
                               >
                                 <option value="user">user</option>
                                 <option value="admin">admin</option>
                               </select>
                             ) : (
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${u.role === "admin" ? "bg-amber-700/40 text-amber-200" : "bg-neutral-700/60 text-gray-200"}`}>
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${u.role === "admin" ? "bg-amber-700/40 text-amber-200" : "bg-neutral-700/60 text-gray-200"}`}
+                              >
                                 {u.role === "admin" && <Shield className="w-3 h-3" />} {u.role}
                               </span>
                             )}

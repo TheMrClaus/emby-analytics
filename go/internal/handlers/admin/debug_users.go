@@ -12,16 +12,16 @@ func DebugUsers(em *emby.Client) fiber.Handler {
 		if err != nil {
 			return c.JSON(fiber.Map{
 				"success": false,
-				"error": err.Error(),
+				"error":   err.Error(),
 				"api_url": em.BaseURL + "/emby/Users",
 			})
 		}
 
 		return c.JSON(fiber.Map{
-			"success": true,
+			"success":    true,
 			"user_count": len(users),
-			"users": users,
-			"api_url": em.BaseURL + "/emby/Users",
+			"users":      users,
+			"api_url":    em.BaseURL + "/emby/Users",
 		})
 	}
 }

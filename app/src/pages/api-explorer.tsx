@@ -13,7 +13,7 @@ type Param = {
 type Endpoint = {
   id: string;
   category: string;
-  method: "GET" | "POST" | "PUT" | "ALL";
+    method: "GET" | "POST" | "PUT" | "DELETE" | "ALL";
   path: string; // may include :id path params
   description: string;
   usage: string;
@@ -64,6 +64,14 @@ const endpoints: Endpoint[] = [
     path: "/health/frontend",
     description: "Frontend data pipeline health check.",
     usage: "Test complete data flow from DB to UI.",
+  },
+  {
+    id: "version",
+    category: "Meta",
+    method: "GET",
+    path: "/version",
+    description: "Backend build metadata (version, commit, date).",
+    usage: "Verify deployed build details for support or diagnostics.",
   },
 
   // Config
@@ -349,6 +357,21 @@ const endpoints: Endpoint[] = [
     ],
   },
   {
+    id: "stats-items-by-genre",
+    category: "Stats",
+    method: "GET",
+    path: "/stats/items/by-genre/:genre",
+    description: "List items matching a genre (movies and episodes).",
+    usage: "Drill into a specific genre across the library.",
+    params: [
+      { key: "genre", kind: "path", required: true, placeholder: "Science Fiction" },
+      { key: "page", kind: "query", placeholder: "1" },
+      { key: "page_size", kind: "query", placeholder: "50" },
+      { key: "media_type", kind: "query", placeholder: "Movie|Episode" },
+      { key: "server", kind: "query", placeholder: "default-plex" },
+    ],
+  },
+  {
     id: "stats-movies",
     category: "Stats",
     method: "GET",
@@ -363,6 +386,20 @@ const endpoints: Endpoint[] = [
     path: "/stats/series",
     description: "Series library summary.",
     usage: "Totals and breakdowns for series.",
+  },
+  {
+    id: "stats-series-by-genre",
+    category: "Stats",
+    method: "GET",
+    path: "/stats/series/by-genre/:genre",
+    description: "List distinct series that include the requested genre.",
+    usage: "Find popular series per genre, including multi-server filters.",
+    params: [
+      { key: "genre", kind: "path", required: true, placeholder: "Drama" },
+      { key: "page", kind: "query", placeholder: "1" },
+      { key: "page_size", kind: "query", placeholder: "25" },
+      { key: "server", kind: "query", placeholder: "default-jellyfin" },
+    ],
   },
 
   // Items & images
@@ -419,6 +456,14 @@ const endpoints: Endpoint[] = [
   },
 
   // Now Playing
+  {
+    id: "now-summary",
+    category: "Now",
+    method: "GET",
+    path: "/api/now-playing/summary",
+    description: "Aggregated counts of active streams and current outbound bitrate.",
+    usage: "Populate the dashboard Now Playing header without pulling full session payloads.",
+  },
   {
     id: "now-snapshot-multi",
     category: "Now",
@@ -532,6 +577,15 @@ const endpoints: Endpoint[] = [
       { key: "timeout_ms", kind: "body", required: false, placeholder: "5000" },
     ],
   },
+  {
+    id: "now-ws-api",
+    category: "Now",
+    method: "GET",
+    path: "/api/now/ws",
+    description: "WebSocket stream of active sessions (multi-server aware).",
+    usage: "Subscribe to cross-server playback events in real time.",
+    note: "Not runnable from this explorer – connect with a WebSocket client.",
+  },
 
   // Servers
   {
@@ -541,6 +595,57 @@ const endpoints: Endpoint[] = [
     path: "/api/servers",
     description: "List configured media servers with health status.",
     usage: "Verify connectivity and IDs for server filtering.",
+  },
+
+  // Auth
+  {
+    id: "auth-login",
+    category: "Auth",
+    method: "POST",
+    path: "/auth/login",
+    description: "Start a UI session (sets HTTP-only cookie).",
+    usage: "Log in with app_user credentials.",
+    params: [
+      { key: "username", kind: "body", required: true, placeholder: "admin" },
+      { key: "password", kind: "body", required: true, placeholder: "••••••" },
+    ],
+  },
+  {
+    id: "auth-logout",
+    category: "Auth",
+    method: "POST",
+    path: "/auth/logout",
+    description: "Destroy the current session cookie.",
+    usage: "Log the current user out.",
+  },
+  {
+    id: "auth-register",
+    category: "Auth",
+    method: "POST",
+    path: "/auth/register",
+    description: "Create a new app_user subject to registration mode/secret.",
+    usage: "Bootstrap first admin or invite additional users.",
+    params: [
+      { key: "username", kind: "body", required: true, placeholder: "newuser" },
+      { key: "password", kind: "body", required: true, placeholder: "••••••" },
+      { key: "secret", kind: "body", required: false, placeholder: "invite-code" },
+    ],
+  },
+  {
+    id: "auth-me",
+    category: "Auth",
+    method: "GET",
+    path: "/auth/me",
+    description: "Return the authenticated session user (if any).",
+    usage: "Check current login state.",
+  },
+  {
+    id: "auth-config",
+    category: "Auth",
+    method: "GET",
+    path: "/auth/config",
+    description: "Expose registration mode and whether a secret is required.",
+    usage: "Drive UI around self-registration flows.",
   },
 
   // Admin - Refresh & scheduler
@@ -562,6 +667,23 @@ const endpoints: Endpoint[] = [
     usage: "Lightweight maintenance. Protected.",
   },
   {
+    id: "admin-sync-all",
+    category: "Admin",
+    method: "POST",
+    path: "/admin/sync/all",
+    description: "Trigger a background sync across every configured media server.",
+    usage: "Force-refresh metadata when auto-sync is disabled or lagging. Protected.",
+  },
+  {
+    id: "admin-sync-server",
+    category: "Admin",
+    method: "POST",
+    path: "/admin/sync/server/:id",
+    description: "Trigger a background sync for a single media server by ID.",
+    usage: "Refresh one server without touching others (e.g., default-jellyfin). Protected.",
+    params: [{ key: "id", kind: "path", required: true, placeholder: "default-jellyfin" }],
+  },
+  {
     id: "admin-enrich-user-names",
     category: "Admin",
     method: "POST",
@@ -574,7 +696,8 @@ const endpoints: Endpoint[] = [
     category: "Admin",
     method: "POST",
     path: "/admin/enrich/missing-items",
-    description: "Enrich items with missing/placeholder names by consulting the last-known server context.",
+    description:
+      "Enrich items with missing/placeholder names by consulting the last-known server context.",
     usage: "Fix Unknown/Deleted placeholders in Top Items. Protected.",
     params: [
       { key: "days", kind: "query", placeholder: "30" },
@@ -702,6 +825,15 @@ const endpoints: Endpoint[] = [
     usage: "Configure Emby webhooks. Protected.",
   },
   {
+    id: "admin-webhook-emby",
+    category: "Admin",
+    method: "POST",
+    path: "/admin/webhook/emby",
+    description: "Webhook receiver for Emby playback events (signed with WEBHOOK_SECRET).",
+    usage: "Point your Emby webhook here to keep analytics in sync. Protected via signature.",
+    note: "Not runnable from explorer – Emby sends signed POST payloads.",
+  },
+  {
     id: "admin-users-force-sync",
     category: "Admin",
     method: "POST",
@@ -716,6 +848,50 @@ const endpoints: Endpoint[] = [
     path: "/admin/debug/users",
     description: "Debug listing of Emby users.",
     usage: "Inspect mapped users. Protected.",
+  },
+  {
+    id: "admin-app-users-list",
+    category: "Admin",
+    method: "GET",
+    path: "/admin/app-users",
+    description: "List UI accounts (app_user table).",
+    usage: "Audit who can log into the analytics UI. Protected.",
+  },
+  {
+    id: "admin-app-users-create",
+    category: "Admin",
+    method: "POST",
+    path: "/admin/app-users",
+    description: "Create a UI account with a role (admin or user).",
+    usage: "Invite additional admins or viewers. Protected.",
+    params: [
+      { key: "username", kind: "body", required: true, placeholder: "observer" },
+      { key: "password", kind: "body", required: true, placeholder: "••••••" },
+      { key: "role", kind: "body", required: true, placeholder: "user" },
+    ],
+  },
+  {
+    id: "admin-app-users-update",
+    category: "Admin",
+    method: "PUT",
+    path: "/admin/app-users/:id",
+    description: "Update username, password, or role for an account.",
+    usage: "Rename users, rotate credentials, or change roles. Protected.",
+    params: [
+      { key: "id", kind: "path", required: true, placeholder: "123" },
+      { key: "username", kind: "body", placeholder: "newname" },
+      { key: "password", kind: "body", placeholder: "new password" },
+      { key: "role", kind: "body", placeholder: "admin|user" },
+    ],
+  },
+  {
+    id: "admin-app-users-delete",
+    category: "Admin",
+    method: "DELETE",
+    path: "/admin/app-users/:id",
+    description: "Delete an app_user (sessions cascade).",
+    usage: "Remove UI access for a user. Protected.",
+    params: [{ key: "id", kind: "path", required: true, placeholder: "123" }],
   },
 
   // Admin - Debug (added)

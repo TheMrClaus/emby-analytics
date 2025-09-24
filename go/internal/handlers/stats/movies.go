@@ -1,13 +1,14 @@
 package stats
 
 import (
-    "database/sql"
-    "log"
-    "time"
+	"database/sql"
+	"fmt"
+	"log"
+	"time"
 
-    "emby-analytics/internal/handlers/admin"
+	"emby-analytics/internal/handlers/admin"
 
-    "github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3"
 )
 
 type MoviesData struct {
@@ -41,18 +42,22 @@ func Movies(db *sql.DB) fiber.Handler {
 		start := time.Now()
 		data := MoviesData{}
 
+		serverType, serverID := normalizeServerParam(c.Query("server", ""))
+		movieWhere, movieArgs := appendServerFilter("media_type = 'Movie' AND "+excludeLiveTvFilter(), "", serverType, serverID)
+		movieAliasWhere, movieAliasArgs := appendServerFilter("li.media_type = 'Movie' AND "+excludeLiveTvFilter(), "li", serverType, serverID)
+
 		// Count total movies
-		err := db.QueryRow(`
+		err := db.QueryRow(fmt.Sprintf(`
 			SELECT COUNT(*) 
 			FROM library_item 
-			WHERE media_type = 'Movie' AND ` + excludeLiveTvFilter()).Scan(&data.TotalMovies)
+			WHERE %s`, movieWhere), movieArgs...).Scan(&data.TotalMovies)
 		if err != nil {
 			log.Printf("[movies] Error counting movies: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to count movies"})
 		}
 
 		// Get largest movie: prefer actual size, then bitrate*runtime, else heuristic
-		err = db.QueryRow(`
+		largestQuery := fmt.Sprintf(`
             SELECT COALESCE(name, 'Unknown'),
                    COALESCE(
                      CASE WHEN file_size_bytes IS NOT NULL AND file_size_bytes > 0
@@ -63,105 +68,110 @@ func Movies(db *sql.DB) fiber.Handler {
                      END,
                      (COALESCE(run_time_ticks, 0) / 36000000000.0) * 
                      CASE 
-                       WHEN height >= 2160 THEN 25.0  -- 4K estimate
-                       WHEN height >= 1080 THEN 8.0   -- 1080p estimate
-                       WHEN height >= 720 THEN 4.0    -- 720p estimate
-                       ELSE 2.0                        -- SD estimate
+                       WHEN height >= 2160 THEN 25.0
+                       WHEN height >= 1080 THEN 8.0
+                       WHEN height >= 720 THEN 4.0
+                       ELSE 2.0
                      END
                    ) AS estimated_gb
             FROM library_item
-            WHERE media_type = 'Movie' AND `+excludeLiveTvFilter()+`
+            WHERE %s
             ORDER BY estimated_gb DESC
-            LIMIT 1`).Scan(&data.LargestMovieName, &data.LargestMovieGB)
+            LIMIT 1`, movieWhere)
+		err = db.QueryRow(largestQuery, movieArgs...).Scan(&data.LargestMovieName, &data.LargestMovieGB)
 		if err != nil && err != sql.ErrNoRows {
 			log.Printf("[movies] Error finding largest movie: %v", err)
 		}
 
 		// Get longest runtime movie
-		err = db.QueryRow(`
+		longestQuery := fmt.Sprintf(`
 			SELECT name, run_time_ticks / 600000000 
 			FROM library_item 
-			WHERE media_type = 'Movie' AND `+excludeLiveTvFilter()+` 
+			WHERE %s 
 			  AND run_time_ticks > 0
 			ORDER BY run_time_ticks DESC 
-			LIMIT 1`).Scan(&data.LongestMovieName, &data.LongestRuntime)
+			LIMIT 1`, movieWhere)
+		err = db.QueryRow(longestQuery, movieArgs...).Scan(&data.LongestMovieName, &data.LongestRuntime)
 		if err != nil && err != sql.ErrNoRows {
 			log.Printf("[movies] Error finding longest movie: %v", err)
 		}
 
 		// Get shortest runtime movie (but reasonable minimum of 30 minutes)
-		err = db.QueryRow(`
+		shortestQuery := fmt.Sprintf(`
 			SELECT name, run_time_ticks / 600000000 
 			FROM library_item 
-			WHERE media_type = 'Movie' AND `+excludeLiveTvFilter()+` 
-			  AND run_time_ticks >= 18000000000  -- At least 30 minutes
+			WHERE %s 
+			  AND run_time_ticks >= 18000000000
 			ORDER BY run_time_ticks ASC 
-			LIMIT 1`).Scan(&data.ShortestMovieName, &data.ShortestRuntime)
+			LIMIT 1`, movieWhere)
+		err = db.QueryRow(shortestQuery, movieArgs...).Scan(&data.ShortestMovieName, &data.ShortestRuntime)
 		if err != nil && err != sql.ErrNoRows {
 			log.Printf("[movies] Error finding shortest movie: %v", err)
 		}
 
 		// Get newest added movie
-		err = db.QueryRow(`
+		newestQuery := fmt.Sprintf(`
 			SELECT name, created_at 
 			FROM library_item 
-			WHERE media_type = 'Movie' AND `+excludeLiveTvFilter()+`
+			WHERE %s
 			ORDER BY created_at DESC 
-			LIMIT 1`).Scan(&data.NewestMovie.Name, &data.NewestMovie.Date)
+			LIMIT 1`, movieWhere)
+		err = db.QueryRow(newestQuery, movieArgs...).Scan(&data.NewestMovie.Name, &data.NewestMovie.Date)
 		if err != nil && err != sql.ErrNoRows {
 			log.Printf("[movies] Error finding newest movie: %v", err)
 		}
 
-        // Get most watched movie using exact interval merging (avoids over/under-count)
-        {
-            // Candidate movie IDs that appear in intervals
-            ids := []string{}
-            rows, qerr := db.Query(`
+		// Get most watched movie using exact interval merging (avoids over/under-count)
+		{
+			// Candidate movie IDs that appear in intervals
+			ids := []string{}
+			intervalQuery := fmt.Sprintf(`
                 SELECT DISTINCT pi.item_id
                 FROM play_intervals pi
                 JOIN library_item li ON li.id = pi.item_id
-                WHERE li.media_type = 'Movie' AND ` + excludeLiveTvFilter() + `
-            `)
-            if qerr == nil {
-                defer rows.Close()
-                for rows.Next() {
-                    var id string
-                    if err := rows.Scan(&id); err == nil && id != "" {
-                        ids = append(ids, id)
-                    }
-                }
-                _ = rows.Err()
-            }
+                WHERE %s
+            `, movieAliasWhere)
+			rows, qerr := db.Query(intervalQuery, movieAliasArgs...)
+			if qerr == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var id string
+					if err := rows.Scan(&id); err == nil && id != "" {
+						ids = append(ids, id)
+					}
+				}
+				_ = rows.Err()
+			}
 
-            if len(ids) > 0 {
-                // Compute exact hours across "all time" window
-                now := time.Now().UTC()
-                hoursMap, herr := computeExactItemHours(db, ids, 0, now.AddDate(100, 0, 0).Unix())
-                if herr == nil {
-                    var bestID string
-                    var bestHours float64
-                    for id, hrs := range hoursMap {
-                        if hrs > bestHours {
-                            bestHours = hrs
-                            bestID = id
-                        }
-                    }
-                    if bestID != "" {
-                        _ = db.QueryRow(`SELECT COALESCE(name,'Unknown') FROM library_item WHERE id = ?`, bestID).Scan(&data.MostWatchedMovie.Name)
-                        data.MostWatchedMovie.Hours = bestHours
-                    }
-                } else {
-                    log.Printf("[movies] computeExactItemHours failed: %v", herr)
-                }
-            }
-        }
+			if len(ids) > 0 {
+				// Compute exact hours across "all time" window
+				now := time.Now().UTC()
+				hoursMap, herr := computeExactItemHours(db, ids, 0, now.AddDate(100, 0, 0).Unix())
+				if herr == nil {
+					var bestID string
+					var bestHours float64
+					for id, hrs := range hoursMap {
+						if hrs > bestHours {
+							bestHours = hrs
+							bestID = id
+						}
+					}
+					if bestID != "" {
+						_ = db.QueryRow(`SELECT COALESCE(name,'Unknown') FROM library_item WHERE id = ?`, bestID).Scan(&data.MostWatchedMovie.Name)
+						data.MostWatchedMovie.Hours = bestHours
+					}
+				} else {
+					log.Printf("[movies] computeExactItemHours failed: %v", herr)
+				}
+			}
+		}
 
 		// Calculate total runtime hours
-		err = db.QueryRow(`
+		totalRuntimeQuery := fmt.Sprintf(`
 			SELECT COALESCE(SUM(run_time_ticks), 0) / 36000000000.0 
 			FROM library_item 
-			WHERE media_type = 'Movie' AND ` + excludeLiveTvFilter() + ` 
-			  AND run_time_ticks > 0`).Scan(&data.TotalRuntimeHours)
+			WHERE %s AND run_time_ticks > 0`, movieWhere)
+		err = db.QueryRow(totalRuntimeQuery, movieArgs...).Scan(&data.TotalRuntimeHours)
 		if err != nil {
 			log.Printf("[movies] Error calculating total runtime: %v", err)
 		}
@@ -172,11 +182,11 @@ func Movies(db *sql.DB) fiber.Handler {
 			var cnt int
 			row := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('library_item') WHERE name = 'genres'`)
 			if err := row.Scan(&cnt); err == nil && cnt > 0 {
-                q := `
+				genreQuery := fmt.Sprintf(`
                 WITH RECURSIVE base AS (
                   SELECT id, REPLACE(genres, ', ', ',') AS g
                   FROM library_item
-                  WHERE media_type = 'Movie' AND ` + excludeLiveTvFilter() + ` AND genres IS NOT NULL AND genres != ''
+                  WHERE %s AND genres IS NOT NULL AND genres != ''
                 ),
                 split(id, token, rest) AS (
 				  SELECT id,
@@ -195,8 +205,9 @@ func Movies(db *sql.DB) fiber.Handler {
 				WHERE token IS NOT NULL AND token != ''
 				GROUP BY token
 				ORDER BY count DESC
-				LIMIT 5`
-				if rows, err := db.Query(q); err == nil {
+				LIMIT 5`, movieWhere)
+				genreArgs := append([]interface{}{}, movieArgs...)
+				if rows, err := db.Query(genreQuery, genreArgs...); err == nil {
 					defer rows.Close()
 					for rows.Next() {
 						var g GenreStats
@@ -213,11 +224,11 @@ func Movies(db *sql.DB) fiber.Handler {
 		}
 
 		// Get movies added this month
-		err = db.QueryRow(`
+		addedQuery := fmt.Sprintf(`
 			SELECT COUNT(*) 
 			FROM library_item 
-			WHERE media_type = 'Movie' AND ` + excludeLiveTvFilter() + ` 
-			  AND created_at >= date('now', 'start of month')`).Scan(&data.MoviesAddedThisMonth)
+			WHERE %s AND created_at >= date('now', 'start of month')`, movieWhere)
+		err = db.QueryRow(addedQuery, movieArgs...).Scan(&data.MoviesAddedThisMonth)
 		if err != nil {
 			log.Printf("[movies] Error counting movies added this month: %v", err)
 		}

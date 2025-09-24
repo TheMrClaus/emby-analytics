@@ -13,14 +13,14 @@ import (
 
 // Broadcaster manages a single Emby API poller and broadcasts to multiple WebSocket clients
 type Broadcaster struct {
-	mu               sync.RWMutex
-	clients          map[*ws.Conn]bool
-	embyClient       *emby.Client
-	interval         time.Duration
-	ctx              context.Context
-	cancel           context.CancelFunc
-    // Optional callback to run server-side processing each poll
-    SessionProcessor func()
+	mu         sync.RWMutex
+	clients    map[*ws.Conn]bool
+	embyClient *emby.Client
+	interval   time.Duration
+	ctx        context.Context
+	cancel     context.CancelFunc
+	// Optional callback to run server-side processing each poll
+	SessionProcessor func()
 }
 
 // NewBroadcaster creates a new broadcaster instance
@@ -141,10 +141,10 @@ func (b *Broadcaster) fetchNowPlayingEntries() ([]NowEntry, error) {
 		return nil, err // Return the error instead of an empty slice
 	}
 
-    // Run any server-side processing callback (multi-server processor pulls its own data)
-    if b.SessionProcessor != nil {
-        b.SessionProcessor()
-    }
+	// Run any server-side processing callback (multi-server processor pulls its own data)
+	if b.SessionProcessor != nil {
+		b.SessionProcessor()
+	}
 
 	nowTime := time.Now().UnixMilli()
 	entries := make([]NowEntry, 0, len(sessions))

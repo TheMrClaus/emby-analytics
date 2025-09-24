@@ -13,10 +13,10 @@ import (
 
 // CleanupScheduler manages automatic cleanup operations
 type CleanupScheduler struct {
-	db     *sql.DB
-	em     *emby.Client
-	ctx    context.Context
-	cancel context.CancelFunc
+	db           *sql.DB
+	em           *emby.Client
+	ctx          context.Context
+	cancel       context.CancelFunc
 	intervalizer *Intervalizer
 }
 
@@ -24,10 +24,10 @@ type CleanupScheduler struct {
 func NewCleanupScheduler(db *sql.DB, em *emby.Client, intervalizer *Intervalizer) *CleanupScheduler {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &CleanupScheduler{
-		db:     db,
-		em:     em,
-		ctx:    ctx,
-		cancel: cancel,
+		db:           db,
+		em:           em,
+		ctx:          ctx,
+		cancel:       cancel,
 		intervalizer: intervalizer,
 	}
 }
@@ -93,10 +93,10 @@ func (s *CleanupScheduler) runWeeklyCleanup() {
 	}
 
 	logging.Info("Starting scheduled cleanup", "job_id", logger.GetJobID())
-	
+
 	// Use higher limit for scheduled cleanup (process more items)
 	limit := 10000
-	
+
 	// Get library items to check
 	rows, err := s.db.Query(`
 		SELECT id, name, media_type, series_name 
@@ -165,12 +165,12 @@ func (s *CleanupScheduler) runWeeklyCleanup() {
 	for _, item := range missingItems {
 		var hasIntervals int
 		_ = s.db.QueryRow(`SELECT 1 FROM play_intervals WHERE item_id = ? LIMIT 1`, item.ID).Scan(&hasIntervals)
-		
+
 		if hasIntervals == 0 {
 			// Safe to delete - no watch history
 			if _, err := s.db.Exec(`DELETE FROM library_item WHERE id = ?`, item.ID); err == nil {
 				deleted++
-				logger.LogItemAction("deleted", item.ID, item.Name, item.MediaType, "", 
+				logger.LogItemAction("deleted", item.ID, item.Name, item.MediaType, "",
 					map[string]interface{}{"reason": "no_watch_history"})
 			}
 		} else {
@@ -178,11 +178,11 @@ func (s *CleanupScheduler) runWeeklyCleanup() {
 			targetID, err := cleanup.FindMatchingItem(s.db, cleanup.ItemInfo(item))
 			if err != nil || targetID == "" {
 				skipped++
-				logger.LogItemAction("skipped", item.ID, item.Name, item.MediaType, "", 
+				logger.LogItemAction("skipped", item.ID, item.Name, item.MediaType, "",
 					map[string]interface{}{"reason": "no_matching_target"})
 				continue
 			}
-			
+
 			// Attempt merge
 			if err := cleanup.MergeItemData(s.db, item.ID, targetID); err != nil {
 				skipped++
@@ -206,10 +206,10 @@ func (s *CleanupScheduler) runWeeklyCleanup() {
 	}
 	logger.CompleteJob(len(ids), deleted+merged, summary)
 
-	logging.Info("Scheduled cleanup completed", 
+	logging.Info("Scheduled cleanup completed",
 		"job_id", logger.GetJobID(),
 		"checked", len(ids),
-		"missing", len(missingItems), 
+		"missing", len(missingItems),
 		"deleted", deleted,
 		"merged", merged,
 		"skipped", skipped)
@@ -219,7 +219,7 @@ func (s *CleanupScheduler) runWeeklyCleanup() {
 func (s *CleanupScheduler) shouldRunWeeklyCleanup() bool {
 	now := time.Now()
 
-	// Check if it's Sunday (0) between 2:00 AM and 2:59 AM  
+	// Check if it's Sunday (0) between 2:00 AM and 2:59 AM
 	if now.Weekday() != time.Sunday || now.Hour() != 2 {
 		return false
 	}
@@ -233,12 +233,12 @@ func (s *CleanupScheduler) shouldRunWeeklyCleanup() bool {
 		AND created_by = 'scheduler'
 		AND started_at > ?
 	`, time.Now().AddDate(0, 0, -7).Unix()).Scan(&lastRunUnix)
-	
+
 	if err != nil {
 		// If we can't check, assume we should run
 		return true
 	}
-	
+
 	if !lastRunUnix.Valid {
 		// No recent runs, should run
 		return true
@@ -257,12 +257,10 @@ type itemInfo struct {
 	SeriesName string
 }
 
-
-
-// GetCleanupStats returns statistics about scheduled cleanup operations  
+// GetCleanupStats returns statistics about scheduled cleanup operations
 func GetCleanupStats(db *sql.DB) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
-	
+
 	// Get last scheduled cleanup
 	var lastRunUnix sql.NullInt64
 	var itemsProcessed sql.NullInt64
@@ -275,7 +273,7 @@ func GetCleanupStats(db *sql.DB) (map[string]interface{}, error) {
 		ORDER BY started_at DESC 
 		LIMIT 1
 	`).Scan(&lastRunUnix, &itemsProcessed)
-	
+
 	if err == nil && lastRunUnix.Valid {
 		lastTime := time.Unix(lastRunUnix.Int64, 0)
 		stats["last_cleanup"] = lastTime.Format("2006-01-02 15:04:05")
@@ -284,10 +282,10 @@ func GetCleanupStats(db *sql.DB) (map[string]interface{}, error) {
 			stats["items_processed"] = itemsProcessed.Int64
 		}
 	}
-	
+
 	// Add scheduling info
 	stats["cleanup_schedule"] = "Sunday 2:00 AM weekly"
-	
+
 	// Calculate next cleanup time
 	now := time.Now()
 	nextSunday := now
@@ -299,6 +297,6 @@ func GetCleanupStats(db *sql.DB) (map[string]interface{}, error) {
 		next2AM = next2AM.Add(7 * 24 * time.Hour)
 	}
 	stats["next_cleanup"] = next2AM.Format("2006-01-02 15:04:05")
-	
+
 	return stats, nil
 }

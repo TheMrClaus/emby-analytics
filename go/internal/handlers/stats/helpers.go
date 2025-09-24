@@ -1,7 +1,9 @@
 package stats
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -34,4 +36,45 @@ func parseTimeframeToDays(timeframe string) int {
 	default:
 		return 14 // Default fallback
 	}
+}
+
+func normalizeServerParam(raw string) (serverType string, serverID string) {
+	v := strings.TrimSpace(raw)
+	if v == "" || strings.EqualFold(v, "all") {
+		return "", ""
+	}
+	lower := strings.ToLower(v)
+	switch lower {
+	case "emby", "plex", "jellyfin":
+		return lower, ""
+	default:
+		return "", v
+	}
+}
+
+func serverPredicate(alias string, serverType, serverID string) (string, []interface{}) {
+	if serverType == "" && serverID == "" {
+		return "", nil
+	}
+	column := func(col string) string {
+		if strings.TrimSpace(alias) == "" {
+			return col
+		}
+		return fmt.Sprintf("%s.%s", alias, col)
+	}
+	if serverType != "" {
+		return fmt.Sprintf("LOWER(COALESCE(%s, '')) = ?", column("server_type")), []interface{}{serverType}
+	}
+	return fmt.Sprintf("%s = ?", column("server_id")), []interface{}{serverID}
+}
+
+func appendServerFilter(baseCondition, alias, serverType, serverID string) (string, []interface{}) {
+	predicate, args := serverPredicate(alias, serverType, serverID)
+	if predicate == "" {
+		return baseCondition, nil
+	}
+	if strings.TrimSpace(baseCondition) == "" {
+		return predicate, args
+	}
+	return baseCondition + " AND " + predicate, args
 }

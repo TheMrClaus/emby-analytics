@@ -5,9 +5,12 @@ import { useCodecs } from "../hooks/useData";
 import { fmtInt } from "../lib/format";
 
 import { colors } from "../theme/colors";
+import { useLibraryServer } from "../contexts/LibraryServerContext";
 
 export default function CodecsChart() {
-  const { data, error, isLoading } = useCodecs();
+  const { server } = useLibraryServer();
+  const { data, error, isLoading } = useCodecs(server);
+  const serverLabel = server === "all" ? "" : server.charAt(0).toUpperCase() + server.slice(1);
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -31,6 +34,9 @@ export default function CodecsChart() {
     <div className="bg-neutral-800 rounded-2xl p-4 shadow">
       <div className="text-sm text-gray-400 mb-2">
         Codecs
+        {serverLabel && (
+          <span className="ml-2 text-xs text-gray-400 uppercase tracking-wide">{serverLabel}</span>
+        )}
         {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}
       </div>
       <div style={{ height: 300 }}>

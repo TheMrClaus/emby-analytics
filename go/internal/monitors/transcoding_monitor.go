@@ -1,16 +1,16 @@
 package monitors
 
 import (
-    "database/sql"
-    "fmt"
-    "regexp"
-    "strings"
-    "sync"
-    "time"
+	"database/sql"
+	"fmt"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
 
-    "emby-analytics/internal/emby"
-    "emby-analytics/internal/handlers/settings"
-    "emby-analytics/internal/logging"
+	"emby-analytics/internal/emby"
+	"emby-analytics/internal/handlers/settings"
+	"emby-analytics/internal/logging"
 )
 
 // TranscodingMonitor monitors active sessions and stops 4K video transcoding when enabled
@@ -53,7 +53,7 @@ func (tm *TranscodingMonitor) Stop() {
 // monitorLoop is the main monitoring loop
 func (tm *TranscodingMonitor) monitorLoop() {
 	defer tm.wg.Done()
-	
+
 	ticker := time.NewTicker(tm.interval)
 	defer ticker.Stop()
 
@@ -83,37 +83,37 @@ func (tm *TranscodingMonitor) checkAndStopTranscodingSessions() {
 	}
 
 	for _, session := range sessions {
-        if tm.shouldStopSession(session) {
-            logging.Info("Stopping 4K video transcoding session", 
-                "session_id", session.SessionID,
-                "user", session.UserName,
-                "item", session.ItemName,
-                "device", session.Device)
+		if tm.shouldStopSession(session) {
+			logging.Info("Stopping 4K video transcoding session",
+				"session_id", session.SessionID,
+				"user", session.UserName,
+				"item", session.ItemName,
+				"device", session.Device)
 
-            // Try to notify the user on the client before stopping playback
-            // so it doesn't feel like an unexplained interruption.
-            header := "4K Transcoding Blocked"
-            body := fmt.Sprintf("This server blocks 4K video transcoding. Item: %s. Try a lower quality or direct play.", strings.TrimSpace(session.ItemName))
-            if err := tm.emby.SendMessage(session.SessionID, header, body, 5000); err != nil {
-                logging.Debug("Failed to send session message before stop", "error", err, "session_id", session.SessionID)
-            } else {
-                // Small delay to give the client a chance to render the message
-                time.Sleep(750 * time.Millisecond)
-            }
+			// Try to notify the user on the client before stopping playback
+			// so it doesn't feel like an unexplained interruption.
+			header := "4K Transcoding Blocked"
+			body := fmt.Sprintf("This server blocks 4K video transcoding. Item: %s. Try a lower quality or direct play.", strings.TrimSpace(session.ItemName))
+			if err := tm.emby.SendMessage(session.SessionID, header, body, 5000); err != nil {
+				logging.Debug("Failed to send session message before stop", "error", err, "session_id", session.SessionID)
+			} else {
+				// Small delay to give the client a chance to render the message
+				time.Sleep(750 * time.Millisecond)
+			}
 
-            if err := tm.emby.Stop(session.SessionID); err != nil {
-                logging.Error("Failed to stop 4K video transcoding session", 
-                    "error", err,
-                    "session_id", session.SessionID,
-                    "user", session.UserName)
-            } else {
-                logging.Info("Successfully stopped 4K video transcoding session", 
-                    "session_id", session.SessionID,
-                    "user", session.UserName,
-                    "item", session.ItemName)
-            }
-        }
-    }
+			if err := tm.emby.Stop(session.SessionID); err != nil {
+				logging.Error("Failed to stop 4K video transcoding session",
+					"error", err,
+					"session_id", session.SessionID,
+					"user", session.UserName)
+			} else {
+				logging.Info("Successfully stopped 4K video transcoding session",
+					"session_id", session.SessionID,
+					"user", session.UserName,
+					"item", session.ItemName)
+			}
+		}
+	}
 }
 
 // shouldStopSession determines if a session should be stopped based on 4K video transcoding
@@ -163,36 +163,36 @@ func (tm *TranscodingMonitor) contains4KMarker(text string) bool {
 
 // isVideoTranscoding determines if video is being transcoded in the session
 func (tm *TranscodingMonitor) isVideoTranscoding(session emby.EmbySession) bool {
-    // Check VideoMethod for direct video transcoding indication
-    if strings.ToLower(session.VideoMethod) == "transcode" {
-        return true
-    }
+	// Check VideoMethod for direct video transcoding indication
+	if strings.ToLower(session.VideoMethod) == "transcode" {
+		return true
+	}
 
-    // Check if video codec is being converted (transcoded)
-    if session.TransVideoFrom != "" && session.TransVideoTo != "" {
-        // If source and target codecs are different, video is being transcoded
-        if strings.ToLower(session.TransVideoFrom) != strings.ToLower(session.TransVideoTo) {
-            return true
-        }
-    }
+	// Check if video codec is being converted (transcoded)
+	if session.TransVideoFrom != "" && session.TransVideoTo != "" {
+		// If source and target codecs are different, video is being transcoded
+		if strings.ToLower(session.TransVideoFrom) != strings.ToLower(session.TransVideoTo) {
+			return true
+		}
+	}
 
-    // Look at explicit transcode reasons for video-related causes
-    if len(session.TransReasons) > 0 {
-        reasons := strings.ToLower(strings.Join(session.TransReasons, ","))
-        videoIndicators := []string{
-            "videocodecnotsupported", "video codec not supported",
-            "videoprofilenotsupported", "video profile not supported",
-            "videolevelnotsupported", "video level not supported",
-            "videoframeratenotsupported", "video framerate not supported",
-            "videobitratenotsupported", "video bitrate not supported",
-            "videoresolutionnotsupported", "video resolution not supported",
-        }
-        for _, ind := range videoIndicators {
-            if strings.Contains(reasons, ind) {
-                return true
-            }
-        }
-    }
+	// Look at explicit transcode reasons for video-related causes
+	if len(session.TransReasons) > 0 {
+		reasons := strings.ToLower(strings.Join(session.TransReasons, ","))
+		videoIndicators := []string{
+			"videocodecnotsupported", "video codec not supported",
+			"videoprofilenotsupported", "video profile not supported",
+			"videolevelnotsupported", "video level not supported",
+			"videoframeratenotsupported", "video framerate not supported",
+			"videobitratenotsupported", "video bitrate not supported",
+			"videoresolutionnotsupported", "video resolution not supported",
+		}
+		for _, ind := range videoIndicators {
+			if strings.Contains(reasons, ind) {
+				return true
+			}
+		}
+	}
 
-    return false
+	return false
 }

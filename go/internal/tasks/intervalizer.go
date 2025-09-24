@@ -19,17 +19,17 @@ type Intervalizer struct {
 }
 
 type liveState struct {
-    SessionFK        int64
-    SessionID        string // Session identifier from Emby
-    DeviceID         string // Device identifier from Emby
-    UserID           string
-    ItemID           string
-    ItemType         string
-    LastPosTicks     int64
-    LastEventTS      time.Time
-    SessionStartTS   time.Time
-    IsIntervalOpen   bool
-    IntervalStartTS  time.Time
+	SessionFK        int64
+	SessionID        string // Session identifier from Emby
+	DeviceID         string // Device identifier from Emby
+	UserID           string
+	ItemID           string
+	ItemType         string
+	LastPosTicks     int64
+	LastEventTS      time.Time
+	SessionStartTS   time.Time
+	IsIntervalOpen   bool
+	IntervalStartTS  time.Time
 	IntervalStartPos int64
 	IsPaused         bool // NEW: Track if the session is currently paused
 	// Tracks whether we have recorded any interval for this session
@@ -37,86 +37,86 @@ type liveState struct {
 }
 
 var (
-    LiveSessions = make(map[string]*liveState)
-    LiveMutex    = &sync.Mutex{}
+	LiveSessions = make(map[string]*liveState)
+	LiveMutex    = &sync.Mutex{}
 )
 
 // NEW: Expose live watch times for active intervals
 func isLiveTVType(t string) bool {
-    switch strings.ToLower(strings.TrimSpace(t)) {
-    case "tvchannel", "livetv", "channel", "tvprogram":
-        return true
-    default:
-        return false
-    }
+	switch strings.ToLower(strings.TrimSpace(t)) {
+	case "tvchannel", "livetv", "channel", "tvprogram":
+		return true
+	default:
+		return false
+	}
 }
 
 // NEW: Expose live watch times for active intervals (excluding Live TV)
 func GetLiveUserWatchTimes() map[string]float64 {
-    LiveMutex.Lock()
-    defer LiveMutex.Unlock()
-    watchTimes := make(map[string]float64)
-    now := time.Now()
-    for _, session := range LiveSessions {
-        if session.IsIntervalOpen {
-            duration := now.Sub(session.IntervalStartTS).Seconds()
-            watchTimes[session.UserID] += duration
-        }
-    }
-    return watchTimes
+	LiveMutex.Lock()
+	defer LiveMutex.Unlock()
+	watchTimes := make(map[string]float64)
+	now := time.Now()
+	for _, session := range LiveSessions {
+		if session.IsIntervalOpen {
+			duration := now.Sub(session.IntervalStartTS).Seconds()
+			watchTimes[session.UserID] += duration
+		}
+	}
+	return watchTimes
 }
 
 // Excludes Live TV
 func GetLiveItemWatchTimes() map[string]float64 {
-    LiveMutex.Lock()
-    defer LiveMutex.Unlock()
-    watchTimes := make(map[string]float64)
-    now := time.Now()
-    for _, session := range LiveSessions {
-        if session.IsIntervalOpen && !isLiveTVType(session.ItemType) {
-            duration := now.Sub(session.IntervalStartTS).Seconds()
-            watchTimes[session.ItemID] += duration
-        }
-    }
-    return watchTimes
+	LiveMutex.Lock()
+	defer LiveMutex.Unlock()
+	watchTimes := make(map[string]float64)
+	now := time.Now()
+	for _, session := range LiveSessions {
+		if session.IsIntervalOpen && !isLiveTVType(session.ItemType) {
+			duration := now.Sub(session.IntervalStartTS).Seconds()
+			watchTimes[session.ItemID] += duration
+		}
+	}
+	return watchTimes
 }
 
 // Helper specifically for TopUsers to exclude Live TV
 func GetLiveUserWatchTimesExcludingLiveTV() map[string]float64 {
-    LiveMutex.Lock()
-    defer LiveMutex.Unlock()
-    watchTimes := make(map[string]float64)
-    now := time.Now()
-    for _, session := range LiveSessions {
-        if session.IsIntervalOpen && !isLiveTVType(session.ItemType) {
-            duration := now.Sub(session.IntervalStartTS).Seconds()
-            watchTimes[session.UserID] += duration
-        }
-    }
-    return watchTimes
+	LiveMutex.Lock()
+	defer LiveMutex.Unlock()
+	watchTimes := make(map[string]float64)
+	now := time.Now()
+	for _, session := range LiveSessions {
+		if session.IsIntervalOpen && !isLiveTVType(session.ItemType) {
+			duration := now.Sub(session.IntervalStartTS).Seconds()
+			watchTimes[session.UserID] += duration
+		}
+	}
+	return watchTimes
 }
 
 func sessionKey(sessionID, itemID string) string { return sessionID + "|" + itemID }
 
 func (iz *Intervalizer) Handle(evt emby.EmbyEvent) {
-    logging.Debug("Received event: %s", evt.MessageType)
+	logging.Debug("Received event: %s", evt.MessageType)
 
 	LiveMutex.Lock()
 	defer LiveMutex.Unlock()
 	var data emby.PlaybackProgressData
-    if err := json.Unmarshal(evt.Data, &data); err != nil {
-        logging.Debug("JSON unmarshal error: %v", err)
-        return
-    }
-    if data.NowPlaying.ID == "" {
-        logging.Debug("[intervalizer] Empty NowPlaying.ID, skipping event")
-        return
-    }
-    // Skip Live TV content entirely
-    if isLiveTVType(data.NowPlaying.Type) {
-        logging.Debug("[intervalizer] Skipping Live TV event for item %s", data.NowPlaying.ID)
-        return
-    }
+	if err := json.Unmarshal(evt.Data, &data); err != nil {
+		logging.Debug("JSON unmarshal error: %v", err)
+		return
+	}
+	if data.NowPlaying.ID == "" {
+		logging.Debug("[intervalizer] Empty NowPlaying.ID, skipping event")
+		return
+	}
+	// Skip Live TV content entirely
+	if isLiveTVType(data.NowPlaying.Type) {
+		logging.Debug("[intervalizer] Skipping Live TV event for item %s", data.NowPlaying.ID)
+		return
+	}
 
 	logging.Debug("Processing %s for user %s, item %s", evt.MessageType, data.UserID, data.NowPlaying.Name)
 
@@ -149,18 +149,18 @@ func (iz *Intervalizer) onStart(d emby.PlaybackProgressData) {
 	logging.Debug("onStart created session FK: %d", sessionFK)
 
 	insertEvent(iz.DB, sessionFK, "start", d.PlayState.IsPaused, d.PlayState.PositionTicks)
-    s := &liveState{
-        SessionFK:      sessionFK,
-        SessionID:      d.SessionID,
-        DeviceID:       d.DeviceID,
-        UserID:         d.UserID,
-        ItemID:         d.NowPlaying.ID,
-        ItemType:       d.NowPlaying.Type,
-        LastPosTicks:   d.PlayState.PositionTicks,
-        LastEventTS:    now,
-        SessionStartTS: now, // Store the absolute start time
-        IsIntervalOpen: false,
-    }
+	s := &liveState{
+		SessionFK:      sessionFK,
+		SessionID:      d.SessionID,
+		DeviceID:       d.DeviceID,
+		UserID:         d.UserID,
+		ItemID:         d.NowPlaying.ID,
+		ItemType:       d.NowPlaying.Type,
+		LastPosTicks:   d.PlayState.PositionTicks,
+		LastEventTS:    now,
+		SessionStartTS: now, // Store the absolute start time
+		IsIntervalOpen: false,
+	}
 
 	var intervalCount int
 	err = iz.DB.QueryRow(`SELECT COUNT(*) FROM play_intervals WHERE session_fk = ?`, sessionFK).Scan(&intervalCount)
@@ -221,49 +221,49 @@ func (iz *Intervalizer) onStop(d emby.PlaybackProgressData) {
 
 	insertEvent(iz.DB, s.SessionFK, "stop", false, d.PlayState.PositionTicks)
 
-    if s.IsIntervalOpen {
-        // If an interval was open, close it normally.
-        iz.closeInterval(s, s.IntervalStartTS, now, s.IntervalStartPos, d.PlayState.PositionTicks, false)
-    } else if !s.HadAnyInterval && !s.SessionStartTS.IsZero() && s.LastPosTicks > 0 {
-        // Fallback: We never opened an interval (e.g., no progress before pause/stop),
-        // but we have a non-zero position. Estimate watched time from position ticks
-        // and anchor the interval to the last activity timestamp to avoid counting
-        // long paused/disconnected wall-clock time as watched.
-        const ticksPerSecond = 10000000
-        watchedSeconds := int(d.PlayState.PositionTicks / ticksPerSecond)
+	if s.IsIntervalOpen {
+		// If an interval was open, close it normally.
+		iz.closeInterval(s, s.IntervalStartTS, now, s.IntervalStartPos, d.PlayState.PositionTicks, false)
+	} else if !s.HadAnyInterval && !s.SessionStartTS.IsZero() && s.LastPosTicks > 0 {
+		// Fallback: We never opened an interval (e.g., no progress before pause/stop),
+		// but we have a non-zero position. Estimate watched time from position ticks
+		// and anchor the interval to the last activity timestamp to avoid counting
+		// long paused/disconnected wall-clock time as watched.
+		const ticksPerSecond = 10000000
+		watchedSeconds := int(d.PlayState.PositionTicks / ticksPerSecond)
 
-        // Use the last event timestamp if available; it represents the last
-        // moment we observed activity (progress/pause). This avoids dragging
-        // the interval end to "now" after hours of being paused.
-        endTS := s.LastEventTS
-        if endTS.IsZero() {
-            endTS = now
-        }
+		// Use the last event timestamp if available; it represents the last
+		// moment we observed activity (progress/pause). This avoids dragging
+		// the interval end to "now" after hours of being paused.
+		endTS := s.LastEventTS
+		if endTS.IsZero() {
+			endTS = now
+		}
 
-        // Optional cap: do not let a single session's total intervals exceed item runtime
-        // Fetch item runtime (in ticks) -> seconds
-        var runTimeTicks sql.NullInt64
-        _ = iz.DB.QueryRow(`SELECT run_time_ticks FROM library_item WHERE id = ?`, d.NowPlaying.ID).Scan(&runTimeTicks)
-        if runTimeTicks.Valid && runTimeTicks.Int64 > 0 {
-            runtimeSec := int(runTimeTicks.Int64 / ticksPerSecond)
-            var alreadySec sql.NullInt64
-            _ = iz.DB.QueryRow(`SELECT COALESCE(SUM(duration_seconds),0) FROM play_intervals WHERE session_fk = ?`, s.SessionFK).Scan(&alreadySec)
-            remaining := runtimeSec - int(alreadySec.Int64)
-            if remaining < watchedSeconds {
-                if remaining <= 0 {
-                    // Nothing left to attribute within this session; skip creating interval
-                    return
-                }
-                watchedSeconds = remaining
-            }
-        }
+		// Optional cap: do not let a single session's total intervals exceed item runtime
+		// Fetch item runtime (in ticks) -> seconds
+		var runTimeTicks sql.NullInt64
+		_ = iz.DB.QueryRow(`SELECT run_time_ticks FROM library_item WHERE id = ?`, d.NowPlaying.ID).Scan(&runTimeTicks)
+		if runTimeTicks.Valid && runTimeTicks.Int64 > 0 {
+			runtimeSec := int(runTimeTicks.Int64 / ticksPerSecond)
+			var alreadySec sql.NullInt64
+			_ = iz.DB.QueryRow(`SELECT COALESCE(SUM(duration_seconds),0) FROM play_intervals WHERE session_fk = ?`, s.SessionFK).Scan(&alreadySec)
+			remaining := runtimeSec - int(alreadySec.Int64)
+			if remaining < watchedSeconds {
+				if remaining <= 0 {
+					// Nothing left to attribute within this session; skip creating interval
+					return
+				}
+				watchedSeconds = remaining
+			}
+		}
 
-        startTS := endTS.Add(-time.Duration(watchedSeconds) * time.Second)
-        if startTS.Before(s.SessionStartTS) {
-            startTS = s.SessionStartTS
-        }
-        iz.closeInterval(s, startTS, endTS, 0, d.PlayState.PositionTicks, false)
-    }
+		startTS := endTS.Add(-time.Duration(watchedSeconds) * time.Second)
+		if startTS.Before(s.SessionStartTS) {
+			startTS = s.SessionStartTS
+		}
+		iz.closeInterval(s, startTS, endTS, 0, d.PlayState.PositionTicks, false)
+	}
 
 	_, _ = iz.DB.Exec(`UPDATE play_sessions SET ended_at = ?, is_active = false WHERE id = ?`, now.Unix(), s.SessionFK)
 	delete(LiveSessions, k)
@@ -437,7 +437,7 @@ func upsertSession(db *sql.DB, d emby.PlaybackProgressData) (int64, error) {
 		// Determine detailed playback methods from available data
 		videoMethod, audioMethod, videoCodecFrom, videoCodecTo, audioCodecFrom, audioCodecTo := determineDetailedMethods(d)
 
-        _, updateErr := db.Exec(`
+		_, updateErr := db.Exec(`
 			UPDATE play_sessions 
 			SET user_id=?, device_id=?, client_name=?, item_name=?, item_type=?, play_method=?, 
 				ended_at=NULL, is_active=true, transcode_reasons=?, remote_address=?,

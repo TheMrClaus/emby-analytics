@@ -30,6 +30,7 @@ import type {
   UserDetail,
 } from "../types";
 import type { VersionInfo } from "../lib/api";
+import type { ServerAlias } from "../types/multi-server";
 
 // SWR configuration
 const config = {
@@ -58,22 +59,31 @@ export function useTopUsers(days = 14, limit = 10, timeframe?: string) {
 }
 
 // Top items hook with dynamic parameters + optional timeframe
-export function useTopItems(days = 14, limit = 10, timeframe?: string) {
+export function useTopItems(
+  days = 14,
+  limit = 10,
+  timeframe?: string,
+  server?: ServerAlias | string
+) {
   return useSWR<TopItem[]>(
-    ["topItems", days, limit, timeframe],
-    () => fetchTopItems(days, limit, timeframe),
+    ["topItems", days, limit, timeframe, server ?? "all"],
+    () => fetchTopItems(days, limit, timeframe, server),
     config
   );
 }
 
 // Qualities data hook
-export function useQualities() {
-  return useSWR<QualityBuckets>("qualities", () => fetchQualities(), config);
+export function useQualities(server?: ServerAlias | string) {
+  return useSWR<QualityBuckets>(
+    ["qualities", server ?? "all"],
+    () => fetchQualities(server),
+    config
+  );
 }
 
 // Codecs data hook
-export function useCodecs() {
-  return useSWR<CodecBuckets>("codecs", () => fetchCodecs(), config);
+export function useCodecs(server?: ServerAlias | string) {
+  return useSWR<CodecBuckets>(["codecs", server ?? "all"], () => fetchCodecs(server), config);
 }
 
 // Active users lifetime hook with dynamic limit
@@ -86,13 +96,17 @@ export function useActiveUsersLifetime(limit = 10) {
 }
 
 // Movie stats hook
-export function useMovieStats() {
-  return useSWR<MovieStats>("movieStats", () => fetchMovieStats(), config);
+export function useMovieStats(server?: ServerAlias | string) {
+  return useSWR<MovieStats>(["movieStats", server ?? "all"], () => fetchMovieStats(server), config);
 }
 
 // Series stats hook
-export function useSeriesStats() {
-  return useSWR<SeriesStats>("seriesStats", () => fetchSeriesStats(), config);
+export function useSeriesStats(server?: ServerAlias | string) {
+  return useSWR<SeriesStats>(
+    ["seriesStats", server ?? "all"],
+    () => fetchSeriesStats(server),
+    config
+  );
 }
 
 // User detail hook

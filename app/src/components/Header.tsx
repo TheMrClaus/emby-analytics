@@ -2,7 +2,7 @@
 import { useRef } from "react";
 import Link from "next/link";
 import { useUsage, useNowSnapshot, useRefreshStatus, useVersion } from "../hooks/useData";
-import { startRefresh, setAdminToken } from "../lib/api";
+import { startRefresh, setAdminToken, syncAllServers } from "../lib/api";
 import { useRouter } from "next/router";
 import { fmtHours } from "../lib/format";
 
@@ -37,6 +37,25 @@ export default function Header() {
 
   const router = useRouter();
 
+  const performSyncs = async () => {
+    let primaryError: unknown = null;
+    try {
+      await startRefresh();
+    } catch (err) {
+      primaryError = err;
+    }
+    try {
+      await syncAllServers();
+    } catch (err) {
+      if (primaryError == null) {
+        primaryError = err;
+      }
+    }
+    if (primaryError) {
+      throw primaryError;
+    }
+  };
+
   const handleRefresh = async () => {
     // Block if lock engaged, UI already refreshing, or backend says it's running.
     if (clickLockRef.current || isRunning) return;
@@ -48,7 +67,7 @@ export default function Header() {
     }, 1200);
 
     try {
-      await startRefresh(); // Fiber v3: kicks off the job; progress read via useRefreshStatus
+      await performSyncs();
     } catch (err: unknown) {
       const msg = String((err as Error)?.message || err || "");
       // If unauthorized, prompt for admin token and retry once
@@ -57,7 +76,7 @@ export default function Header() {
         if (t && t.trim()) {
           setAdminToken(t.trim());
           try {
-            await startRefresh();
+            await performSyncs();
             return;
           } catch (e) {
             console.error("Failed to start refresh after setting token:", e);
@@ -147,11 +166,8 @@ export default function Header() {
                   {streamsTotal}
                   {streamsTotal > 0 && (
                     <span className="text-sm ml-1">
-                      (
-                      <span className="text-green-400">{directPlay}D</span>
-                      /
-                      <span className="text-orange-400">{transcoding}T</span>
-                      )
+                      (<span className="text-green-400">{directPlay}D</span>/
+                      <span className="text-orange-400">{transcoding}T</span>)
                     </span>
                   )}
                 </>

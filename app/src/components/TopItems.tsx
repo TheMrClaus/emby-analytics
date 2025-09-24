@@ -5,6 +5,7 @@ import { imgPrimary, fetchConfig } from "../lib/api";
 import { fmtTooltipTime, fmtHours } from "../lib/format";
 import Card from "./ui/Card";
 import { openInEmby } from "../lib/emby";
+import { useLibraryServer } from "../contexts/LibraryServerContext";
 
 const timeframeOptions = [
   { value: "all-time", label: "All Time" },
@@ -20,13 +21,15 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
   const [embyExternalUrl, setEmbyExternalUrl] = useState<string>("");
   const [embyServerId, setEmbyServerId] = useState<string>("");
   const [plexExternalUrl, setPlexExternalUrl] = useState<string>("");
-  const [jfExternalUrl,   setJfExternalUrl] = useState<string>("");
+  const [jfExternalUrl, setJfExternalUrl] = useState<string>("");
   const [plexServerId, setPlexServerId] = useState<string>("");
+  const { server } = useLibraryServer();
+  const serverLabel = server === "all" ? "" : server.charAt(0).toUpperCase() + server.slice(1);
 
   // Convert timeframe to days for the API (backwards compatibility)
   const days = timeframe === "all-time" ? 0 : parseInt(timeframe.replace("d", "")) || 14;
 
-  const { data: rows = [], error, isLoading } = useTopItems(days, limit, timeframe);
+  const { data: rows = [], error, isLoading } = useTopItems(days, limit, timeframe, server);
 
   // Fetch Emby config once for deep-linking to items
   useEffect(() => {
@@ -58,6 +61,11 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
       title={
         <>
           Top Items ({selectedOption?.label})
+          {serverLabel && (
+            <span className="ml-2 text-xs text-gray-400 uppercase tracking-wide">
+              {serverLabel}
+            </span>
+          )}
           {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}
         </>
       }
@@ -94,7 +102,11 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
                 <td className="py-3">
                   <div className="flex items-center gap-3">
                     <Image
-                      src={r.server_type ? `${process.env.NEXT_PUBLIC_API_BASE ?? ""}/img/primary/${r.server_type}/${r.item_id}` : imgPrimary(r.item_id)}
+                      src={
+                        r.server_type
+                          ? `${process.env.NEXT_PUBLIC_API_BASE ?? ""}/img/primary/${r.server_type}/${r.item_id}`
+                          : imgPrimary(r.item_id)
+                      }
                       alt={displayName}
                       width={32}
                       height={48}

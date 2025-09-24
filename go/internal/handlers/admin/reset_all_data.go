@@ -2,14 +2,14 @@ package admin
 
 import (
 	"database/sql"
-	"emby-analytics/internal/emby"
+	"emby-analytics/internal/media"
 	"emby-analytics/internal/tasks"
 
 	"github.com/gofiber/fiber/v3"
 )
 
 // ResetAllData clears all data and re-syncs from scratch
-func ResetAllData(db *sql.DB, em *emby.Client) fiber.Handler {
+func ResetAllData(db *sql.DB, mgr *media.MultiServerManager) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		// Clear all tables - updated for new schema
 		tables := []string{"play_intervals", "play_events", "play_sessions", "lifetime_watch", "emby_user", "library_item"}
@@ -25,7 +25,7 @@ func ResetAllData(db *sql.DB, em *emby.Client) fiber.Handler {
 		}
 
 		// Re-sync users immediately
-		tasks.RunUserSyncOnce(db, em)
+		tasks.RunUserSyncOnce(db, mgr)
 
 		// Get final counts
 		var finalUsers int

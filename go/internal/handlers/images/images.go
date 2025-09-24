@@ -129,10 +129,10 @@ func MultiServerPrimary(multiServerMgr interface{}) fiber.Handler {
 			// Emby image URL format
 			imageURL = fmt.Sprintf("http://emby:8096/emby/Items/%s/Images/Primary?api_key=9bcb8efb00244f889a78e5878ab89b41&quality=90&maxWidth=300",
 				url.PathEscape(id))
-    case "jellyfin":
-        // Jellyfin image URL format (no "/jellyfin" prefix)
-        imageURL = fmt.Sprintf("http://jellyfin:8096/Items/%s/Images/Primary?api_key=0528a4ed9fc34d669ce4bea9c17d7f69&quality=90&maxWidth=300",
-                url.PathEscape(id))
+		case "jellyfin":
+			// Jellyfin image URL format (no "/jellyfin" prefix)
+			imageURL = fmt.Sprintf("http://jellyfin:8096/Items/%s/Images/Primary?api_key=0528a4ed9fc34d669ce4bea9c17d7f69&quality=90&maxWidth=300",
+				url.PathEscape(id))
 		default:
 			return c.Status(404).JSON(fiber.Map{"error": "unsupported server type"})
 		}
