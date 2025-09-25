@@ -301,6 +301,7 @@ func main() {
 	app.Get("/img/backdrop/:id", images.Backdrop(imgOpts))
 	// Multi-server image routes
 	app.Get("/img/primary/:server/:id", images.MultiServerPrimary(multiMgr))
+	app.Get("/img/backdrop/:server/:id", images.MultiServerBackdrop(multiMgr))
 	// Now Playing Routes
 	app.Get("/api/now-playing/summary", now.Summary)
 	// Legacy single-Emby snapshot remains for compatibility with current UI

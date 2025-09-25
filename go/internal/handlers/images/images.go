@@ -8,11 +8,13 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
 
 	"emby-analytics/internal/config"
+	"emby-analytics/internal/media"
 )
 
 type Opts struct {
@@ -109,36 +111,148 @@ func Backdrop(opts Opts) fiber.Handler {
 
 // MultiServerPrimary handles image requests with server routing: /img/primary/:server/:id
 func MultiServerPrimary(multiServerMgr interface{}) fiber.Handler {
+	mgr, _ := multiServerMgr.(*media.MultiServerManager)
+	primaryWidth := getenvInt("IMG_PRIMARY_MAX_WIDTH", 300)
+	primaryHeight := getenvInt("IMG_PRIMARY_MAX_HEIGHT", int(float64(primaryWidth)*1.5))
+	quality := getenvInt("IMG_QUALITY", 90)
+
 	return func(c fiber.Ctx) error {
-		serverType := c.Params("server", "")
+		serverParam := strings.TrimSpace(c.Params("server", ""))
 		id := c.Params("id", "")
 
-		if serverType == "" || id == "" {
+		if serverParam == "" || id == "" {
 			return c.Status(400).JSON(fiber.Map{"error": "missing server or item id"})
 		}
 
-		var imageURL string
-
-		// Use environment variable values (same as configured in the multi-server manager)
-		switch serverType {
-		case "plex":
-			// Plex image URL format - use photo transcode endpoint
-			imageURL = fmt.Sprintf("http://plex:32400/photo/:/transcode?width=300&height=450&minSize=1&upscale=1&url=/library/metadata/%s/thumb&X-Plex-Token=2V3pSLipwDso8ziMyxYj",
-				url.PathEscape(id))
-		case "emby":
-			// Emby image URL format
-			imageURL = fmt.Sprintf("http://emby:8096/emby/Items/%s/Images/Primary?api_key=9bcb8efb00244f889a78e5878ab89b41&quality=90&maxWidth=300",
-				url.PathEscape(id))
-		case "jellyfin":
-			// Jellyfin image URL format (no "/jellyfin" prefix)
-			imageURL = fmt.Sprintf("http://jellyfin:8096/Items/%s/Images/Primary?api_key=0528a4ed9fc34d669ce4bea9c17d7f69&quality=90&maxWidth=300",
-				url.PathEscape(id))
-		default:
-			return c.Status(404).JSON(fiber.Map{"error": "unsupported server type"})
+		cfg := resolveServerConfig(mgr, serverParam)
+		if cfg == nil {
+			return c.Status(404).JSON(fiber.Map{"error": "server configuration not found"})
 		}
 
-		// Create HTTP client and proxy the request
+		imageURL, err := buildServerImageURL(*cfg, id, imageVariantPrimary, primaryWidth, primaryHeight, quality)
+		if err != nil {
+			return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+		}
+
 		httpClient := &http.Client{Timeout: 20 * time.Second}
 		return proxyImage(c, httpClient, imageURL)
+	}
+}
+
+func MultiServerBackdrop(multiServerMgr interface{}) fiber.Handler {
+	mgr, _ := multiServerMgr.(*media.MultiServerManager)
+	backdropWidth := getenvInt("IMG_BACKDROP_MAX_WIDTH", 1280)
+	backdropHeight := getenvInt("IMG_BACKDROP_MAX_HEIGHT", int(float64(backdropWidth)*9.0/16.0))
+	quality := getenvInt("IMG_QUALITY", 90)
+
+	return func(c fiber.Ctx) error {
+		serverParam := strings.TrimSpace(c.Params("server", ""))
+		id := c.Params("id", "")
+		if serverParam == "" || id == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "missing server or item id"})
+		}
+
+		cfg := resolveServerConfig(mgr, serverParam)
+		if cfg == nil {
+			return c.Status(404).JSON(fiber.Map{"error": "server configuration not found"})
+		}
+
+		imageURL, err := buildServerImageURL(*cfg, id, imageVariantBackdrop, backdropWidth, backdropHeight, quality)
+		if err != nil {
+			return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		httpClient := &http.Client{Timeout: 20 * time.Second}
+		return proxyImage(c, httpClient, imageURL)
+	}
+}
+
+type imageVariant string
+
+const (
+	imageVariantPrimary  imageVariant = "primary"
+	imageVariantBackdrop imageVariant = "backdrop"
+)
+
+func resolveServerConfig(mgr *media.MultiServerManager, serverParam string) *media.ServerConfig {
+	if mgr == nil {
+		return nil
+	}
+	sp := strings.TrimSpace(serverParam)
+	if sp == "" {
+		return nil
+	}
+	lower := strings.ToLower(sp)
+	configs := mgr.GetServerConfigs()
+	for _, cfg := range configs {
+		cfgCopy := cfg
+		if !cfgCopy.Enabled {
+			continue
+		}
+		if strings.EqualFold(cfgCopy.ID, sp) || strings.EqualFold(string(cfgCopy.Type), lower) {
+			return &cfgCopy
+		}
+	}
+	return nil
+}
+
+func buildServerImageURL(cfg media.ServerConfig, itemID string, variant imageVariant, width, height, quality int) (string, error) {
+	base := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
+	if base == "" {
+		base = strings.TrimRight(strings.TrimSpace(cfg.ExternalURL), "/")
+	}
+	if base == "" {
+		return "", fmt.Errorf("no base URL configured for server %s", cfg.ID)
+	}
+	token := strings.TrimSpace(cfg.APIKey)
+	switch cfg.Type {
+	case media.ServerTypeEmby:
+		if token == "" {
+			return "", fmt.Errorf("api key not configured for server %s", cfg.ID)
+		}
+		path := "Primary"
+		if variant == imageVariantBackdrop {
+			path = "Backdrop"
+		}
+		u := fmt.Sprintf("%s/emby/Items/%s/Images/%s", base, url.PathEscape(itemID), path)
+		q := url.Values{}
+		q.Set("api_key", token)
+		q.Set("quality", strconv.Itoa(quality))
+		q.Set("maxWidth", strconv.Itoa(width))
+		return u + "?" + q.Encode(), nil
+	case media.ServerTypeJellyfin:
+		if token == "" {
+			return "", fmt.Errorf("api key not configured for server %s", cfg.ID)
+		}
+		path := "Primary"
+		if variant == imageVariantBackdrop {
+			path = "Backdrop"
+		}
+		u := fmt.Sprintf("%s/Items/%s/Images/%s", base, url.PathEscape(itemID), path)
+		q := url.Values{}
+		q.Set("api_key", token)
+		q.Set("quality", strconv.Itoa(quality))
+		q.Set("maxWidth", strconv.Itoa(width))
+		return u + "?" + q.Encode(), nil
+	case media.ServerTypePlex:
+		if token == "" {
+			return "", fmt.Errorf("plex token not configured for server %s", cfg.ID)
+		}
+		var remotePath string
+		if variant == imageVariantBackdrop {
+			remotePath = fmt.Sprintf("/library/metadata/%s/art", url.PathEscape(itemID))
+		} else {
+			remotePath = fmt.Sprintf("/library/metadata/%s/thumb", url.PathEscape(itemID))
+		}
+		params := url.Values{}
+		params.Set("width", strconv.Itoa(width))
+		params.Set("height", strconv.Itoa(height))
+		params.Set("minSize", "1")
+		params.Set("upscale", "1")
+		params.Set("url", remotePath)
+		params.Set("X-Plex-Token", token)
+		return fmt.Sprintf("%s/photo/:/transcode?%s", base, params.Encode()), nil
+	default:
+		return "", fmt.Errorf("unsupported server type %s", cfg.Type)
 	}
 }

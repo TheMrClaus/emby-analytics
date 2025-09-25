@@ -9,6 +9,7 @@ import NowPlaying from "../components/NowPlaying";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import DragDropDashboard from "../components/DragDropDashboard";
 import LibraryServerSelector from "../components/LibraryServerSelector";
+import ClientOnly from "../components/ClientOnly";
 
 export default function Dashboard() {
   return (
@@ -21,12 +22,16 @@ export default function Dashboard() {
         <Header />
         <main className="p-4 md:p-6 space-y-6 border-t border-neutral-800">
           <ErrorBoundary>
-            <OverviewCards />
+            <ClientOnly>
+              <OverviewCards />
+            </ClientOnly>
           </ErrorBoundary>
 
           {/* Live sessions */}
           <ErrorBoundary>
-            <NowPlaying />
+            <ClientOnly>
+              <NowPlaying />
+            </ClientOnly>
           </ErrorBoundary>
 
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -35,21 +40,29 @@ export default function Dashboard() {
           </div>
 
           {/* Dashboard cards with drag and drop functionality */}
-          <DragDropDashboard />
+          <ClientOnly>
+            <DragDropDashboard />
+          </ClientOnly>
 
           {/* Pin Media Qualities & Media Codecs just above Most Active */}
           <div className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <ErrorBoundary>
-                <QualitiesTable />
+                <ClientOnly>
+                  <QualitiesTable />
+                </ClientOnly>
               </ErrorBoundary>
               <ErrorBoundary>
-                <CodecsTable />
+                <ClientOnly>
+                  <CodecsTable />
+                </ClientOnly>
               </ErrorBoundary>
             </div>
 
             <ErrorBoundary>
-              <ActiveUsersLifetime limit={10} />
+              <ClientOnly>
+                <ActiveUsersLifetime limit={10} />
+              </ClientOnly>
             </ErrorBoundary>
           </div>
         </main>

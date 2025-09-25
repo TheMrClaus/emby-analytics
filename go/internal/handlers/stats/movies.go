@@ -43,8 +43,10 @@ func Movies(db *sql.DB) fiber.Handler {
 		data := MoviesData{}
 
 		serverType, serverID := normalizeServerParam(c.Query("server", ""))
-		movieWhere, movieArgs := appendServerFilter("media_type = 'Movie' AND "+excludeLiveTvFilter(), "", serverType, serverID)
-		movieAliasWhere, movieAliasArgs := appendServerFilter("li.media_type = 'Movie' AND "+excludeLiveTvFilter(), "li", serverType, serverID)
+		movieBase := "(" + movieMediaPredicate("") + ") AND " + excludeLiveTvFilter()
+		movieWhere, movieArgs := appendServerFilter(movieBase, "", serverType, serverID)
+		movieAliasBase := "(" + movieMediaPredicate("li") + ") AND " + excludeLiveTvFilterAlias("li")
+		movieAliasWhere, movieAliasArgs := appendServerFilter(movieAliasBase, "li", serverType, serverID)
 
 		// Count total movies
 		err := db.QueryRow(fmt.Sprintf(`

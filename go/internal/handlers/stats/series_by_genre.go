@@ -42,7 +42,8 @@ func SeriesByGenre(db *sql.DB) fiber.Handler {
 		}
 
 		// Token-boundary, case-insensitive match against normalized CSV
-		cond := "media_type = 'Episode' AND " + excludeLiveTvFilter() + " AND genres IS NOT NULL AND genres != '' AND COALESCE(series_id,'') != '' AND INSTR(LOWER(',' || REPLACE(genres, ', ', ',') || ','), LOWER(',' || ? || ',')) > 0"
+		episodePredicate := episodeMediaPredicate("")
+		cond := "(" + episodePredicate + ") AND " + excludeLiveTvFilter() + " AND genres IS NOT NULL AND genres != '' AND COALESCE(series_id,'') != '' AND INSTR(LOWER(',' || REPLACE(genres, ', ', ',') || ','), LOWER(',' || ? || ',')) > 0"
 
 		// Count distinct series
 		var total int
@@ -92,7 +93,7 @@ func SeriesByGenre(db *sql.DB) fiber.Handler {
                 WITH RECURSIVE base AS (
                   SELECT series_id, REPLACE(genres, ', ', ',') AS g
                   FROM library_item
-                  WHERE media_type = 'Episode' AND ` + excludeLiveTvFilter() + ` AND genres IS NOT NULL AND genres != '' AND series_id IN (` + strings.Join(placeholders, ",") + `)
+                  WHERE (` + episodeMediaPredicate("") + `) AND ` + excludeLiveTvFilter() + ` AND genres IS NOT NULL AND genres != '' AND series_id IN (` + strings.Join(placeholders, ",") + `)
                 ),
                 split(series_id, token, rest) AS (
                   SELECT series_id,
@@ -138,7 +139,7 @@ func SeriesByGenre(db *sql.DB) fiber.Handler {
                          COALESCE(width, 0)  AS w,
                          COALESCE(video_codec, 'Unknown') AS codec
                   FROM library_item
-                  WHERE media_type = 'Episode' AND ` + excludeLiveTvFilter() + ` AND COALESCE(series_id,'') != '' AND series_id IN (` + strings.Join(placeholders, ",") + `)
+                  WHERE (` + episodeMediaPredicate("") + `) AND ` + excludeLiveTvFilter() + ` AND COALESCE(series_id,'') != '' AND series_id IN (` + strings.Join(placeholders, ",") + `)
                 ),
                 res AS (
                   SELECT series_id, MAX(h) AS max_h, MAX(w) AS max_w

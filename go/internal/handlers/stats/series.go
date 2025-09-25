@@ -55,8 +55,10 @@ func Series(db *sql.DB) fiber.Handler {
 		var err error
 
 		serverType, serverID := normalizeServerParam(c.Query("server", ""))
-		episodeWhere, episodeArgs := appendServerFilter("media_type = 'Episode' AND "+excludeLiveTvFilter(), "", serverType, serverID)
-		episodeAliasWhere, episodeAliasArgs := appendServerFilter("li.media_type = 'Episode' AND "+excludeLiveTvFilter(), "li", serverType, serverID)
+		episodeBase := "(" + episodeMediaPredicate("") + ") AND " + excludeLiveTvFilter()
+		episodeWhere, episodeArgs := appendServerFilter(episodeBase, "", serverType, serverID)
+		episodeAliasBase := "(" + episodeMediaPredicate("li") + ") AND " + excludeLiveTvFilterAlias("li")
+		episodeAliasWhere, episodeAliasArgs := appendServerFilter(episodeAliasBase, "li", serverType, serverID)
 
 		// Total series: prefer 'series' table if populated; fallback to derived from episodes
 		var seriesTableCount int

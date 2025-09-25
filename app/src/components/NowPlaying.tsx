@@ -64,8 +64,11 @@ export default function NowPlaying() {
   const nextHeroUrl = useMemo(() => {
     const first = sessions[0];
     if (!first?.item_id) return "";
-    return `${apiBase}/img/backdrop/${encodeURIComponent(first.item_id)}`;
-  }, [sessions]);
+    const server = (first.server_type || "emby").toLowerCase();
+    const path = `/img/backdrop/${server}/${encodeURIComponent(first.item_id)}`;
+    if (!apiBase) return path;
+    return `${apiBase}${path}`;
+  }, [sessions, apiBase]);
 
   // When the first session changes, crossfade layers
   useEffect(() => {

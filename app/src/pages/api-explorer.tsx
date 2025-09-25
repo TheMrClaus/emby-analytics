@@ -378,6 +378,7 @@ const endpoints: Endpoint[] = [
     path: "/stats/movies",
     description: "Movies library summary.",
     usage: "Totals and breakdowns for movies.",
+    params: [{ key: "server", kind: "query", required: false, placeholder: "plex|default-plex" }],
   },
   {
     id: "stats-series",
@@ -386,6 +387,7 @@ const endpoints: Endpoint[] = [
     path: "/stats/series",
     description: "Series library summary.",
     usage: "Totals and breakdowns for series.",
+    params: [{ key: "server", kind: "query", required: false, placeholder: "plex|default-plex" }],
   },
   {
     id: "stats-series-by-genre",

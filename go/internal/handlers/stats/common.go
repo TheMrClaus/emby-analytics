@@ -40,6 +40,14 @@ func normalizedMediaTypeExpr(alias string) string {
     END`, mediaTypeCol, seriesIDCol, mediaTypeCol, mediaTypeCol)
 }
 
+func movieMediaPredicate(alias string) string {
+	return fmt.Sprintf("%s = 'Movie'", normalizedMediaTypeExpr(alias))
+}
+
+func episodeMediaPredicate(alias string) string {
+	return fmt.Sprintf("%s = 'Episode'", normalizedMediaTypeExpr(alias))
+}
+
 // withLiveTvFilter adds Live TV exclusion to an existing WHERE clause
 func withLiveTvFilter(existingWhere string) string {
 	if existingWhere == "" {

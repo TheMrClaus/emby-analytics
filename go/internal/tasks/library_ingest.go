@@ -104,7 +104,7 @@ func ingestJellyfinLibrary(db *sql.DB, sc media.ServerConfig, client *jellyfin.C
 }
 
 func ingestPlexLibrary(db *sql.DB, sc media.ServerConfig, client *plex.Client) error {
-	items, err := client.FetchLibraryMovies()
+	items, err := client.FetchLibraryItems()
 	if err != nil {
 		return err
 	}

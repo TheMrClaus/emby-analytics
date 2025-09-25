@@ -147,7 +147,7 @@ func UserDetailHandler(db *sql.DB, em *emby.Client) fiber.Handler {
 			SELECT COUNT(DISTINCT ps.item_id)
 			FROM play_sessions ps
 			JOIN library_item li ON li.id = ps.item_id
-			WHERE ps.user_id = ? AND li.media_type = 'Movie'
+			WHERE ps.user_id = ? AND (`+movieMediaPredicate("li")+`)
 			AND ps.ended_at IS NOT NULL
 		`, userID).Scan(&detail.TotalMovies)
 
@@ -156,7 +156,7 @@ func UserDetailHandler(db *sql.DB, em *emby.Client) fiber.Handler {
 			SELECT COUNT(DISTINCT ps.item_id)
 			FROM play_sessions ps
 			JOIN library_item li ON li.id = ps.item_id
-			WHERE ps.user_id = ? AND li.media_type = 'Episode'
+			WHERE ps.user_id = ? AND (`+episodeMediaPredicate("li")+`)
 			AND ps.ended_at IS NOT NULL
 		`, userID).Scan(&detail.TotalEpisodes)
 
@@ -171,7 +171,7 @@ func UserDetailHandler(db *sql.DB, em *emby.Client) fiber.Handler {
 			)
 			FROM play_sessions ps
 			JOIN library_item li ON li.id = ps.item_id
-			WHERE ps.user_id = ? AND li.media_type = 'Episode'
+			WHERE ps.user_id = ? AND (`+episodeMediaPredicate("li")+`)
 			AND ps.ended_at IS NOT NULL
 			AND li.name LIKE '%-%'
 		`, userID).Scan(&detail.TotalSeriesFinished)
@@ -181,7 +181,7 @@ func UserDetailHandler(db *sql.DB, em *emby.Client) fiber.Handler {
 			SELECT li.id, li.name, li.media_type, MAX(ps.ended_at) as last_seen
 			FROM play_sessions ps
 			JOIN library_item li ON li.id = ps.item_id
-			WHERE ps.user_id = ? AND li.media_type = 'Movie'
+			WHERE ps.user_id = ? AND (`+movieMediaPredicate("li")+`)
 			AND ps.ended_at IS NOT NULL
 			GROUP BY li.id, li.name, li.media_type
 			ORDER BY last_seen DESC
@@ -203,7 +203,7 @@ func UserDetailHandler(db *sql.DB, em *emby.Client) fiber.Handler {
             SELECT li.id, li.name, li.media_type, MAX(ps.ended_at) as last_seen
             FROM play_sessions ps
             JOIN library_item li ON li.id = ps.item_id
-            WHERE ps.user_id = ? AND li.media_type = 'Episode'
+            WHERE ps.user_id = ? AND (`+episodeMediaPredicate("li")+`)
               AND ps.ended_at IS NOT NULL
             GROUP BY li.id, li.name, li.media_type
             ORDER BY last_seen DESC

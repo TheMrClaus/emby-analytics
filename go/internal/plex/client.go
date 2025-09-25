@@ -58,17 +58,26 @@ type plexMediaContainer struct {
 	Info     plexSystemInfo `xml:",any"`
 }
 
+type plexLibrarySection struct {
+	Key  string `xml:"key,attr"`
+	Type string `xml:"type,attr"`
+}
+
 type plexSession struct {
-	XMLName        xml.Name `xml:"Video"`
-	SessionKey     string   `xml:"sessionKey,attr"`
-	RatingKey      string   `xml:"ratingKey,attr"`
-	Key            string   `xml:"key,attr"`
-	ParentKey      string   `xml:"parentKey,attr"`
-	GrandparentKey string   `xml:"grandparentKey,attr"`
-	Title          string   `xml:"title,attr"`
-	Type           string   `xml:"type,attr"`
-	Duration       int64    `xml:"duration,attr"`   // milliseconds
-	ViewOffset     int64    `xml:"viewOffset,attr"` // milliseconds
+	XMLName          xml.Name `xml:"Video"`
+	SessionKey       string   `xml:"sessionKey,attr"`
+	RatingKey        string   `xml:"ratingKey,attr"`
+	Key              string   `xml:"key,attr"`
+	ParentKey        string   `xml:"parentKey,attr"`
+	GrandparentKey   string   `xml:"grandparentKey,attr"`
+	ParentTitle      string   `xml:"parentTitle,attr"`
+	GrandparentTitle string   `xml:"grandparentTitle,attr"`
+	Title            string   `xml:"title,attr"`
+	Type             string   `xml:"type,attr"`
+	Duration         int64    `xml:"duration,attr"`   // milliseconds
+	ViewOffset       int64    `xml:"viewOffset,attr"` // milliseconds
+	ParentIndex      int      `xml:"parentIndex,attr"`
+	Index            int      `xml:"index,attr"`
 
 	User struct {
 		ID    string `xml:"id,attr"`
@@ -594,108 +603,209 @@ func (c *Client) ItemsByIDs(ids []string) ([]media.MediaItem, error) {
 	return items, nil
 }
 
-// FetchLibraryMovies retrieves movie metadata for all Plex library sections of type "movie".
-func (c *Client) FetchLibraryMovies() ([]media.MediaItem, error) {
-	sections, err := c.fetchMovieSections()
+// FetchLibraryItems retrieves metadata for Plex library sections supported by analytics (movies and episodes).
+func (c *Client) FetchLibraryItems() ([]media.MediaItem, error) {
+	sections, err := c.fetchLibrarySections()
 	if err != nil {
 		return nil, err
 	}
-	items := make([]media.MediaItem, 0)
 	const pageSize = 200
-	for _, sectionKey := range sections {
-		start := 0
-		for {
-			path := fmt.Sprintf("/library/sections/%s/all?type=1&X-Plex-Container-Start=%d&X-Plex-Container-Size=%d", sectionKey, start, pageSize)
-			resp, err := c.doRequest(path)
-			if err != nil {
-				return nil, err
-			}
+	items := make([]media.MediaItem, 0)
 
-			var container plexMediaContainer
-			if err := readXML(resp, &container); err != nil {
-				return nil, err
-			}
+	for _, section := range sections {
+		sectionType := strings.ToLower(section.Type)
+		var videos []plexSession
 
-			if len(container.Metadata) == 0 && len(container.Videos) == 0 {
-				break
+		switch sectionType {
+		case "movie":
+			videos, err = c.fetchSectionEntries(
+				fmt.Sprintf("/library/sections/%s/all", section.Key),
+				"type=1",
+				pageSize,
+			)
+		case "show":
+			videos, err = c.fetchSectionEntries(
+				fmt.Sprintf("/library/sections/%s/all", section.Key),
+				"type=4",
+				pageSize,
+			)
+			if err == nil && len(videos) == 0 {
+				videos, err = c.fetchShowEpisodesFallback(section.Key, pageSize)
 			}
+		default:
+			continue
+		}
 
-			rows := container.Metadata
-			if len(container.Videos) > 0 {
-				rows = container.Videos
+		if err != nil {
+			return nil, err
+		}
+
+		for _, video := range videos {
+			if strings.TrimSpace(video.RatingKey) == "" {
+				continue
 			}
-
-			for _, video := range rows {
-				item := media.MediaItem{
-					ID:         video.RatingKey,
-					ServerID:   c.serverID,
-					ServerType: media.ServerTypePlex,
-					Name:       video.Title,
-					Type:       video.Type,
-					Genres:     nil,
+			item := media.MediaItem{
+				ID:         video.RatingKey,
+				ServerID:   c.serverID,
+				ServerType: media.ServerTypePlex,
+				Name:       video.Title,
+				Type:       video.Type,
+				Genres:     nil,
+			}
+			if video.Duration > 0 {
+				runtime := video.Duration
+				item.RuntimeMs = &runtime
+			}
+			if len(video.Media) > 0 {
+				mediaEntry := video.Media[0]
+				if mediaEntry.VideoCodec != "" {
+					item.Codec = strings.ToUpper(mediaEntry.VideoCodec)
 				}
-				if video.Duration > 0 {
-					runtime := video.Duration
-					item.RuntimeMs = &runtime
+				if mediaEntry.Container != "" {
+					item.Container = mediaEntry.Container
 				}
-				if len(video.Media) > 0 {
-					mediaEntry := video.Media[0]
-					if mediaEntry.VideoCodec != "" {
-						item.Codec = strings.ToUpper(mediaEntry.VideoCodec)
-					}
-					if mediaEntry.Container != "" {
-						item.Container = mediaEntry.Container
-					}
-					if mediaEntry.Bitrate > 0 {
-						bitrate := mediaEntry.Bitrate * 1000 // Plex stores kbps
-						item.BitrateBps = &bitrate
-					}
-					if mediaEntry.Width > 0 {
-						w := mediaEntry.Width
-						item.Width = &w
-					}
-					if mediaEntry.Height > 0 {
-						h := mediaEntry.Height
-						item.Height = &h
-					}
-					if len(mediaEntry.Part) > 0 {
-						part := mediaEntry.Part[0]
-						if part.Size > 0 {
-							size := part.Size
-							item.FileSizeBytes = &size
-						}
+				if mediaEntry.Bitrate > 0 {
+					bitrate := mediaEntry.Bitrate * 1000 // Plex stores kbps
+					item.BitrateBps = &bitrate
+				}
+				if mediaEntry.Width > 0 {
+					w := mediaEntry.Width
+					item.Width = &w
+				}
+				if mediaEntry.Height > 0 {
+					h := mediaEntry.Height
+					item.Height = &h
+				}
+				if len(mediaEntry.Part) > 0 {
+					part := mediaEntry.Part[0]
+					if part.Size > 0 {
+						size := part.Size
+						item.FileSizeBytes = &size
 					}
 				}
-				items = append(items, item)
 			}
 
-			if len(rows) < pageSize {
-				break
+			if strings.EqualFold(video.Type, "episode") {
+				item.SeriesID = video.GrandparentKey
+				item.SeriesName = video.GrandparentTitle
+				if item.SeriesID == "" {
+					item.SeriesID = video.ParentKey
+				}
+				if item.SeriesName == "" {
+					item.SeriesName = video.ParentTitle
+				}
+				if video.ParentIndex > 0 {
+					season := video.ParentIndex
+					item.ParentIndexNumber = &season
+				}
+				if video.Index > 0 {
+					episode := video.Index
+					item.IndexNumber = &episode
+				}
 			}
-			start += len(rows)
+
+			items = append(items, item)
 		}
 	}
+
 	return items, nil
 }
 
-func (c *Client) fetchMovieSections() ([]string, error) {
+func (c *Client) fetchSectionEntries(basePath, querySuffix string, pageSize int) ([]plexSession, error) {
+	entries := make([]plexSession, 0)
+	start := 0
+	for {
+		query := fmt.Sprintf("X-Plex-Container-Start=%d&X-Plex-Container-Size=%d", start, pageSize)
+		if strings.TrimSpace(querySuffix) != "" {
+			query = fmt.Sprintf("%s&%s", query, querySuffix)
+		}
+		path := fmt.Sprintf("%s?%s", basePath, query)
+		resp, err := c.doRequest(path)
+		if err != nil {
+			return entries, err
+		}
+
+		var container plexMediaContainer
+		if err := readXML(resp, &container); err != nil {
+			return entries, err
+		}
+
+		rows := container.Metadata
+		if len(container.Videos) > 0 {
+			rows = container.Videos
+		}
+		if len(rows) == 0 {
+			break
+		}
+
+		entries = append(entries, rows...)
+
+		if len(rows) < pageSize {
+			break
+		}
+		start += len(rows)
+	}
+
+	return entries, nil
+}
+
+func (c *Client) fetchShowEpisodesFallback(sectionKey string, pageSize int) ([]plexSession, error) {
+	shows, err := c.fetchSectionEntries(
+		fmt.Sprintf("/library/sections/%s/all", sectionKey),
+		"type=2",
+		pageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	episodes := make([]plexSession, 0)
+	for _, show := range shows {
+		ratingKey := strings.TrimSpace(show.RatingKey)
+		if ratingKey == "" {
+			continue
+		}
+
+		showEpisodes, err := c.fetchSectionEntries(
+			fmt.Sprintf("/library/metadata/%s/allLeaves", ratingKey),
+			"includeAllLeaves=1",
+			pageSize,
+		)
+		if err != nil {
+			return episodes, err
+		}
+
+		for i := range showEpisodes {
+			if showEpisodes[i].GrandparentKey == "" {
+				showEpisodes[i].GrandparentKey = show.RatingKey
+			}
+			if showEpisodes[i].GrandparentTitle == "" {
+				showEpisodes[i].GrandparentTitle = show.Title
+			}
+		}
+
+		episodes = append(episodes, showEpisodes...)
+	}
+
+	return episodes, nil
+}
+
+func (c *Client) fetchLibrarySections() ([]plexLibrarySection, error) {
 	resp, err := c.doRequest("/library/sections")
 	if err != nil {
 		return nil, err
 	}
 	var container struct {
-		Directories []struct {
-			Key  string `xml:"key,attr"`
-			Type string `xml:"type,attr"`
-		} `xml:"Directory"`
+		Directories []plexLibrarySection `xml:"Directory"`
 	}
 	if err := readXML(resp, &container); err != nil {
 		return nil, err
 	}
-	sections := make([]string, 0)
+	sections := make([]plexLibrarySection, 0, len(container.Directories))
 	for _, dir := range container.Directories {
-		if strings.EqualFold(dir.Type, "movie") {
-			sections = append(sections, dir.Key)
+		typeName := strings.ToLower(dir.Type)
+		if typeName == "movie" || typeName == "show" {
+			sections = append(sections, dir)
 		}
 	}
 	return sections, nil
