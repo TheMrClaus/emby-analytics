@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -34,7 +35,7 @@ func StartSyncLoop(db *sql.DB, mgr *media.MultiServerManager, cfg config.Config)
 
 // RunOnce triggers a single synchronization cycle immediately.
 func RunOnce(db *sql.DB, mgr *media.MultiServerManager, cfg config.Config) {
-	IngestLibraries(db, mgr, nil)
+	IngestLibraries(db, mgr, nil, nil)
 	runSyncFiltered(db, mgr, cfg, nil, nil)
 }
 
@@ -50,7 +51,12 @@ func RunServerOnce(db *sql.DB, mgr *media.MultiServerManager, cfg config.Config,
 	}
 	filter := map[string]bool{serverID: true}
 	force := map[string]bool{serverID: true}
-	IngestLibraries(db, mgr, filter)
+	IngestLibraries(db, mgr, filter, force)
+	if isSyncDisabled(db, serverID, configs[serverID].Enabled) {
+		CancelServerSyncProgress(serverID, "Sync cancelled by user")
+		return nil
+	}
+	SetServerSyncStage(serverID, "Collecting playback history...")
 	runSyncFiltered(db, mgr, cfg, filter, force)
 	return nil
 }
@@ -84,12 +90,26 @@ func runSyncFiltered(db *sql.DB, mgr *media.MultiServerManager, cfg config.Confi
 				continue
 			}
 		}
+		if isSyncDisabled(db, serverID, sc.Enabled) {
+			CancelServerSyncProgress(serverID, "Sync cancelled by user")
+			continue
+		}
 
 		logging.Debug("play sync started", "server", sc.Name, "server_id", sc.ID)
+		SetServerSyncStage(serverID, "Collecting playback history...")
 
-		inserted, apiCalls := syncServer(db, client, sc, cfg)
+		inserted, apiCalls, err := syncServer(db, client, sc, cfg)
 		totalInserted += inserted
 		totalAPICalls += apiCalls
+		switch {
+		case err == nil:
+			CompleteServerSyncProgress(serverID)
+		case errors.Is(err, ErrSyncCancelled):
+			// Already marked as cancelled where detected.
+		default:
+			logging.Debug("play sync failed", "server", sc.Name, "server_id", sc.ID, "error", err)
+			FailServerSyncProgress(serverID, err)
+		}
 	}
 
 	dur := time.Since(start)
@@ -102,13 +122,17 @@ func shouldSyncServer(db *sql.DB, sc media.ServerConfig) bool {
 	return settings.GetSyncEnabled(db, sc.ID, sc.Enabled)
 }
 
-func syncServer(db *sql.DB, client media.MediaServerClient, sc media.ServerConfig, cfg config.Config) (int, int) {
+func syncServer(db *sql.DB, client media.MediaServerClient, sc media.ServerConfig, cfg config.Config) (int, int, error) {
 	serverID := client.GetServerID()
 	serverType := client.GetServerType()
 	serverName := client.GetServerName()
 
 	insertedEvents := 0
 	apiCalls := 0
+
+	checkCancelled := func() bool {
+		return isSyncDisabled(db, serverID, sc.Enabled)
+	}
 
 	// Determine if this is the first sync for the server
 	isInitialized := settings.GetSettingBool(db, syncInitializedKey(serverID), false)
@@ -117,6 +141,10 @@ func syncServer(db *sql.DB, client media.MediaServerClient, sc media.ServerConfi
 		historyDays = 0 // fetch full history on first sync
 		logging.Debug("First sync detected for server", "server", serverName, "server_id", serverID)
 	}
+	if checkCancelled() {
+		CancelServerSyncProgress(serverID, "Sync cancelled by user")
+		return insertedEvents, apiCalls, ErrSyncCancelled
+	}
 
 	// Step 1: Active sessions snapshot
 	sessions, err := client.GetActiveSessions()
@@ -124,7 +152,11 @@ func syncServer(db *sql.DB, client media.MediaServerClient, sc media.ServerConfi
 	if err != nil {
 		logging.Debug("play sync: failed to fetch sessions", "server", serverName, "error", err)
 	} else {
-		for _, s := range sessions {
+		for idx, s := range sessions {
+			if idx%cancelCheckInterval == 0 && checkCancelled() {
+				CancelServerSyncProgress(serverID, "Sync cancelled by user")
+				return insertedEvents, apiCalls, ErrSyncCancelled
+			}
 			upsertUserAndItem(db, serverID, serverType, s.UserID, s.UserName, s.ItemID, s.ItemName, s.ItemType)
 
 			posMs := clampPositionMs(s.PositionMs, s.DurationMs)
@@ -141,10 +173,14 @@ func syncServer(db *sql.DB, client media.MediaServerClient, sc media.ServerConfi
 	apiCalls++
 	if err != nil {
 		logging.Debug("play sync: failed to fetch users", "server", serverName, "error", err)
-		return insertedEvents, apiCalls
+		return insertedEvents, apiCalls, err
 	}
 
-	for _, user := range users {
+	for idx, user := range users {
+		if idx%cancelCheckInterval == 0 && checkCancelled() {
+			CancelServerSyncProgress(serverID, "Sync cancelled by user")
+			return insertedEvents, apiCalls, ErrSyncCancelled
+		}
 		remoteUserID := user.ID
 		if strings.TrimSpace(remoteUserID) == "" {
 			continue
@@ -160,7 +196,11 @@ func syncServer(db *sql.DB, client media.MediaServerClient, sc media.ServerConfi
 			continue
 		}
 
-		for _, h := range history {
+		for hIdx, h := range history {
+			if hIdx%cancelCheckInterval == 0 && checkCancelled() {
+				CancelServerSyncProgress(serverID, "Sync cancelled by user")
+				return insertedEvents, apiCalls, ErrSyncCancelled
+			}
 			if strings.TrimSpace(h.ID) == "" {
 				continue
 			}
@@ -184,7 +224,7 @@ func syncServer(db *sql.DB, client media.MediaServerClient, sc media.ServerConfi
 		}
 	}
 
-	return insertedEvents, apiCalls
+	return insertedEvents, apiCalls, nil
 }
 
 func clampPositionMs(posMs, durationMs int64) int64 {

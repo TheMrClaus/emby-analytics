@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Head from "next/head";
 import Header from "../components/Header";
@@ -28,8 +28,11 @@ import {
   fetchServers,
   MediaServerInfo,
   syncServer,
+  deleteServerMedia,
 } from "../lib/api";
+import type { ServerSyncProgress } from "../types";
 import useSWR from "swr";
+import { useRefreshStatus } from "../hooks/useData";
 
 export default function SettingsPage() {
   const { data: settings, error, isLoading, updateSetting } = useSettings();
@@ -40,6 +43,24 @@ export default function SettingsPage() {
   );
   const [syncingServer, setSyncingServer] = useState<string | null>(null);
   const [serverSyncStatus, setServerSyncStatus] = useState<Record<string, "success" | "error">>({});
+  const [deletingServer, setDeletingServer] = useState<string | null>(null);
+  const [serverDeleteStatus, setServerDeleteStatus] = useState<Record<string, "success" | "error">>(
+    {}
+  );
+  const { data: refreshStatus } = useRefreshStatus(true);
+  const serverProgressMap = useMemo(() => {
+    const map: Record<string, ServerSyncProgress> = {};
+    refreshStatus?.servers?.forEach((entry) => {
+      map[entry.server_id] = entry;
+    });
+    return map;
+  }, [refreshStatus?.servers]);
+  const orderedServers = useMemo(() => {
+    if (!servers) return undefined;
+    return [...servers].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+    );
+  }, [servers]);
 
   const handleToggleChange = async (key: string, currentValue: string) => {
     const newValue = currentValue === "true" ? "false" : "true";
@@ -127,6 +148,14 @@ export default function SettingsPage() {
     });
   }, []);
 
+  const clearServerDeleteStatus = useCallback((serverId: string) => {
+    setServerDeleteStatus((prev) => {
+      const next = { ...prev };
+      delete next[serverId];
+      return next;
+    });
+  }, []);
+
   const handleServerSync = useCallback(
     async (serverId: string) => {
       setSyncingServer(serverId);
@@ -139,11 +168,38 @@ export default function SettingsPage() {
         console.error("Failed to start server sync:", error);
         setServerSyncStatus((prev) => ({ ...prev, [serverId]: "error" }));
         setTimeout(() => clearServerSyncStatus(serverId), 6000);
-      } finally {
         setSyncingServer(null);
       }
     },
     [clearServerSyncStatus]
+  );
+
+  const handleServerDelete = useCallback(
+    async (serverId: string) => {
+      if (typeof window !== "undefined") {
+        const confirmed = window.confirm(
+          "Delete all local media metadata for this server? Watch history will be preserved."
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+
+      setDeletingServer(serverId);
+      clearServerDeleteStatus(serverId);
+      try {
+        await deleteServerMedia(serverId);
+        setServerDeleteStatus((prev) => ({ ...prev, [serverId]: "success" }));
+        setTimeout(() => clearServerDeleteStatus(serverId), 4000);
+      } catch (error) {
+        console.error("Failed to delete server media:", error);
+        setServerDeleteStatus((prev) => ({ ...prev, [serverId]: "error" }));
+        setTimeout(() => clearServerDeleteStatus(serverId), 6000);
+      } finally {
+        setDeletingServer(null);
+      }
+    },
+    [clearServerDeleteStatus]
   );
 
   useEffect(() => {
@@ -151,6 +207,21 @@ export default function SettingsPage() {
       loadUsers();
     }
   }, [meRole, loadUsers]);
+
+  useEffect(() => {
+    if (!syncingServer) {
+      return;
+    }
+    const entry = serverProgressMap[syncingServer];
+    if (entry && !entry.running) {
+      setSyncingServer(null);
+      return;
+    }
+    if (!entry && typeof window !== "undefined") {
+      const timer = window.setTimeout(() => setSyncingServer(null), 8000);
+      return () => window.clearTimeout(timer);
+    }
+  }, [syncingServer, serverProgressMap]);
 
   if (isLoading) {
     return (
@@ -329,76 +400,175 @@ export default function SettingsPage() {
               <p className="text-sm text-gray-400 mb-4">
                 Enable or disable background sync for each configured media server. Disabling sync
                 stops library and watch history imports for that server while keeping existing data.
+                Use the <span className="text-white">Full Sync</span> action to run a complete
+                library and playback rescan (not incremental) for the selected server.
               </p>
               <div className="space-y-3">
-                {servers?.map((server) => {
+                {(orderedServers ?? servers)?.map((server) => {
                   const key = `sync_enabled_${server.id}`;
                   const currentSetting = settings?.find((s) => s.key === key)?.value;
                   const isEnabled =
                     (currentSetting ?? (server.enabled ? "true" : "false")) === "true";
                   const busy = saving === key;
+                  const serverProgress = serverProgressMap[server.id];
+                  const isServerRunning = Boolean(serverProgress?.running && !serverProgress.done);
+                  const progressTotal = serverProgress?.total ?? 0;
+                  const progressProcessed = serverProgress?.processed ?? 0;
+                  const percent =
+                    progressTotal > 0
+                      ? Math.max(
+                          0,
+                          Math.min(100, Math.round((progressProcessed / progressTotal) * 100))
+                        )
+                      : 0;
+                  const stageText =
+                    serverProgress?.stage ||
+                    (isServerRunning
+                      ? "Full sync running..."
+                      : serverProgress?.done
+                        ? "Full sync complete"
+                        : undefined);
+                  const showProgressBar = Boolean(
+                    serverProgress && (progressTotal > 0 || isServerRunning || serverProgress.done)
+                  );
+                  const reachable = server.health?.is_reachable;
+                  const statusColor =
+                    reachable === false
+                      ? "bg-red-500"
+                      : reachable === true
+                        ? "bg-green-400"
+                        : "bg-neutral-500";
+                  const statusTitle =
+                    reachable === false
+                      ? server.health?.error
+                        ? `Unreachable: ${server.health.error}`
+                        : "Server unreachable"
+                      : reachable === true
+                        ? "Server reachable with current credentials"
+                        : "Reachability unknown";
+                  const disableSync = syncingServer === server.id || isServerRunning;
+
                   return (
                     <div
                       key={server.id}
-                      className="flex items-center justify-between p-4 bg-neutral-700/50 rounded-lg border border-neutral-700/70"
+                      className="p-4 bg-neutral-700/50 rounded-lg border border-neutral-700/70"
                     >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-white font-medium">{server.name}</span>
-                          <span className="text-xs px-2 py-0.5 rounded-full border border-neutral-600 text-neutral-300 uppercase">
-                            {server.type}
-                          </span>
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`inline-flex h-2.5 w-2.5 rounded-full ${statusColor}`}
+                                title={statusTitle}
+                              />
+                              <span className="text-white font-medium">{server.name}</span>
+                              <span className="text-xs px-2 py-0.5 rounded-full border border-neutral-600 text-neutral-300 uppercase">
+                                {server.type}
+                              </span>
+                            </div>
+                            <div className="text-sm text-gray-400 mt-1">
+                              Background sync {isEnabled ? "enabled" : "disabled"}
+                              {server.health?.is_reachable === false && (
+                                <span className="ml-2 text-red-400">
+                                  ({server.health.error || "unreachable"})
+                                </span>
+                              )}
+                              {serverSyncStatus[server.id] === "success" && (
+                                <span className="ml-2 text-green-400">Full sync started</span>
+                              )}
+                              {serverSyncStatus[server.id] === "error" && (
+                                <span className="ml-2 text-red-400">Failed to start sync</span>
+                              )}
+                              {serverDeleteStatus[server.id] === "success" && (
+                                <span className="ml-2 text-amber-300">
+                                  Media cleared. Run a full sync to repopulate.
+                                </span>
+                              )}
+                              {serverDeleteStatus[server.id] === "error" && (
+                                <span className="ml-2 text-red-400">Failed to clear media</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() => handleServerSync(server.id)}
+                              disabled={disableSync}
+                              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors border border-neutral-600 ${
+                                disableSync
+                                  ? "bg-neutral-700 text-neutral-300 cursor-wait"
+                                  : "bg-neutral-700 hover:bg-neutral-600 text-neutral-200"
+                              }`}
+                              title="Run a full sync for this server (library + playback history)"
+                            >
+                              {disableSync ? (
+                                <RotateCcw className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <RefreshCcw className="w-4 h-4" />
+                              )}
+                              <span>{disableSync ? "Syncing" : "Full Sync"}</span>
+                            </button>
+                            <button
+                              onClick={() => handleServerDelete(server.id)}
+                              disabled={deletingServer === server.id}
+                              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
+                                deletingServer === server.id
+                                  ? "border-red-800 bg-red-900/60 text-red-200 cursor-wait"
+                                  : "border-red-800 text-red-300 hover:bg-red-900/30"
+                              }`}
+                              title="Delete local media metadata for this server"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              <span>
+                                {deletingServer === server.id ? "Deleting..." : "Delete Media"}
+                              </span>
+                            </button>
+                            {busy && <RotateCcw className="w-4 h-4 text-gray-400 animate-spin" />}
+                            <button
+                              onClick={() =>
+                                handleToggleChange(
+                                  key,
+                                  currentSetting ?? (server.enabled ? "true" : "false")
+                                )
+                              }
+                              disabled={busy}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-neutral-900 ${
+                                isEnabled ? "bg-amber-600" : "bg-neutral-600"
+                              } ${busy ? "opacity-50 cursor-not-allowed" : ""}`}
+                            >
+                              <span
+                                className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${isEnabled ? "translate-x-5" : "translate-x-1"}`}
+                              />
+                            </button>
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-400 mt-1">
-                          Sync {isEnabled ? "enabled" : "disabled"}
-                          {server.health?.is_reachable === false && (
-                            <span className="ml-2 text-red-400">
-                              ({server.health.error || "unreachable"})
-                            </span>
-                          )}
-                          {serverSyncStatus[server.id] === "success" && (
-                            <span className="ml-2 text-green-400">Sync started</span>
-                          )}
-                          {serverSyncStatus[server.id] === "error" && (
-                            <span className="ml-2 text-red-400">Failed to start sync</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => handleServerSync(server.id)}
-                          disabled={syncingServer === server.id}
-                          className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors border border-neutral-600 ${
-                            syncingServer === server.id
-                              ? "bg-neutral-700 text-neutral-300 cursor-wait"
-                              : "bg-neutral-700 hover:bg-neutral-600 text-neutral-200"
-                          }`}
-                          title="Run a one-time sync for this server"
-                        >
-                          {syncingServer === server.id ? (
-                            <RotateCcw className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <RefreshCcw className="w-4 h-4" />
-                          )}
-                          <span>{syncingServer === server.id ? "Syncing" : "Sync"}</span>
-                        </button>
-                        {busy && <RotateCcw className="w-4 h-4 text-gray-400 animate-spin" />}
-                        <button
-                          onClick={() =>
-                            handleToggleChange(
-                              key,
-                              currentSetting ?? (server.enabled ? "true" : "false")
-                            )
-                          }
-                          disabled={busy}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-neutral-900 ${
-                            isEnabled ? "bg-amber-600" : "bg-neutral-600"
-                          } ${busy ? "opacity-50 cursor-not-allowed" : ""}`}
-                        >
-                          <span
-                            className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${isEnabled ? "translate-x-5" : "translate-x-1"}`}
-                          />
-                        </button>
+                        {showProgressBar && (
+                          <div>
+                            {stageText && (
+                              <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
+                                <span>{stageText}</span>
+                                {progressTotal > 0 && (
+                                  <span>
+                                    {progressProcessed}/{progressTotal}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {progressTotal > 0 ? (
+                              <div className="h-1.5 rounded bg-neutral-700">
+                                <div
+                                  className="h-full rounded bg-amber-500 transition-all duration-300"
+                                  style={{ width: `${Math.max(4, percent)}%` }}
+                                />
+                              </div>
+                            ) : (
+                              isServerRunning && (
+                                <div className="h-1.5 rounded bg-neutral-700 overflow-hidden">
+                                  <div className="h-full w-1/3 bg-amber-500 animate-pulse" />
+                                </div>
+                              )
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

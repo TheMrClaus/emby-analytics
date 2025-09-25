@@ -46,12 +46,32 @@ export type TopItem = {
 
 export type ItemRow = { id: string; name?: string; type?: string; display?: string };
 
+export type ServerSyncProgress = {
+  server_id: string;
+  server_name?: string;
+  total: number;
+  processed: number;
+  stage?: string;
+  running: boolean;
+  done: boolean;
+  error?: string | null;
+  updated_at?: string;
+};
+
 export type RefreshState = {
   running: boolean;
   imported: number;
   total?: number;
+  aggregate_processed?: number;
+  aggregate_total?: number;
   page: number;
   error: string | null;
+  servers?: ServerSyncProgress[];
+  refresh_only?: {
+    running: boolean;
+    imported: number;
+    total: number;
+  };
 };
 
 // Now Playing (UI-friendly subset)

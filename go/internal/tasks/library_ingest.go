@@ -2,6 +2,8 @@ package tasks
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -14,7 +16,7 @@ import (
 const librarySyncSettingPrefix = "library_sync_at_"
 
 // IngestLibraries pulls library metadata from external servers so stats endpoints can operate on up-to-date data.
-func IngestLibraries(db *sql.DB, mgr *media.MultiServerManager, include map[string]bool) {
+func IngestLibraries(db *sql.DB, mgr *media.MultiServerManager, include map[string]bool, force map[string]bool) {
 	if mgr == nil {
 		return
 	}
@@ -31,9 +33,13 @@ func IngestLibraries(db *sql.DB, mgr *media.MultiServerManager, include map[stri
 		if !ok {
 			continue
 		}
-		if !shouldRunLibraryIngest(db, serverID, 6*time.Hour) {
+		forced := force != nil && force[serverID]
+		if !forced && !shouldRunLibraryIngest(db, serverID, sc.Enabled, 6*time.Hour) {
 			continue
 		}
+
+		StartServerSyncProgress(serverID, sc.Name)
+		SetServerSyncStage(serverID, "Fetching library metadata...")
 		var err error
 		switch sc.Type {
 		case media.ServerTypeJellyfin:
@@ -48,14 +54,23 @@ func IngestLibraries(db *sql.DB, mgr *media.MultiServerManager, include map[stri
 			continue
 		}
 		if err != nil {
-			logging.Debug("library ingest failed", "server", sc.Name, "server_id", sc.ID, "error", err)
+			if errors.Is(err, ErrSyncCancelled) {
+				logging.Debug("library ingest cancelled", "server", sc.Name, "server_id", sc.ID)
+			} else {
+				logging.Debug("library ingest failed", "server", sc.Name, "server_id", sc.ID, "error", err)
+				SetServerSyncStage(serverID, fmt.Sprintf("Sync failed: %v", err))
+				FailServerSyncProgress(serverID, err)
+			}
 			continue
 		}
 		_ = setSettingValue(db, librarySyncSettingPrefix+serverID, time.Now().UTC().Format(time.RFC3339))
 	}
 }
 
-func shouldRunLibraryIngest(db *sql.DB, serverID string, interval time.Duration) bool {
+func shouldRunLibraryIngest(db *sql.DB, serverID string, defaultEnabled bool, interval time.Duration) bool {
+	if isSyncDisabled(db, serverID, defaultEnabled) {
+		return false
+	}
 	if interval <= 0 {
 		return true
 	}
@@ -74,6 +89,17 @@ func ingestJellyfinLibrary(db *sql.DB, sc media.ServerConfig, client *jellyfin.C
 	if err != nil {
 		return err
 	}
+	if isSyncDisabled(db, sc.ID, sc.Enabled) {
+		CancelServerSyncProgress(sc.ID, "Sync cancelled by user")
+		return ErrSyncCancelled
+	}
+	UpdateServerSyncTotals(sc.ID, len(items))
+	SetServerSyncProcessed(sc.ID, 0)
+	if len(items) == 0 {
+		SetServerSyncStage(sc.ID, "No library items returned")
+		return nil
+	}
+	SetServerSyncStage(sc.ID, fmt.Sprintf("Ingesting %d items...", len(items)))
 	return upsertMediaItems(db, sc, items)
 }
 
@@ -82,12 +108,27 @@ func ingestPlexLibrary(db *sql.DB, sc media.ServerConfig, client *plex.Client) e
 	if err != nil {
 		return err
 	}
+	if isSyncDisabled(db, sc.ID, sc.Enabled) {
+		CancelServerSyncProgress(sc.ID, "Sync cancelled by user")
+		return ErrSyncCancelled
+	}
+	UpdateServerSyncTotals(sc.ID, len(items))
+	SetServerSyncProcessed(sc.ID, 0)
+	if len(items) == 0 {
+		SetServerSyncStage(sc.ID, "No library items returned")
+		return nil
+	}
+	SetServerSyncStage(sc.ID, fmt.Sprintf("Ingesting %d items...", len(items)))
 	return upsertMediaItems(db, sc, items)
 }
 
 func upsertMediaItems(db *sql.DB, sc media.ServerConfig, items []media.MediaItem) error {
 	seriesUpserts := make(map[string]string)
-	for _, item := range items {
+	for idx, item := range items {
+		if idx%cancelCheckInterval == 0 && isSyncDisabled(db, sc.ID, sc.Enabled) {
+			CancelServerSyncProgress(sc.ID, "Sync cancelled by user")
+			return ErrSyncCancelled
+		}
 		storedID := storageItemID(sc.ID, item.ID)
 		if strings.TrimSpace(storedID) == "" {
 			continue
@@ -144,6 +185,7 @@ func upsertMediaItems(db *sql.DB, sc media.ServerConfig, items []media.MediaItem
 		if err != nil {
 			return err
 		}
+		IncrementServerSyncProcessed(sc.ID, 1)
 	}
 
 	for sid, sname := range seriesUpserts {
@@ -158,6 +200,8 @@ func upsertMediaItems(db *sql.DB, sc media.ServerConfig, items []media.MediaItem
 			return err
 		}
 	}
+	SetServerSyncStage(sc.ID, fmt.Sprintf("Library ingest complete (%d items)", len(items)))
+	SetServerSyncProcessed(sc.ID, len(items))
 	return nil
 }
 

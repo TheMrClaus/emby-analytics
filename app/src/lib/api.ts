@@ -207,6 +207,11 @@ export const syncServer = (serverId: string) =>
     method: "POST",
   });
 
+export const deleteServerMedia = (serverId: string) =>
+  j<{ success: boolean }>(`/admin/server/${encodeURIComponent(serverId)}/media`, {
+    method: "DELETE",
+  });
+
 export const fetchRefreshStatus = () => j<RefreshState>("/admin/refresh/status");
 
 // Now Playing snapshot (HTTP)

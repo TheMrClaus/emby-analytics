@@ -352,6 +352,7 @@ func main() {
 	app.All("/admin/fix-pos-units", adminAuth, admin.FixPosUnits(sqlDB))
 	app.Post("/admin/sync/all", adminAuth, admin.SyncAllServers(sqlDB, multiMgr, cfg))
 	app.Post("/admin/sync/server/:id", adminAuth, admin.SyncServer(sqlDB, multiMgr, cfg))
+	app.Delete("/admin/server/:id/media", adminAuth, admin.DeleteServerMedia(sqlDB, multiMgr))
 	app.Get("/admin/debug/users", adminAuth, admin.DebugUsers(em))
 	app.Post("/admin/recover-intervals", adminAuth, admin.RecoverIntervalsHandler(sqlDB))
 	// Backfill series linkage for episodes

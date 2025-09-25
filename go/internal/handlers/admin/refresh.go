@@ -253,7 +253,7 @@ func (rm *RefreshManager) triggerMultiServerSync(db *sql.DB) {
 	cfg := rm.cfg
 	go func() {
 		logging.Debug("refresh completed; ingesting external libraries")
-		tasks.IngestLibraries(db, rm.multiMgr, nil)
+		tasks.IngestLibraries(db, rm.multiMgr, nil, nil)
 		logging.Debug("refresh completed; starting multi-server play sync")
 		tasks.RunOnce(db, rm.multiMgr, cfg)
 	}()
@@ -487,12 +487,32 @@ func StartIncrementalHandler(rm *RefreshManager, db *sql.DB, em *emby.Client) fi
 func StatusHandler(rm *RefreshManager) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		p := rm.get()
+		serverProgress := tasks.GetServerSyncProgressSnapshot()
+		aggregateProcessed := p.Processed
+		aggregateTotal := p.Total
+		multiRunning := false
+		for _, s := range serverProgress {
+			aggregateProcessed += s.Processed
+			aggregateTotal += s.Total
+			if s.Running && !s.Done {
+				multiRunning = true
+			}
+		}
+		running := (p.Running && !p.Done) || multiRunning
 		return c.JSON(fiber.Map{
-			"running":  p.Running && !p.Done,
-			"imported": p.Processed,
-			"total":    p.Total,
-			"page":     p.Page,
-			"error":    ifEmptyNil(p.Error),
+			"running":             running,
+			"imported":            aggregateProcessed,
+			"total":               aggregateTotal,
+			"page":                p.Page,
+			"error":               ifEmptyNil(p.Error),
+			"aggregate_processed": aggregateProcessed,
+			"aggregate_total":     aggregateTotal,
+			"servers":             serverProgress,
+			"refresh_only": fiber.Map{
+				"running":  p.Running && !p.Done,
+				"imported": p.Processed,
+				"total":    p.Total,
+			},
 		})
 	}
 }

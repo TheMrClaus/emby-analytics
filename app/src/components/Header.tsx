@@ -25,11 +25,23 @@ export default function Header() {
   const transcoding = streamsTotal - directPlay;
 
   // Progress %
-  const imported = Number(refreshStatus?.imported ?? 0);
-  const total = Number(refreshStatus?.total ?? 0);
-  const progress = total > 0 ? Math.max(0, Math.min(100, (imported / total) * 100)) : 0;
+  const aggregateProcessed = Number(
+    refreshStatus?.aggregate_processed ?? refreshStatus?.imported ?? 0
+  );
+  const aggregateTotal = Number(refreshStatus?.aggregate_total ?? refreshStatus?.total ?? 0);
+  const refreshOnly = refreshStatus?.refresh_only;
 
-  // The running state is now driven directly by the SWR hook
+  let displayTotal = aggregateTotal;
+  let displayProcessed = aggregateProcessed;
+  if (!displayTotal && refreshOnly?.total) {
+    displayTotal = Number(refreshOnly.total ?? 0);
+    displayProcessed = Number(refreshOnly.imported ?? 0);
+  }
+
+  const progress =
+    displayTotal > 0 ? Math.max(0, Math.min(100, (displayProcessed / displayTotal) * 100)) : 0;
+
+  // The running state is now driven directly by the aggregated status
   const isRunning = Boolean(refreshStatus?.running);
 
   // ---- Double-click / spam click guard ----
@@ -195,9 +207,9 @@ export default function Header() {
                   <>
                     {"Refreshing… "}
                     {Math.round(progress)}%
-                    {total > 0 && (
+                    {displayTotal > 0 && (
                       <span className="text-xs ml-1 opacity-90">
-                        ({imported}/{total})
+                        ({displayProcessed}/{displayTotal})
                       </span>
                     )}
                   </>
