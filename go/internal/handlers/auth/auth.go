@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"emby-analytics/internal/config"
+	dbutil "emby-analytics/internal/db"
 	"emby-analytics/internal/logging"
 
 	"github.com/gofiber/fiber/v3"
@@ -23,7 +24,13 @@ type userRow struct {
 func getUserByUsername(db *sql.DB, username string) (*userRow, string, error) {
 	var u userRow
 	var hash string
-	err := db.QueryRow(`SELECT id, username, role, password_hash FROM app_user WHERE lower(username)=lower(?)`, username).Scan(&u.ID, &u.Username, &u.Role, &hash)
+	err := dbutil.QueryRowWithRetry(db,
+		`SELECT id, username, role, password_hash FROM app_user WHERE lower(username)=lower(?)`,
+		[]any{username},
+		func(row *sql.Row) error {
+			return row.Scan(&u.ID, &u.Username, &u.Role, &hash)
+		},
+	)
 	if err != nil {
 		return nil, "", err
 	}
@@ -31,7 +38,10 @@ func getUserByUsername(db *sql.DB, username string) (*userRow, string, error) {
 }
 
 func insertUser(db *sql.DB, username, passwordHash, role string) (int64, error) {
-	res, err := db.Exec(`INSERT INTO app_user (username, password_hash, role) VALUES (?, ?, ?)`, username, passwordHash, role)
+	res, err := dbutil.ExecWithRetry(db,
+		`INSERT INTO app_user (username, password_hash, role) VALUES (?, ?, ?)`,
+		username, passwordHash, role,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -40,14 +50,19 @@ func insertUser(db *sql.DB, username, passwordHash, role string) (int64, error) 
 
 func countUsers(db *sql.DB) (int64, error) {
 	var n int64
-	err := db.QueryRow(`SELECT COUNT(*) FROM app_user`).Scan(&n)
+	err := dbutil.QueryRowWithRetry(db, `SELECT COUNT(*) FROM app_user`, []any{}, func(row *sql.Row) error {
+		return row.Scan(&n)
+	})
 	return n, err
 }
 
 func upsertSession(db *sql.DB, userID int64, ttl time.Duration) (string, time.Time, error) {
 	token := uuid.NewString()
 	expires := time.Now().Add(ttl)
-	_, err := db.Exec(`INSERT INTO app_session (token, user_id, expires_at) VALUES (?, ?, ?)`, token, userID, expires.UTC())
+	_, err := dbutil.ExecWithRetry(db,
+		`INSERT INTO app_session (token, user_id, expires_at) VALUES (?, ?, ?)`,
+		token, userID, expires.UTC(),
+	)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -55,18 +70,20 @@ func upsertSession(db *sql.DB, userID int64, ttl time.Duration) (string, time.Ti
 }
 
 func deleteSession(db *sql.DB, token string) {
-	_, _ = db.Exec(`DELETE FROM app_session WHERE token=?`, token)
+	_, _ = dbutil.ExecWithRetry(db, `DELETE FROM app_session WHERE token=?`, token)
 }
 
 func findSessionUser(db *sql.DB, token string) (*userRow, error) {
 	var u userRow
 	var expires time.Time
-	err := db.QueryRow(`
+	err := dbutil.QueryRowWithRetry(db, `
         SELECT u.id, u.username, u.role, s.expires_at
         FROM app_session s
         JOIN app_user u ON u.id = s.user_id
         WHERE s.token = ?
-    `, token).Scan(&u.ID, &u.Username, &u.Role, &expires)
+	`, []any{token}, func(row *sql.Row) error {
+		return row.Scan(&u.ID, &u.Username, &u.Role, &expires)
+	})
 	if err != nil {
 		return nil, err
 	}

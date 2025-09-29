@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	dbutil "emby-analytics/internal/db"
 	"emby-analytics/internal/logging"
 	"emby-analytics/internal/media"
 	"strings"
@@ -178,7 +179,7 @@ func (sp *SessionProcessor) startNewSession(session media.Session, startTime tim
 func (sp *SessionProcessor) updateSessionDuration(tracked *TrackedSession, currentTime time.Time) {
 	duration := tracked.AccumulatedSec
 
-	_, err := sp.DB.Exec(`
+	_, err := dbutil.ExecWithRetry(sp.DB, `
         UPDATE play_sessions 
         SET ended_at = ?, is_active = true 
         WHERE id = ?
@@ -198,7 +199,7 @@ func (sp *SessionProcessor) finalizeSession(tracked *TrackedSession, endTime tim
 	duration := tracked.AccumulatedSec
 
 	// Update play_session as ended
-	_, err := sp.DB.Exec(`
+	_, err := dbutil.ExecWithRetry(sp.DB, `
 		UPDATE play_sessions 
 		SET ended_at = ?, is_active = false 
 		WHERE id = ?
@@ -225,7 +226,7 @@ func (sp *SessionProcessor) createOrUpdateInterval(tracked *TrackedSession, endT
 	// - If we have a current interval for this tracked segment, update it
 	// - Otherwise, insert a new interval and remember its id
 	if tracked.CurrentIntervalID != 0 {
-		_, uerr := sp.DB.Exec(`
+		_, uerr := dbutil.ExecWithRetry(sp.DB, `
             UPDATE play_intervals
             SET end_ts = ?, duration_seconds = ?
             WHERE id = ?
@@ -236,7 +237,7 @@ func (sp *SessionProcessor) createOrUpdateInterval(tracked *TrackedSession, endT
 		return
 	}
 
-	res, ierr := sp.DB.Exec(`
+	res, ierr := dbutil.ExecWithRetry(sp.DB, `
         INSERT INTO play_intervals 
         (session_fk, item_id, user_id, start_ts, end_ts, start_pos_ticks, end_pos_ticks, duration_seconds, seeked, server_id)
         SELECT id, item_id, user_id, ?, ?, 0, 0, ?, 0, server_id
@@ -255,7 +256,11 @@ func (sp *SessionProcessor) createOrUpdateInterval(tracked *TrackedSession, endT
 func (sp *SessionProcessor) createPlaySession(session media.Session, startTime time.Time) (int64, error) {
 	// Check if a session already exists for this (server_id, session_id, item_id)
 	var existingID int64
-	err := sp.DB.QueryRow(`SELECT id FROM play_sessions WHERE server_id=? AND session_id=? AND item_id=?`, session.ServerID, session.SessionID, session.ItemID).Scan(&existingID)
+	err := dbutil.QueryRowWithRetry(sp.DB,
+		`SELECT id FROM play_sessions WHERE server_id=? AND session_id=? AND item_id=?`,
+		[]any{session.ServerID, session.SessionID, session.ItemID},
+		func(row *sql.Row) error { return row.Scan(&existingID) },
+	)
 	if err == nil {
 		// Reactivate existing row and refresh transcode details (best effort)
 		transcodeReasons := strings.Join(session.TranscodeReasons, ",")
@@ -264,7 +269,7 @@ func (sp *SessionProcessor) createPlaySession(session media.Session, startTime t
 		videoTo := strings.ToUpper(session.TranscodeVideoCodec)
 		audioFrom := strings.ToUpper(session.AudioCodec)
 		audioTo := strings.ToUpper(session.TranscodeAudioCodec)
-		_, _ = sp.DB.Exec(`
+		_, _ = dbutil.ExecWithRetry(sp.DB, `
             UPDATE play_sessions 
             SET is_active = true, ended_at = NULL,
                 play_method = ?,
@@ -276,9 +281,12 @@ func (sp *SessionProcessor) createPlaySession(session media.Session, startTime t
                 audio_codec_from = COALESCE(NULLIF(?, ''), audio_codec_from),
                 audio_codec_to   = COALESCE(NULLIF(?, ''), audio_codec_to)
             WHERE id = ?
-        `, session.PlayMethod, transcodeReasons, session.VideoMethod, session.AudioMethod,
+		`, session.PlayMethod, transcodeReasons, session.VideoMethod, session.AudioMethod,
 			videoFrom, videoTo, audioFrom, audioTo, existingID)
 		return existingID, nil
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return 0, err
 	}
 
 	transcodeReasons := strings.Join(session.TranscodeReasons, ",")
@@ -286,7 +294,7 @@ func (sp *SessionProcessor) createPlaySession(session media.Session, startTime t
 	videoTo := strings.ToUpper(session.TranscodeVideoCodec)
 	audioFrom := strings.ToUpper(session.AudioCodec)
 	audioTo := strings.ToUpper(session.TranscodeAudioCodec)
-	res, ierr := sp.DB.Exec(`
+	res, ierr := dbutil.ExecWithRetry(sp.DB, `
         INSERT INTO play_sessions
         (user_id, user_name, session_id, device_id, client_name, item_id, item_name, item_type,
          play_method, started_at, is_active, transcode_reasons, remote_address,
@@ -340,7 +348,7 @@ func (sp *SessionProcessor) enrichLibraryItem(s media.Session) {
 		return
 	}
 	// Upsert into library_item (keep it minimal and non-destructive)
-	_, _ = sp.DB.Exec(`
+	_, _ = dbutil.ExecWithRetry(sp.DB, `
         INSERT INTO library_item (id, server_id, name, media_type, updated_at)
         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(id) DO UPDATE SET
