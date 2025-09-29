@@ -79,6 +79,8 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const sessionsLenRef = useRef(0);
+  const snapshotRetryRef = useRef<NodeJS.Timeout | null>(null);
+  const loadSnapshotRef = useRef<(() => Promise<void>) | null>(null);
   // Stable ordering: remember first-seen order for each session id
   const firstSeenRef = useRef<Map<string, number>>(new Map());
   const orderCounterRef = useRef(0);
@@ -117,11 +119,25 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
       const arr = Array.isArray(data) ? data : [];
       setSessions(orderSessions(arr));
       setError(null);
+      if (snapshotRetryRef.current) {
+        clearTimeout(snapshotRetryRef.current);
+        snapshotRetryRef.current = null;
+      }
     } catch (e: unknown) {
       const msg = (e as Error)?.message || String(e);
       setError(`Failed to load now playing: ${msg}`);
+      if (!snapshotRetryRef.current) {
+        snapshotRetryRef.current = setTimeout(() => {
+          snapshotRetryRef.current = null;
+          void loadSnapshotRef.current?.();
+        }, 3000);
+      }
     }
   }, [orderSessions]);
+
+  useEffect(() => {
+    loadSnapshotRef.current = loadSnapshot;
+  }, [loadSnapshot]);
 
   const connectWS = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -140,6 +156,10 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
           reconnectTimeoutRef.current = null;
+        }
+        if (snapshotRetryRef.current) {
+          clearTimeout(snapshotRetryRef.current);
+          snapshotRetryRef.current = null;
         }
       };
 
@@ -196,6 +216,10 @@ export function NowPlayingProvider({ children }: NowPlayingProviderProps) {
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (snapshotRetryRef.current) {
+        clearTimeout(snapshotRetryRef.current);
+        snapshotRetryRef.current = null;
       }
     };
   }, [connectWS, loadSnapshot]);

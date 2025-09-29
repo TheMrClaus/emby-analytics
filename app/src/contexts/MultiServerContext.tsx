@@ -35,6 +35,8 @@ export function MultiServerProvider({ children }: { children: ReactNode }) {
   const [server, setServerState] = useState<ServerAlias>(getInitialServer());
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<NodeJS.Timeout | null>(null);
+  const snapshotRetryRef = useRef<NodeJS.Timeout | null>(null);
+  const loadSnapshotRef = useRef<((alias: ServerAlias) => Promise<void>) | null>(null);
 
   const updateServer = useCallback((s: ServerAlias) => {
     setServerState(s);
@@ -72,13 +74,27 @@ export function MultiServerProvider({ children }: { children: ReactNode }) {
         const data: MultiNowEntry[] = await res.json();
         setSessions(orderSessions(Array.isArray(data) ? data : []));
         setError(null);
+        if (snapshotRetryRef.current) {
+          clearTimeout(snapshotRetryRef.current);
+          snapshotRetryRef.current = null;
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         setError(`Failed to load now playing: ${msg}`);
+        if (!snapshotRetryRef.current) {
+          snapshotRetryRef.current = setTimeout(() => {
+            snapshotRetryRef.current = null;
+            void loadSnapshotRef.current?.(alias);
+          }, 3000);
+        }
       }
     },
     [orderSessions]
   );
+
+  useEffect(() => {
+    loadSnapshotRef.current = loadSnapshot;
+  }, [loadSnapshot]);
 
   const connectWS = useCallback(
     (alias: ServerAlias) => {
@@ -93,6 +109,10 @@ export function MultiServerProvider({ children }: { children: ReactNode }) {
           if (reconnectRef.current) {
             clearTimeout(reconnectRef.current);
             reconnectRef.current = null;
+          }
+          if (snapshotRetryRef.current) {
+            clearTimeout(snapshotRetryRef.current);
+            snapshotRetryRef.current = null;
           }
         };
         ws.onmessage = (ev) => {
@@ -133,6 +153,10 @@ export function MultiServerProvider({ children }: { children: ReactNode }) {
     return () => {
       if (wsRef.current) wsRef.current.close();
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
+      if (snapshotRetryRef.current) {
+        clearTimeout(snapshotRetryRef.current);
+        snapshotRetryRef.current = null;
+      }
     };
   }, [server, connectWS, loadSnapshot]);
 
