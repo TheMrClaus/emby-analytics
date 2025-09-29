@@ -30,8 +30,9 @@ import {
   syncServer,
   deleteServerMedia,
   fetchRuntimeOutliers,
+  fetchItemsByIds,
 } from "../lib/api";
-import type { ServerSyncProgress } from "../types";
+import type { ItemRow, RuntimeOutlier, RuntimeOutlierResponse, ServerSyncProgress } from "../types";
 import useSWR from "swr";
 import { useRefreshStatus } from "../hooks/useData";
 
@@ -98,6 +99,7 @@ export default function SettingsPage() {
   const [editDraft, setEditDraft] = useState<
     Partial<{ username: string; password: string; role: "admin" | "user" }>
   >({});
+  const [selectedOutlier, setSelectedOutlier] = useState<RuntimeOutlier | null>(null);
 
   const runtimeOutlierLimit = 100;
   const shouldLoadRuntimeOutliers = meRole?.toLowerCase() === "admin";
@@ -106,7 +108,7 @@ export default function SettingsPage() {
     error: runtimeOutliersError,
     isLoading: runtimeOutliersLoading,
     mutate: reloadRuntimeOutliers,
-  } = useSWR(
+  } = useSWR<RuntimeOutlierResponse>(
     shouldLoadRuntimeOutliers ? ["runtimeOutliers", runtimeOutlierLimit] : null,
     () => fetchRuntimeOutliers(runtimeOutlierLimit),
     { revalidateOnFocus: false }
@@ -116,6 +118,19 @@ export default function SettingsPage() {
   const runtimeOutlierThresholdDays =
     Math.round((runtimeOutlierThresholdMinutes / (60 * 24)) * 10) / 10;
   const runtimeOutlierItems = runtimeOutliers?.items ?? [];
+  const {
+    data: selectedOutlierDetails,
+    isLoading: selectedOutlierDetailsLoading,
+    error: selectedOutlierDetailsError,
+  } = useSWR<ItemRow[] | null>(
+    selectedOutlier?.item_id ? ["outlier-detail", selectedOutlier.item_id] : null,
+    async () => {
+      if (!selectedOutlier?.item_id) return null;
+      const detail = await fetchItemsByIds([selectedOutlier.item_id]);
+      return detail;
+    },
+    { revalidateOnFocus: false }
+  );
 
   useEffect(() => {
     (async () => {
@@ -742,48 +757,69 @@ export default function SettingsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {runtimeOutlierItems.map((item) => (
-                        <tr key={item.library_id} className="border-t border-neutral-700/60">
-                          <td className="py-2 pr-4 align-top">
-                            <div className="text-white font-medium">{item.name || "Unknown"}</div>
-                            <div className="mt-1 space-y-1 text-xs text-gray-400">
-                              {(item.server_type || item.server_id) && (
-                                <div>
-                                  {(item.server_type && item.server_type.length > 0 && (
-                                    <span className="uppercase tracking-wide text-gray-300">
-                                      {item.server_type}
-                                    </span>
-                                  )) || null}
-                                  {item.server_id && (
-                                    <span className="ml-2 text-gray-500">{item.server_id}</span>
+                      {runtimeOutlierItems.map((item) => {
+                        const isSelected = selectedOutlier?.library_id === item.library_id;
+                        return (
+                          <tr
+                            key={item.library_id}
+                            className={`border-t border-neutral-700/60 ${
+                              isSelected ? "bg-neutral-700/30" : ""
+                            }`}
+                          >
+                            <td className="py-2 pr-4 align-top">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedOutlier(item)}
+                                className="text-left w-full group"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="text-white font-medium group-hover:text-amber-300">
+                                    {item.name || "Unknown"}
+                                  </span>
+                                  <span className="text-xs text-amber-400 hidden group-hover:inline">
+                                    View details
+                                  </span>
+                                </div>
+                                <div className="mt-1 space-y-1 text-xs text-gray-400">
+                                  {(item.server_type || item.server_id) && (
+                                    <div>
+                                      {(item.server_type && item.server_type.length > 0 && (
+                                        <span className="uppercase tracking-wide text-gray-300">
+                                          {item.server_type}
+                                        </span>
+                                      )) || null}
+                                      {item.server_id && (
+                                        <span className="ml-2 text-gray-500">{item.server_id}</span>
+                                      )}
+                                    </div>
                                   )}
+                                  <div className="text-gray-500">
+                                    Library ID: <code className="text-gray-300">{item.library_id}</code>
+                                  </div>
+                                  {item.item_id && (
+                                    <div className="text-gray-500">
+                                      Server Item: <code className="text-gray-300">{item.item_id}</code>
+                                    </div>
+                                  )}
+                                  <div className="text-gray-500">
+                                    Stored ticks: <code className="text-gray-300">{item.runtime_ticks}</code>
+                                  </div>
                                 </div>
-                              )}
-                              <div className="text-gray-500">
-                                Library ID: <code className="text-gray-300">{item.library_id}</code>
-                              </div>
-                              {item.item_id && (
-                                <div className="text-gray-500">
-                                  Server Item: <code className="text-gray-300">{item.item_id}</code>
-                                </div>
-                              )}
-                              <div className="text-gray-500">
-                                Stored ticks: <code className="text-gray-300">{item.runtime_ticks}</code>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-2 pr-4 align-top text-gray-200">
-                            <div className="font-semibold">{item.runtime_hours}</div>
-                            <div className="text-xs text-gray-500">{item.runtime_minutes} minutes</div>
-                          </td>
-                          <td className="py-2 pr-4 align-top text-gray-400">
-                            {item.updated_at || "—"}
-                          </td>
-                          <td className="py-2 pr-4 align-top text-gray-400">
-                            {item.created_at || "—"}
-                          </td>
-                        </tr>
-                      ))}
+                              </button>
+                            </td>
+                            <td className="py-2 pr-4 align-top text-gray-200">
+                              <div className="font-semibold">{item.runtime_hours}</div>
+                              <div className="text-xs text-gray-500">{item.runtime_minutes} minutes</div>
+                            </td>
+                            <td className="py-2 pr-4 align-top text-gray-400">
+                              {item.updated_at || "—"}
+                            </td>
+                            <td className="py-2 pr-4 align-top text-gray-400">
+                              {item.created_at || "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -803,10 +839,114 @@ export default function SettingsPage() {
                 </p>
               )}
 
+              {selectedOutlier && (
+                <div className="mt-4 bg-neutral-900/40 border border-neutral-700 rounded-md p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">
+                        {selectedOutlier.name || "Unknown title"}
+                      </h3>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Library ID: <code className="text-gray-300">{selectedOutlier.library_id}</code>
+                        {selectedOutlier.item_id && (
+                          <>
+                            <span className="mx-2">•</span>Server Item ID:{" "}
+                            <code className="text-gray-300">{selectedOutlier.item_id}</code>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOutlier(null)}
+                      className="text-xs text-gray-400 hover:text-white"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <div className="mt-3 text-sm text-gray-300">
+                    <div>
+                      Reported runtime: <strong>{selectedOutlier.runtime_hours}</strong> (
+                      {selectedOutlier.runtime_minutes} minutes)
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Updated at {selectedOutlier.updated_at || "—"} • Created at {" "}
+                      {selectedOutlier.created_at || "—"}
+                    </div>
+                  </div>
+
+                  {selectedOutlierDetailsLoading && (
+                    <div className="mt-3 text-xs text-gray-400">Loading source metadata…</div>
+                  )}
+                  {selectedOutlierDetailsError && (
+                    <div className="mt-3 text-xs text-red-400">
+                      Failed to load item metadata. It may have been removed from the source
+                      server.
+                    </div>
+                  )}
+                  {!selectedOutlierDetailsLoading && !selectedOutlierDetailsError && (
+                    <div className="mt-3 text-xs text-gray-300 space-y-1">
+                      {selectedOutlierDetails && selectedOutlierDetails.length > 0 ? (
+                        <>
+                          <div>
+                            <span className="text-gray-400">Analytics record:</span>{" "}
+                            {selectedOutlierDetails[0].name || "(no name cached)"}
+                          </div>
+                          {selectedOutlierDetails[0].type && (
+                            <div className="text-gray-400">
+                              Media type: {selectedOutlierDetails[0].type}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div>
+                          No analytics metadata is currently cached for this server item. This
+                          usually means the title was removed from Emby without running the missing
+                          item cleanup job yet.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                    {selectedOutlier.item_id && (
+                      <a
+                        href={`/items/by-ids?ids=${encodeURIComponent(selectedOutlier.item_id)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-neutral-700 text-gray-200 hover:border-amber-500 hover:text-amber-200"
+                      >
+                        View analytics JSON
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void navigator.clipboard?.writeText(selectedOutlier.library_id);
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-neutral-700 text-gray-200 hover:border-amber-500 hover:text-amber-200"
+                    >
+                      Copy library ID
+                    </button>
+                    {selectedOutlier.item_id && (
+                      <button
+                        type="button"
+                        onClick={() => void navigator.clipboard?.writeText(selectedOutlier.item_id)}
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-neutral-700 text-gray-200 hover:border-amber-500 hover:text-amber-200"
+                      >
+                        Copy server item ID
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="mt-4 text-xs text-gray-500 bg-neutral-900/40 border border-neutral-700 rounded-md p-3">
                 Entries with unrealistic runtimes are automatically reset the next time they are
                 encountered. If you already refreshed a title in Emby, run a library sync to
-                repopulate its accurate runtime.
+                repopulate its accurate runtime or use the missing-items cleanup job to remove stale
+                library rows.
               </div>
             </div>
           )}
