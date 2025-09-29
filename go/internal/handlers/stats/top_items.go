@@ -24,10 +24,6 @@ type TopItem struct {
 	ServerID   string  `json:"server_id,omitempty"`
 }
 
-var topItemsMultiMgr *media.MultiServerManager
-
-func SetMultiServerManager(mgr *media.MultiServerManager) { topItemsMultiMgr = mgr }
-
 // isDisallowedTopItemType filters out non-content entity types from Top Items.
 // We allow movies/episodes (and unknowns to be enriched), and explicitly exclude people and library containers.
 func isDisallowedTopItemType(t string) bool {
@@ -272,7 +268,7 @@ func TopItems(db *sql.DB, em *emby.Client) fiber.Handler {
 		}
 
 		// 7. Enrichment: prefer multi-server resolution first, then Emby fallback for display
-		if topItemsMultiMgr != nil {
+		if mgr := getMultiServerManager(); mgr != nil {
 			enrichItemsMulti(db, finalResult)
 		}
 		enrichItems(finalResult, em)
@@ -593,7 +589,13 @@ func enrichItemsMulti(db *sql.DB, items []TopItem) {
 		idx[items[i].ItemID] = &items[i]
 	}
 	for sid, idlist := range byServer {
-		client, ok := topItemsMultiMgr.GetClient(sid)
+		mgr := getMultiServerManager()
+		client, ok := func() (media.MediaServerClient, bool) {
+			if mgr == nil {
+				return nil, false
+			}
+			return mgr.GetClient(sid)
+		}()
 		if !ok || client == nil || len(idlist) == 0 {
 			continue
 		}
@@ -665,7 +667,10 @@ func enrichItemsMulti(db *sql.DB, items []TopItem) {
 	}
 
 	// Try each client for each ID until a hit
-	clients := topItemsMultiMgr.GetEnabledClients()
+	clients := map[string]media.MediaServerClient{}
+	if mgr := getMultiServerManager(); mgr != nil {
+		clients = mgr.GetEnabledClients()
+	}
 	for id := range seen {
 		var found bool
 		for sid, client := range clients {

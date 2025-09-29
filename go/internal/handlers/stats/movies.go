@@ -86,39 +86,19 @@ func Movies(db *sql.DB) fiber.Handler {
 			log.Printf("[movies] Error finding largest movie: %v", err)
 		}
 
-		// Get longest runtime movie
+		// Get longest runtime movie, validating via live server metadata when available
 		longestQuery := fmt.Sprintf(`
-			SELECT id, name, run_time_ticks / 600000000 
+			SELECT id, server_id, server_type, item_id, name, run_time_ticks / 600000000, run_time_ticks
 			FROM library_item 
 			WHERE %s 
 			  AND run_time_ticks > 0
 			ORDER BY run_time_ticks DESC 
 			LIMIT 1`, movieWhere)
-		{
-			var longestID string
-			for attempt := 0; attempt < runtimeOutlierMaxFixPasses; attempt++ {
-				err = db.QueryRow(longestQuery, movieArgs...).Scan(&longestID, &data.LongestMovieName, &data.LongestRuntime)
-				if err != nil {
-					if err != sql.ErrNoRows {
-						log.Printf("[movies] Error finding longest movie: %v", err)
-					}
-					break
-				}
-				if !isRuntimeOutlier(data.LongestRuntime) {
-					break
-				}
-				if strings.TrimSpace(longestID) == "" {
-					break
-				}
-				if ferr := clearRuntimeOutlier(db, longestID, data.LongestRuntime); ferr != nil {
-					log.Printf("[movies] Failed clearing runtime outlier for %s: %v", longestID, ferr)
-					break
-				}
-				// Retry to find the next suitable candidate after clearing the outlier
-				longestID = ""
-				data.LongestMovieName = ""
-				data.LongestRuntime = 0
-			}
+		if candidate, cerr := findValidLongestMovie(db, longestQuery, movieArgs...); cerr == nil && candidate != nil {
+			data.LongestMovieName = candidate.Name
+			data.LongestRuntime = candidate.RuntimeMinutes
+		} else if cerr != nil && cerr != sql.ErrNoRows {
+			log.Printf("[movies] Error determining longest movie: %v", cerr)
 		}
 
 		// Get shortest runtime movie (but reasonable minimum of 30 minutes)
@@ -288,4 +268,83 @@ func clearRuntimeOutlier(db *sql.DB, libraryID string, runtimeMinutes int) error
 		log.Printf("[movies] Cleared unrealistic runtime (%d minutes) for library item %s", runtimeMinutes, libraryID)
 	}
 	return err
+}
+
+type movieRuntimeCandidate struct {
+	LibraryID      string
+	ServerID       string
+	ServerType     string
+	ItemID         string
+	Name           string
+	RuntimeMinutes int
+	RuntimeTicks   int64
+}
+
+func findValidLongestMovie(db *sql.DB, query string, args ...any) (*movieRuntimeCandidate, error) {
+	var lastErr error
+	for attempt := 0; attempt < runtimeOutlierMaxFixPasses; attempt++ {
+		candidate := movieRuntimeCandidate{}
+		err := db.QueryRow(query, args...).Scan(&candidate.LibraryID, &candidate.ServerID, &candidate.ServerType, &candidate.ItemID, &candidate.Name, &candidate.RuntimeMinutes, &candidate.RuntimeTicks)
+		if err != nil {
+			return nil, err
+		}
+		if candidate.RuntimeMinutes <= 0 {
+			return &candidate, nil
+		}
+		if !isRuntimeOutlier(candidate.RuntimeMinutes) {
+			return &candidate, nil
+		}
+		if reconcileMovieRuntimeWithServer(db, &candidate) {
+			if !isRuntimeOutlier(candidate.RuntimeMinutes) {
+				return &candidate, nil
+			}
+		} else {
+			lastErr = fmt.Errorf("runtime still implausible after reconciliation")
+		}
+		if err := clearRuntimeOutlier(db, candidate.LibraryID, candidate.RuntimeMinutes); err != nil {
+			return nil, err
+		}
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, sql.ErrNoRows
+}
+
+func reconcileMovieRuntimeWithServer(db *sql.DB, cand *movieRuntimeCandidate) bool {
+	mgr := getMultiServerManager()
+	if mgr == nil || cand == nil {
+		return false
+	}
+	client, ok := mgr.GetClient(strings.TrimSpace(cand.ServerID))
+	if !ok || client == nil {
+		return false
+	}
+	if strings.TrimSpace(cand.ItemID) == "" {
+		return false
+	}
+	items, err := client.ItemsByIDs([]string{cand.ItemID})
+	if err != nil || len(items) == 0 {
+		return false
+	}
+	remote := items[0]
+	if remote.RuntimeMs == nil || *remote.RuntimeMs <= 0 {
+		return false
+	}
+	minutes := int((*remote.RuntimeMs + 59_999) / 60_000)
+	if minutes <= 0 {
+		return false
+	}
+	// Update local cache with authoritative runtime from server
+	ticks := *remote.RuntimeMs * 10_000
+	if _, err := db.Exec(`
+		UPDATE library_item
+		SET run_time_ticks = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, ticks, cand.LibraryID); err != nil {
+		log.Printf("[movies] Failed to upsert reconciled runtime for %s: %v", cand.LibraryID, err)
+	}
+	cand.RuntimeMinutes = minutes
+	cand.RuntimeTicks = ticks
+	return true
 }

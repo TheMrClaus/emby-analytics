@@ -763,7 +763,7 @@ export default function SettingsPage() {
                           <tr
                             key={item.library_id}
                             onClick={() => setSelectedOutlier(item)}
-                            className={`cursor-pointer border-t border-neutral-700/60 transition-colors ${
+                            className={`group cursor-pointer border-t border-neutral-700/60 transition-colors ${
                               isSelected ? "bg-neutral-700/40" : "hover:bg-neutral-800/40"
                             }`}
                             role="button"
@@ -774,6 +774,8 @@ export default function SettingsPage() {
                                 setSelectedOutlier(item);
                               }
                             }}
+                            data-item-clickable="true"
+                            aria-label={`View runtime details for ${item.name || "unknown"}`}
                           >
                             <td className="py-2 pr-4 align-top">
                               <div className="flex items-center gap-2">
@@ -923,21 +925,27 @@ export default function SettingsPage() {
                         View analytics JSON
                       </a>
                     )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof navigator !== "undefined" && navigator.clipboard) {
+                        void navigator.clipboard.writeText(selectedOutlier.library_id);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-neutral-700 text-gray-200 hover:border-amber-500 hover:text-amber-200"
+                  >
+                    Copy library ID
+                  </button>
+                  {selectedOutlier.item_id && (
                     <button
                       type="button"
                       onClick={() => {
-                        void navigator.clipboard?.writeText(selectedOutlier.library_id);
+                        if (typeof navigator !== "undefined" && navigator.clipboard) {
+                          void navigator.clipboard.writeText(selectedOutlier.item_id);
+                        }
                       }}
                       className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-neutral-700 text-gray-200 hover:border-amber-500 hover:text-amber-200"
                     >
-                      Copy library ID
-                    </button>
-                    {selectedOutlier.item_id && (
-                      <button
-                        type="button"
-                        onClick={() => void navigator.clipboard?.writeText(selectedOutlier.item_id)}
-                        className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-neutral-700 text-gray-200 hover:border-amber-500 hover:text-amber-200"
-                      >
                         Copy server item ID
                       </button>
                     )}
