@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"emby-analytics/internal/handlers/admin"
@@ -36,6 +37,11 @@ type GenreStats struct {
 	Genre string `json:"genre"`
 	Count int    `json:"count"`
 }
+
+const (
+	maxRuntimeMinutesToTrust   = 24 * 60
+	maxRuntimeOutlierFixPasses = 3
+)
 
 func Movies(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
@@ -87,15 +93,37 @@ func Movies(db *sql.DB) fiber.Handler {
 
 		// Get longest runtime movie
 		longestQuery := fmt.Sprintf(`
-			SELECT name, run_time_ticks / 600000000 
+			SELECT id, name, run_time_ticks / 600000000 
 			FROM library_item 
 			WHERE %s 
 			  AND run_time_ticks > 0
 			ORDER BY run_time_ticks DESC 
 			LIMIT 1`, movieWhere)
-		err = db.QueryRow(longestQuery, movieArgs...).Scan(&data.LongestMovieName, &data.LongestRuntime)
-		if err != nil && err != sql.ErrNoRows {
-			log.Printf("[movies] Error finding longest movie: %v", err)
+		{
+			var longestID string
+			for attempt := 0; attempt < maxRuntimeOutlierFixPasses; attempt++ {
+				err = db.QueryRow(longestQuery, movieArgs...).Scan(&longestID, &data.LongestMovieName, &data.LongestRuntime)
+				if err != nil {
+					if err != sql.ErrNoRows {
+						log.Printf("[movies] Error finding longest movie: %v", err)
+					}
+					break
+				}
+				if data.LongestRuntime <= maxRuntimeMinutesToTrust {
+					break
+				}
+				if strings.TrimSpace(longestID) == "" {
+					break
+				}
+				if ferr := clearRuntimeOutlier(db, longestID, data.LongestRuntime); ferr != nil {
+					log.Printf("[movies] Failed clearing runtime outlier for %s: %v", longestID, ferr)
+					break
+				}
+				// Retry to find the next suitable candidate after clearing the outlier
+				longestID = ""
+				data.LongestMovieName = ""
+				data.LongestRuntime = 0
+			}
 		}
 
 		// Get shortest runtime movie (but reasonable minimum of 30 minutes)
@@ -249,4 +277,20 @@ func Movies(db *sql.DB) fiber.Handler {
 
 		return c.JSON(data)
 	}
+}
+
+func clearRuntimeOutlier(db *sql.DB, libraryID string, runtimeMinutes int) error {
+	if strings.TrimSpace(libraryID) == "" {
+		return fmt.Errorf("empty library item id")
+	}
+	_, err := db.Exec(`
+		UPDATE library_item
+		SET run_time_ticks = NULL,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, libraryID)
+	if err == nil {
+		log.Printf("[movies] Cleared unrealistic runtime (%d minutes) for library item %s", runtimeMinutes, libraryID)
+	}
+	return err
 }
