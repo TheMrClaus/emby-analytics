@@ -762,50 +762,53 @@ export default function SettingsPage() {
                         return (
                           <tr
                             key={item.library_id}
-                            className={`border-t border-neutral-700/60 ${
-                              isSelected ? "bg-neutral-700/30" : ""
+                            onClick={() => setSelectedOutlier(item)}
+                            className={`cursor-pointer border-t border-neutral-700/60 transition-colors ${
+                              isSelected ? "bg-neutral-700/40" : "hover:bg-neutral-800/40"
                             }`}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(evt) => {
+                              if (evt.key === "Enter" || evt.key === " ") {
+                                evt.preventDefault();
+                                setSelectedOutlier(item);
+                              }
+                            }}
                           >
                             <td className="py-2 pr-4 align-top">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedOutlier(item)}
-                                className="text-left w-full group"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span className="text-white font-medium group-hover:text-amber-300">
-                                    {item.name || "Unknown"}
-                                  </span>
-                                  <span className="text-xs text-amber-400 hidden group-hover:inline">
-                                    View details
-                                  </span>
-                                </div>
-                                <div className="mt-1 space-y-1 text-xs text-gray-400">
-                                  {(item.server_type || item.server_id) && (
-                                    <div>
-                                      {(item.server_type && item.server_type.length > 0 && (
-                                        <span className="uppercase tracking-wide text-gray-300">
-                                          {item.server_type}
-                                        </span>
-                                      )) || null}
-                                      {item.server_id && (
-                                        <span className="ml-2 text-gray-500">{item.server_id}</span>
-                                      )}
-                                    </div>
-                                  )}
-                                  <div className="text-gray-500">
-                                    Library ID: <code className="text-gray-300">{item.library_id}</code>
+                              <div className="flex items-center gap-2">
+                                <span className="text-white font-medium">
+                                  {item.name || "Unknown"}
+                                </span>
+                                <span className="text-xs text-amber-400">
+                                  View details
+                                </span>
+                              </div>
+                              <div className="mt-1 space-y-1 text-xs text-gray-400">
+                                {(item.server_type || item.server_id) && (
+                                  <div>
+                                    {(item.server_type && item.server_type.length > 0 && (
+                                      <span className="uppercase tracking-wide text-gray-300">
+                                        {item.server_type}
+                                      </span>
+                                    )) || null}
+                                    {item.server_id && (
+                                      <span className="ml-2 text-gray-500">{item.server_id}</span>
+                                    )}
                                   </div>
-                                  {item.item_id && (
-                                    <div className="text-gray-500">
-                                      Server Item: <code className="text-gray-300">{item.item_id}</code>
-                                    </div>
-                                  )}
-                                  <div className="text-gray-500">
-                                    Stored ticks: <code className="text-gray-300">{item.runtime_ticks}</code>
-                                  </div>
+                                )}
+                                <div className="text-gray-500">
+                                  Library ID: <code className="text-gray-300">{item.library_id}</code>
                                 </div>
-                              </button>
+                                {item.item_id && (
+                                  <div className="text-gray-500">
+                                    Server Item: <code className="text-gray-300">{item.item_id}</code>
+                                  </div>
+                                )}
+                                <div className="text-gray-500">
+                                  Stored ticks: <code className="text-gray-300">{item.runtime_ticks}</code>
+                                </div>
+                              </div>
                             </td>
                             <td className="py-2 pr-4 align-top text-gray-200">
                               <div className="font-semibold">{item.runtime_hours}</div>
