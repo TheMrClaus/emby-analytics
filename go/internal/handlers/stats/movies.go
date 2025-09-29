@@ -38,11 +38,6 @@ type GenreStats struct {
 	Count int    `json:"count"`
 }
 
-const (
-	maxRuntimeMinutesToTrust   = 24 * 60
-	maxRuntimeOutlierFixPasses = 3
-)
-
 func Movies(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		start := time.Now()
@@ -101,7 +96,7 @@ func Movies(db *sql.DB) fiber.Handler {
 			LIMIT 1`, movieWhere)
 		{
 			var longestID string
-			for attempt := 0; attempt < maxRuntimeOutlierFixPasses; attempt++ {
+			for attempt := 0; attempt < runtimeOutlierMaxFixPasses; attempt++ {
 				err = db.QueryRow(longestQuery, movieArgs...).Scan(&longestID, &data.LongestMovieName, &data.LongestRuntime)
 				if err != nil {
 					if err != sql.ErrNoRows {
@@ -109,7 +104,7 @@ func Movies(db *sql.DB) fiber.Handler {
 					}
 					break
 				}
-				if data.LongestRuntime <= maxRuntimeMinutesToTrust {
+				if !isRuntimeOutlier(data.LongestRuntime) {
 					break
 				}
 				if strings.TrimSpace(longestID) == "" {

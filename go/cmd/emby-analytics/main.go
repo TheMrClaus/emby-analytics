@@ -358,6 +358,7 @@ func main() {
 	app.Post("/admin/recover-intervals", adminAuth, admin.RecoverIntervalsHandler(sqlDB))
 	// Backfill series linkage for episodes
 	app.Get("/admin/backfill/series", adminAuth, admin.BackfillSeries(sqlDB, em, multiMgr))
+	app.Get("/admin/library/runtime-outliers", adminAuth, stats.RuntimeOutliers(sqlDB))
 	app.Post("/admin/backfill/series", adminAuth, admin.BackfillSeries(sqlDB, em, multiMgr))
 	app.Post("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
 	app.Get("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
