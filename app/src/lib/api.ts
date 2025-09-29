@@ -14,6 +14,7 @@ import {
   TopUser,
   UsageRow,
   UserDetail,
+  RuntimeOutlierResponse,
 } from "../types";
 import type { ServerAlias } from "../types/multi-server";
 
@@ -144,6 +145,8 @@ export const fetchUserDetail = (userId: string, days = 30, limit = 10) =>
   j<UserDetail>(`/stats/users/${userId}?days=${days}&limit=${limit}`);
 export const fetchItemsByIds = (ids: string[]) =>
   j<ItemRow[]>(`/items/by-ids?ids=${encodeURIComponent(ids.join(","))}`);
+export const fetchRuntimeOutliers = (limit = 50) =>
+  j<RuntimeOutlierResponse>(`/admin/library/runtime-outliers?limit=${limit}`);
 type SessionDetail = {
   item_name: string;
   item_type: string;

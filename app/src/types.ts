@@ -182,3 +182,22 @@ export type SeriesStats = {
   episodes_added_this_month: number;
   popular_genres: GenreStats[];
 };
+
+export type RuntimeOutlier = {
+  library_id: string;
+  server_id?: string;
+  server_type?: string;
+  item_id: string;
+  name: string;
+  runtime_minutes: number;
+  runtime_hours: string;
+  runtime_ticks: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RuntimeOutlierResponse = {
+  threshold_minutes: number;
+  has_more: boolean;
+  items: RuntimeOutlier[];
+};

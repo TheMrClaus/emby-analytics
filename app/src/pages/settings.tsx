@@ -29,6 +29,7 @@ import {
   MediaServerInfo,
   syncServer,
   deleteServerMedia,
+  fetchRuntimeOutliers,
 } from "../lib/api";
 import type { ServerSyncProgress } from "../types";
 import useSWR from "swr";
@@ -97,6 +98,24 @@ export default function SettingsPage() {
   const [editDraft, setEditDraft] = useState<
     Partial<{ username: string; password: string; role: "admin" | "user" }>
   >({});
+
+  const runtimeOutlierLimit = 100;
+  const shouldLoadRuntimeOutliers = meRole?.toLowerCase() === "admin";
+  const {
+    data: runtimeOutliers,
+    error: runtimeOutliersError,
+    isLoading: runtimeOutliersLoading,
+    mutate: reloadRuntimeOutliers,
+  } = useSWR(
+    shouldLoadRuntimeOutliers ? ["runtimeOutliers", runtimeOutlierLimit] : null,
+    () => fetchRuntimeOutliers(runtimeOutlierLimit),
+    { revalidateOnFocus: false }
+  );
+  const runtimeOutlierThresholdMinutes = runtimeOutliers?.threshold_minutes ?? 24 * 60;
+  const runtimeOutlierThresholdHours = Math.round((runtimeOutlierThresholdMinutes / 60) * 10) / 10;
+  const runtimeOutlierThresholdDays =
+    Math.round((runtimeOutlierThresholdMinutes / (60 * 24)) * 10) / 10;
+  const runtimeOutlierItems = runtimeOutliers?.items ?? [];
 
   useEffect(() => {
     (async () => {
@@ -662,12 +681,139 @@ export default function SettingsPage() {
                   preventing the most resource-intensive transcoding operations while preserving
                   user experience for audio and subtitle features.
                 </p>
+            </div>
+          </div>
+
+          {shouldLoadRuntimeOutliers && (
+            <div className="bg-neutral-800 rounded-lg p-6 mt-6">
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold">Runtime Outliers</h2>
+                  <p className="text-sm text-gray-400">
+                    Items reporting runtimes longer than {runtimeOutlierThresholdMinutes} minutes
+                    ({runtimeOutlierThresholdHours}h, {runtimeOutlierThresholdDays}d). These entries
+                    usually mean Emby cached a bad runtime before the source file was fixed.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void reloadRuntimeOutliers()}
+                  disabled={runtimeOutliersLoading}
+                  className={`inline-flex items-center gap-2 rounded-md border border-neutral-600 px-3 py-2 text-sm transition-colors ${
+                    runtimeOutliersLoading
+                      ? "bg-neutral-700/60 text-gray-400 cursor-wait"
+                      : "bg-neutral-800 hover:bg-neutral-700 text-gray-200"
+                  }`}
+                  title="Refresh runtime outliers"
+                >
+                  <RefreshCcw
+                    className={`w-4 h-4 ${runtimeOutliersLoading ? "animate-spin" : ""}`}
+                  />
+                  Refresh
+                </button>
+              </div>
+
+              {runtimeOutliersLoading && (
+                <div className="animate-pulse space-y-3">
+                  <div className="h-4 bg-neutral-700 rounded w-1/3" />
+                  <div className="h-4 bg-neutral-700 rounded w-1/2" />
+                  <div className="h-32 bg-neutral-700/60 rounded" />
+                </div>
+              )}
+
+              {!runtimeOutliersLoading && runtimeOutliersError && (
+                <div className="flex items-center gap-2 text-red-400">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>
+                    {runtimeOutliersError.message || "Failed to load runtime outliers"}
+                  </span>
+                </div>
+              )}
+
+              {!runtimeOutliersLoading && !runtimeOutliersError && runtimeOutlierItems.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-gray-300">
+                        <th className="py-2 pr-4">Title</th>
+                        <th className="py-2 pr-4">Runtime</th>
+                        <th className="py-2 pr-4">Updated</th>
+                        <th className="py-2 pr-4">Created</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {runtimeOutlierItems.map((item) => (
+                        <tr key={item.library_id} className="border-t border-neutral-700/60">
+                          <td className="py-2 pr-4 align-top">
+                            <div className="text-white font-medium">{item.name || "Unknown"}</div>
+                            <div className="mt-1 space-y-1 text-xs text-gray-400">
+                              {(item.server_type || item.server_id) && (
+                                <div>
+                                  {(item.server_type && item.server_type.length > 0 && (
+                                    <span className="uppercase tracking-wide text-gray-300">
+                                      {item.server_type}
+                                    </span>
+                                  )) || null}
+                                  {item.server_id && (
+                                    <span className="ml-2 text-gray-500">{item.server_id}</span>
+                                  )}
+                                </div>
+                              )}
+                              <div className="text-gray-500">
+                                Library ID: <code className="text-gray-300">{item.library_id}</code>
+                              </div>
+                              {item.item_id && (
+                                <div className="text-gray-500">
+                                  Server Item: <code className="text-gray-300">{item.item_id}</code>
+                                </div>
+                              )}
+                              <div className="text-gray-500">
+                                Stored ticks: <code className="text-gray-300">{item.runtime_ticks}</code>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-2 pr-4 align-top text-gray-200">
+                            <div className="font-semibold">{item.runtime_hours}</div>
+                            <div className="text-xs text-gray-500">{item.runtime_minutes} minutes</div>
+                          </td>
+                          <td className="py-2 pr-4 align-top text-gray-400">
+                            {item.updated_at || "—"}
+                          </td>
+                          <td className="py-2 pr-4 align-top text-gray-400">
+                            {item.created_at || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {!runtimeOutliersLoading && !runtimeOutliersError && runtimeOutlierItems.length === 0 && (
+                <div className="text-sm text-gray-400">
+                  All stored runtimes are below the current threshold. Newly corrected titles will
+                  drop off this list after the next library sync.
+                </div>
+              )}
+
+              {runtimeOutliers?.has_more && !runtimeOutliersLoading && !runtimeOutliersError && (
+                <p className="text-xs text-amber-300 mt-3">
+                  Showing the first {runtimeOutlierItems.length} entries. Use the admin API to
+                  inspect the full list if needed.
+                </p>
+              )}
+
+              <div className="mt-4 text-xs text-gray-500 bg-neutral-900/40 border border-neutral-700 rounded-md p-3">
+                Entries with unrealistic runtimes are automatically reset the next time they are
+                encountered. If you already refreshed a title in Emby, run a library sync to
+                repopulate its accurate runtime.
               </div>
             </div>
+          )}
 
-            {meRole && meRole.toLowerCase() === "admin" && (
-              <div className="bg-neutral-800 rounded-lg p-6 mt-6">
-                <div className="flex items-center gap-2 mb-4">
+          {meRole && meRole.toLowerCase() === "admin" && (
+            <div className="bg-neutral-800 rounded-lg p-6 mt-6">
+              <div className="flex items-center gap-2 mb-4">
                   <User className="w-5 h-5 text-gray-400" />
                   <h2 className="text-lg font-semibold">Users</h2>
                 </div>
