@@ -5,6 +5,12 @@ on:
     tags:
       - 'v*'
       - 'v*-*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag name (e.g., v0.3.1)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -18,11 +24,38 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Determine tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            tag="${{ github.event.inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ -z "$tag" ]]; then
+            echo "Tag name was not provided." >&2
+            exit 1
+          fi
+
+          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "Tag '$tag' was not found. Fetch tags or double-check the name." >&2
+            exit 1
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          if [[ "$tag" == *-* ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Extract tag release notes
         id: notes
         run: |
           notes_file="${RUNNER_TEMP}/release_notes.md"
-          tag="${GITHUB_REF_NAME}"
+          tag="${{ steps.tag.outputs.tag }}"
           git tag -l --format='%(contents)' "$tag" > "$notes_file"
           if [[ -s "$notes_file" ]]; then
             echo "body_path=$notes_file" >> "$GITHUB_OUTPUT"
@@ -37,11 +70,11 @@ jobs:
         if: steps.notes.outputs.has_notes == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          make_latest: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
+          prerelease: ${{ steps.tag.outputs.is_prerelease == 'true' }}
+          make_latest: ${{ steps.tag.outputs.is_prerelease == 'true' && 'false' || 'true' }}
           body_path: ${{ steps.notes.outputs.body_path }}
           generate_release_notes: false
         env:
@@ -51,11 +84,11 @@ jobs:
         if: steps.notes.outputs.has_notes != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          make_latest: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
+          prerelease: ${{ steps.tag.outputs.is_prerelease == 'true' }}
+          make_latest: ${{ steps.tag.outputs.is_prerelease == 'true' && 'false' || 'true' }}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
