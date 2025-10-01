@@ -264,7 +264,7 @@ export default function SettingsPage() {
           <title>Settings - Emby Analytics</title>
           <meta name="viewport" content="initial-scale=1, width=device-width" />
         </Head>
-        <div className="min-h-screen bg-neutral-900 text-white">
+        <div className="min-h-screen bg-neutral-900 text-white overflow-x-hidden">
           <Header />
           <main className="p-4 md:p-6 border-t border-neutral-800">
             <div className="max-w-4xl mx-auto">
@@ -300,7 +300,7 @@ export default function SettingsPage() {
           <title>Settings - Emby Analytics</title>
           <meta name="viewport" content="initial-scale=1, width=device-width" />
         </Head>
-        <div className="min-h-screen bg-neutral-900 text-white">
+        <div className="min-h-screen bg-neutral-900 text-white overflow-x-hidden">
           <Header />
           <main className="p-4 md:p-6 border-t border-neutral-800">
             <div className="max-w-4xl mx-auto">
@@ -334,7 +334,7 @@ export default function SettingsPage() {
         <title>Settings - Emby Analytics</title>
         <meta name="viewport" content="initial-scale=1, width=device-width" />
       </Head>
-      <div className="min-h-screen bg-neutral-900 text-white">
+      <div className="min-h-screen bg-neutral-900 text-white overflow-x-hidden">
         <Header />
         <main className="p-4 md:p-6 border-t border-neutral-800">
           <div className="max-w-4xl mx-auto">

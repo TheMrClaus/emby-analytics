@@ -1,5 +1,5 @@
 // app/src/components/Header.tsx
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import Link from "next/link";
 import { useUsage, useRefreshStatus, useVersion } from "../hooks/useData";
 import { startRefresh, setAdminToken, syncAllServers } from "../lib/api";
@@ -7,6 +7,9 @@ import { useRouter } from "next/router";
 import { fmtHours } from "../lib/format";
 
 export default function Header() {
+  // Mobile menu state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   // SWR-powered data
   const { data: weeklyUsage = [], error: usageError } = useUsage(7);
   const { data: refreshStatus } = useRefreshStatus(true); // poll regularly
@@ -102,21 +105,91 @@ export default function Header() {
     router.replace("/login");
   };
 
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "unset";
+    }
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [mobileMenuOpen]);
+
+  // Close menu on escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && mobileMenuOpen) {
+        setMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [mobileMenuOpen]);
+
   return (
-    <header className="bg-neutral-900 border-b border-neutral-700 px-6 py-4">
-      <div className="flex items-center justify-between">
-        {/* Title + Clock */}
-        <div className="flex items-center gap-8">
+    <>
+      <header className="bg-neutral-900 border-b border-neutral-700 px-4 md:px-6 py-3 md:py-4">
+        {/* Mobile Header */}
+        <div className="flex md:hidden items-center justify-between">
           <Link
             href="/"
-            className="text-2xl font-bold text-white hover:text-amber-300 transition-colors cursor-pointer"
+            className="text-lg font-bold text-white hover:text-amber-300 transition-colors"
           >
             Emby Analytics
           </Link>
+
+          <div className="flex items-center gap-3">
+            {/* Version badge - compact */}
+            {versionInfo && (
+              <a
+                href={versionInfo.url || "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-gray-300 font-mono"
+                title={versionInfo.update_available ? `Update: ${versionInfo.latest_tag}` : versionInfo.version}
+              >
+                {versionInfo.version}
+                {versionInfo.update_available && <span className="ml-1 text-red-500">●</span>}
+              </a>
+            )}
+
+            {/* Weekly Hours - compact */}
+            <div className="text-center">
+              <div className="text-[10px] text-gray-400">Week</div>
+              <div className="text-sm font-bold text-white">
+                {usageError ? <span className="text-red-400">!</span> : fmtHours(weeklyHours)}
+              </div>
+            </div>
+
+            {/* Hamburger Menu Button */}
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="p-2 text-white hover:text-amber-300 transition-colors"
+              aria-label="Open menu"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
         </div>
 
-        {/* Stats + Refresh */}
-        <div className="flex items-center gap-6">
+        {/* Desktop Header */}
+        <div className="hidden md:flex items-center justify-between">
+          {/* Title + Clock */}
+          <div className="flex items-center gap-8">
+            <Link
+              href="/"
+              className="text-2xl font-bold text-white hover:text-amber-300 transition-colors cursor-pointer"
+            >
+              Emby Analytics
+            </Link>
+          </div>
+
+          {/* Stats + Refresh */}
+          <div className="flex items-center gap-6">
           {/* Version badge */}
           <div className="text-xs text-gray-300">
             {versionInfo && (
@@ -227,7 +300,117 @@ export default function Header() {
             </button>
           </div>
         </div>
-      </div>
-    </header>
+        </div>
+      </header>
+
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 z-[100] md:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+
+          {/* Slide-in Menu */}
+          <div className="fixed top-0 right-0 bottom-0 w-80 max-w-[85vw] bg-neutral-900 border-l border-neutral-700 z-[101] md:hidden shadow-2xl">
+            <div className="flex flex-col h-full">
+              {/* Menu Header */}
+              <div className="flex items-center justify-between p-4 border-b border-neutral-700">
+                <h2 className="text-lg font-bold text-white">Menu</h2>
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-2 text-gray-400 hover:text-white transition-colors"
+                  aria-label="Close menu"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Menu Content */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {/* Refresh Button */}
+                <button
+                  onClick={() => {
+                    handleRefresh();
+                    setMobileMenuOpen(false);
+                  }}
+                  disabled={isRunning}
+                  className={[
+                    "w-full rounded-lg px-4 py-3 font-semibold text-black",
+                    "bg-amber-600 hover:bg-amber-500 active:bg-amber-700",
+                    "shadow-md transition-colors min-h-[44px]",
+                    isRunning ? "opacity-90 cursor-not-allowed" : "",
+                  ].join(" ")}
+                >
+                  {!isRunning && "Refresh Library Index"}
+                  {isRunning && (
+                    <>
+                      Refreshing… {Math.round(progress)}%
+                      {displayTotal > 0 && (
+                        <div className="text-xs mt-1 opacity-90">
+                          {displayProcessed}/{displayTotal}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </button>
+
+                {/* Progress bar for refresh */}
+                {isRunning && (
+                  <div className="w-full h-2 rounded-full bg-neutral-800">
+                    <div
+                      className="h-full rounded-full bg-amber-500 transition-all duration-300"
+                      style={{ width: `${Math.max(2, Math.min(100, progress))}%` }}
+                    />
+                  </div>
+                )}
+
+                {/* Navigation Links */}
+                <div className="space-y-2 pt-2">
+                  <Link
+                    href="/settings"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-between w-full p-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white transition-colors min-h-[44px]"
+                  >
+                    <span>Settings</span>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+
+                  <Link
+                    href="/api-explorer"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-between w-full p-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white transition-colors min-h-[44px]"
+                  >
+                    <span>API Explorer</span>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </Link>
+
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex items-center justify-between w-full p-3 rounded-lg bg-red-900/30 hover:bg-red-900/50 text-red-300 hover:text-white transition-colors min-h-[44px]"
+                  >
+                    <span>Logout</span>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </>
   );
 }

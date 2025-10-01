@@ -61,6 +61,7 @@ export default function PlaybackMethodsCard() {
   const [plexExternalUrl, setPlexExternalUrl] = useState<string>("");
   const [plexServerId, setPlexServerId] = useState<string>("");
   const [jfExternalUrl, setJfExternalUrl] = useState<string>("");
+  const [isMobile, setIsMobile] = useState(false);
 
   // Enhanced state for detailed view
   const [currentPage, setCurrentPage] = useState(1);
@@ -148,6 +149,16 @@ export default function PlaybackMethodsCard() {
       void fetchPage(currentPage, false);
     }
   }, [currentPage, showDetailed, fetchPage]);
+
+  // Detect mobile viewport
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Fetch config once on component mount to get Emby external URL
   useEffect(() => {
@@ -415,7 +426,11 @@ export default function PlaybackMethodsCard() {
               data={summaryChartData}
               keys={["value"]}
               indexBy="name"
-              margin={{ top: 20, right: 130, left: 50, bottom: 35 }}
+              margin={
+                isMobile
+                  ? { top: 20, right: 10, left: 45, bottom: 60 }
+                  : { top: 20, right: 130, left: 50, bottom: 35 }
+              }
               padding={0.3}
               valueScale={{ type: "linear" }}
               indexScale={{ type: "band", round: true }}
@@ -437,7 +452,7 @@ export default function PlaybackMethodsCard() {
               axisBottom={{
                 tickSize: 5,
                 tickPadding: 5,
-                tickRotation: 0,
+                tickRotation: isMobile ? -45 : 0,
                 format: (value) => value,
               }}
               axisLeft={{
@@ -467,20 +482,23 @@ export default function PlaybackMethodsCard() {
                   </div>
                 </div>
               )}
-              legends={[
-                {
-                  dataFrom: "indexes",
-                  anchor: "top-right",
-                  direction: "column",
-                  justify: false,
-                  translateX: 5,
-                  translateY: 10,
-                  itemsSpacing: 4,
-                  itemWidth: 120,
-                  itemHeight: 18,
-                  itemDirection: "left-to-right",
-                  itemOpacity: 0.85,
-                  symbolSize: 12,
+              legends={
+                isMobile
+                  ? []
+                  : [
+                      {
+                        dataFrom: "indexes",
+                        anchor: "top-right",
+                        direction: "column",
+                        justify: false,
+                        translateX: 5,
+                        translateY: 10,
+                        itemsSpacing: 4,
+                        itemWidth: 120,
+                        itemHeight: 18,
+                        itemDirection: "left-to-right",
+                        itemOpacity: 0.85,
+                        symbolSize: 12,
                   // Add left padding inside the legend item background by
                   // shifting the color swatch a few pixels to the right.
                   symbolShape: ({ x, y, size, fill, borderWidth, borderColor }: SymbolProps) => (
@@ -499,16 +517,17 @@ export default function PlaybackMethodsCard() {
                   symbolSpacing: 8,
                   itemBackground: "#ffffff",
                   itemTextColor: "#000000",
-                  effects: [
-                    {
-                      on: "hover",
-                      style: {
-                        itemOpacity: 1,
+                        effects: [
+                          {
+                            on: "hover",
+                            style: {
+                              itemOpacity: 1,
+                            },
+                          },
+                        ],
                       },
-                    },
-                  ],
-                },
-              ]}
+                    ]
+              }
               theme={{
                 axis: {
                   ticks: {

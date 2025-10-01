@@ -87,7 +87,7 @@ export default function GenrePage() {
       <Head>
         <title>{pageTitle} - Emby Analytics</title>
       </Head>
-      <div className="min-h-screen bg-neutral-900 text-white">
+      <div className="min-h-screen bg-neutral-900 text-white overflow-x-hidden">
         <Header />
         <main className="p-4 md:p-6 space-y-6 border-t border-neutral-800">
           {/* Header with back button */}

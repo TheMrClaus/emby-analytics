@@ -74,7 +74,7 @@ export default function CodecDetailPage() {
         <Head>
           <title>Loading Codec Details - Emby Analytics</title>
         </Head>
-        <div className="min-h-screen bg-neutral-900 text-white">
+        <div className="min-h-screen bg-neutral-900 text-white overflow-x-hidden">
           <Header />
           <main className="p-4 md:p-6">
             <div className="text-center py-12">
@@ -92,7 +92,7 @@ export default function CodecDetailPage() {
         <Head>
           <title>Error - Emby Analytics</title>
         </Head>
-        <div className="min-h-screen bg-neutral-900 text-white">
+        <div className="min-h-screen bg-neutral-900 text-white overflow-x-hidden">
           <Header />
           <main className="p-4 md:p-6">
             <div className="text-center py-12">
@@ -116,7 +116,7 @@ export default function CodecDetailPage() {
       <Head>
         <title>{title} - Emby Analytics</title>
       </Head>
-      <div className="min-h-screen bg-neutral-900 text-white">
+      <div className="min-h-screen bg-neutral-900 text-white overflow-x-hidden">
         <Header />
         <main className="p-4 md:p-6 space-y-6 border-t border-neutral-800">
           {/* Header with back button */}
