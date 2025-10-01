@@ -308,6 +308,7 @@ type DetailedLibraryItem struct {
 	Id           string   `json:"Id"`
 	Name         string   `json:"Name"`
 	Type         string   `json:"Type"`
+	Path         string   `json:"Path"`
 	Container    string   `json:"Container"`
 	RunTimeTicks int64    `json:"RunTimeTicks"`
 	Genres       []string `json:"Genres"`
@@ -442,6 +443,11 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 		var firstSize int64
 		var firstPath string
 
+		// Use top-level Path first (Emby API returns it here), fallback to MediaSources[0].Path
+		if item.Path != "" {
+			firstPath = item.Path
+		}
+
 		// Find the FIRST video stream only (matches C# plugin logic)
 		for _, source := range item.MediaSources {
 			if firstBitrate == 0 && source.Bitrate > 0 {
@@ -534,6 +540,11 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 		var firstBitrate int64
 		var firstSize int64
 		var firstPath string
+
+		// Use top-level Path first (Emby API returns it here), fallback to MediaSources[0].Path
+		if item.Path != "" {
+			firstPath = item.Path
+		}
 
 		// Find the FIRST video stream only (matches C# plugin logic)
 		for _, source := range item.MediaSources {
