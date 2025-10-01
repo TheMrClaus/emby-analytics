@@ -29,8 +29,23 @@ func Overview(db *sql.DB) fiber.Handler {
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to count users"})
 		}
 
-		// Count library items (excluding live TV)
-		err = db.QueryRow(`SELECT COUNT(*) FROM library_item WHERE media_type NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')`).Scan(&data.TotalItems)
+		// Count unique library items (excluding live TV, deduplicated by normalized file_path across servers)
+		// Only count items that have file_path populated (excludes servers without path support)
+		// Normalize paths by extracting everything after common library folders (Movies/, TV/, etc)
+		err = db.QueryRow(`
+			SELECT COUNT(DISTINCT
+				COALESCE(
+					NULLIF(SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/movies/') + 1), ''),
+					NULLIF(SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/tv/') + 1), ''),
+					NULLIF(SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/shows/') + 1), ''),
+					file_path
+				)
+			)
+			FROM library_item
+			WHERE media_type NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')
+				AND file_path IS NOT NULL
+				AND file_path != ''
+		`).Scan(&data.TotalItems)
 		if err != nil {
 			log.Printf("[overview] Error counting library items: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to count library items"})

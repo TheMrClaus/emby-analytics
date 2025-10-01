@@ -682,6 +682,9 @@ func (c *Client) FetchLibraryItems() ([]media.MediaItem, error) {
 						size := part.Size
 						item.FileSizeBytes = &size
 					}
+					if part.File != "" {
+						item.FilePath = part.File
+					}
 				}
 			}
 
