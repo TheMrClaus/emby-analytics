@@ -1,28 +1,19 @@
 // app/src/components/Header.tsx
 import { useRef } from "react";
 import Link from "next/link";
-import { useUsage, useNowSnapshot, useRefreshStatus, useVersion } from "../hooks/useData";
+import { useUsage, useRefreshStatus, useVersion } from "../hooks/useData";
 import { startRefresh, setAdminToken, syncAllServers } from "../lib/api";
 import { useRouter } from "next/router";
 import { fmtHours } from "../lib/format";
 
-type SnapshotEntry = {
-  play_method?: string;
-};
-
 export default function Header() {
   // SWR-powered data
   const { data: weeklyUsage = [], error: usageError } = useUsage(7);
-  const { data: nowPlaying = [], error: snapshotError } = useNowSnapshot();
   const { data: refreshStatus } = useRefreshStatus(true); // poll regularly
   const { data: versionInfo } = useVersion();
 
   // Derived UI counters
   const weeklyHours = weeklyUsage.reduce((acc, r) => acc + (r.hours || 0), 0);
-  const streamsTotal = nowPlaying.length;
-  // Backend provides play_method as "Direct" or "Transcode".
-  const directPlay = nowPlaying.filter((s: SnapshotEntry) => s.play_method !== "Transcode").length;
-  const transcoding = streamsTotal - directPlay;
 
   // Progress %
   const aggregateProcessed = Number(
@@ -163,26 +154,6 @@ export default function Header() {
                 <span className="text-red-400 text-sm">Error</span>
               ) : (
                 fmtHours(weeklyHours)
-              )}
-            </div>
-          </div>
-
-          {/* Current Streams */}
-          <div className="text-center">
-            <div className="text-sm text-gray-400">Streams</div>
-            <div className="text-xl font-bold text-white">
-              {snapshotError ? (
-                <span className="text-red-400 text-sm">Error</span>
-              ) : (
-                <>
-                  {streamsTotal}
-                  {streamsTotal > 0 && (
-                    <span className="text-sm ml-1">
-                      (<span className="text-green-400">{directPlay}D</span>/
-                      <span className="text-orange-400">{transcoding}T</span>)
-                    </span>
-                  )}
-                </>
               )}
             </div>
           </div>
