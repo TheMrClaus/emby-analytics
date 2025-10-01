@@ -11,8 +11,11 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
+	"emby-analytics/internal/config"
 	"emby-analytics/internal/emby"
+	"emby-analytics/internal/media"
 	syncpkg "emby-analytics/internal/sync"
+	"emby-analytics/internal/tasks"
 	"emby-analytics/internal/types"
 )
 
@@ -21,10 +24,12 @@ type Progress = types.Progress
 type RefreshManager struct {
 	mu       sync.Mutex
 	progress Progress
+	multiMgr *media.MultiServerManager
+	cfg      config.Config
 }
 
-func NewRefreshManager() *RefreshManager {
-	return &RefreshManager{}
+func NewRefreshManager(cfg config.Config, mgr *media.MultiServerManager) *RefreshManager {
+	return &RefreshManager{multiMgr: mgr, cfg: cfg}
 }
 
 func (rm *RefreshManager) set(p Progress) {
@@ -57,6 +62,8 @@ func (rm *RefreshManager) StartIncremental(db *sql.DB, em *emby.Client) {
 }
 
 func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize int, incremental bool) {
+	defer rm.triggerMultiServerSync(db)
+
 	var total int
 	var actualItemsProcessed int
 
@@ -239,6 +246,19 @@ func (rm *RefreshManager) refreshWorker(db *sql.DB, em *emby.Client, chunkSize i
 	}
 }
 
+func (rm *RefreshManager) triggerMultiServerSync(db *sql.DB) {
+	if rm.multiMgr == nil {
+		return
+	}
+	cfg := rm.cfg
+	go func() {
+		logging.Debug("refresh completed; ingesting external libraries")
+		tasks.IngestLibraries(db, rm.multiMgr, nil, nil)
+		logging.Debug("refresh completed; starting multi-server play sync")
+		tasks.RunOnce(db, rm.multiMgr, cfg)
+	}()
+}
+
 // processLibraryEntries handles the insertion and enrichment of library items
 func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, libraryEntries []emby.LibraryItem) int {
 	dbEntriesInserted := 0
@@ -323,21 +343,21 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
                         `, ep.SeriesId, ep.SeriesName)
 
 						// If this episode didn't have genres, try to populate from its Series genres
-                        if genresCSV == nil && em != nil {
-                            if cached, ok := seriesGenresCache[ep.SeriesId]; ok {
-                                if cached != nil {
-                                    db.Exec(`UPDATE library_item SET genres = COALESCE(genres, ?) WHERE id = ?`, *cached, entry.Id)
-                                }
-                            } else {
-                                if g, err := em.SeriesGenres(ep.SeriesId); err == nil && len(g) > 0 {
-                                    csv := strings.Join(g, ", ")
-                                    seriesGenresCache[ep.SeriesId] = &csv
-                                    db.Exec(`UPDATE library_item SET genres = COALESCE(genres, ?) WHERE id = ?`, csv, entry.Id)
-                                } else {
-                                    seriesGenresCache[ep.SeriesId] = nil
-                                }
-                            }
-                        }
+						if genresCSV == nil && em != nil {
+							if cached, ok := seriesGenresCache[ep.SeriesId]; ok {
+								if cached != nil {
+									db.Exec(`UPDATE library_item SET genres = COALESCE(genres, ?) WHERE id = ?`, *cached, entry.Id)
+								}
+							} else {
+								if g, err := em.SeriesGenres(ep.SeriesId); err == nil && len(g) > 0 {
+									csv := strings.Join(g, ", ")
+									seriesGenresCache[ep.SeriesId] = &csv
+									db.Exec(`UPDATE library_item SET genres = COALESCE(genres, ?) WHERE id = ?`, csv, entry.Id)
+								} else {
+									seriesGenresCache[ep.SeriesId] = nil
+								}
+							}
+						}
 					}
 				}
 			}
@@ -467,12 +487,32 @@ func StartIncrementalHandler(rm *RefreshManager, db *sql.DB, em *emby.Client) fi
 func StatusHandler(rm *RefreshManager) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		p := rm.get()
+		serverProgress := tasks.GetServerSyncProgressSnapshot()
+		aggregateProcessed := p.Processed
+		aggregateTotal := p.Total
+		multiRunning := false
+		for _, s := range serverProgress {
+			aggregateProcessed += s.Processed
+			aggregateTotal += s.Total
+			if s.Running && !s.Done {
+				multiRunning = true
+			}
+		}
+		running := (p.Running && !p.Done) || multiRunning
 		return c.JSON(fiber.Map{
-			"running":  p.Running && !p.Done,
-			"imported": p.Processed,
-			"total":    p.Total,
-			"page":     p.Page,
-			"error":    ifEmptyNil(p.Error),
+			"running":             running,
+			"imported":            aggregateProcessed,
+			"total":               aggregateTotal,
+			"page":                p.Page,
+			"error":               ifEmptyNil(p.Error),
+			"aggregate_processed": aggregateProcessed,
+			"aggregate_total":     aggregateTotal,
+			"servers":             serverProgress,
+			"refresh_only": fiber.Map{
+				"running":  p.Running && !p.Done,
+				"imported": p.Processed,
+				"total":    p.Total,
+			},
 		})
 	}
 }

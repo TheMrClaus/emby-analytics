@@ -12,27 +12,27 @@ import (
 	"emby-analytics/internal/config"
 	db "emby-analytics/internal/db"
 	emby "emby-analytics/internal/emby"
-    admin "emby-analytics/internal/handlers/admin"
-    auth "emby-analytics/internal/handlers/auth"
-    configHandler "emby-analytics/internal/handlers/config"
-    verhandler "emby-analytics/internal/handlers/version"
-    health "emby-analytics/internal/handlers/health"
-    images "emby-analytics/internal/handlers/images"
-    items "emby-analytics/internal/handlers/items"
-    now "emby-analytics/internal/handlers/now"
-    serversHandler "emby-analytics/internal/handlers/servers"
-    settings "emby-analytics/internal/handlers/settings"
-    stats "emby-analytics/internal/handlers/stats"
-    "emby-analytics/internal/logging"
-    "emby-analytics/internal/middleware"
-    "emby-analytics/internal/monitors"
-    "emby-analytics/internal/sync"
-    tasks "emby-analytics/internal/tasks"
+	admin "emby-analytics/internal/handlers/admin"
+	auth "emby-analytics/internal/handlers/auth"
+	configHandler "emby-analytics/internal/handlers/config"
+	health "emby-analytics/internal/handlers/health"
+	images "emby-analytics/internal/handlers/images"
+	items "emby-analytics/internal/handlers/items"
+	now "emby-analytics/internal/handlers/now"
+	serversHandler "emby-analytics/internal/handlers/servers"
+	settings "emby-analytics/internal/handlers/settings"
+	stats "emby-analytics/internal/handlers/stats"
+	verhandler "emby-analytics/internal/handlers/version"
+	"emby-analytics/internal/logging"
+	"emby-analytics/internal/middleware"
+	"emby-analytics/internal/monitors"
+	"emby-analytics/internal/sync"
+	tasks "emby-analytics/internal/tasks"
 
-    // Multi-server clients
-    "emby-analytics/internal/media"
-    "emby-analytics/internal/plex"
-    "emby-analytics/internal/jellyfin"
+	// Multi-server clients
+	"emby-analytics/internal/jellyfin"
+	"emby-analytics/internal/media"
+	"emby-analytics/internal/plex"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/recover"
@@ -101,49 +101,49 @@ func main() {
 	logger.Info("=====================================================")
 	logger.Info("        Starting Emby Analytics Application")
 	logger.Info("=====================================================")
-    em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
+	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
 
-    // Build MultiServerManager (Plex/Jellyfin for now; Emby support via legacy paths)
-    multiMgr := media.NewMultiServerManager()
-    for _, sc := range cfg.MediaServers {
-        switch sc.Type {
-        case media.ServerTypePlex:
-            multiMgr.AddServer(sc, plex.New(sc))
-        case media.ServerTypeJellyfin:
-            multiMgr.AddServer(sc, jellyfin.New(sc))
-        case media.ServerTypeEmby:
-            multiMgr.AddServer(sc, media.NewEmbyAdapter(sc))
-        }
-    }
+	// Build MultiServerManager (Plex/Jellyfin for now; Emby support via legacy paths)
+	multiMgr := media.NewMultiServerManager()
+	for _, sc := range cfg.MediaServers {
+		switch sc.Type {
+		case media.ServerTypePlex:
+			multiMgr.AddServer(sc, plex.New(sc))
+		case media.ServerTypeJellyfin:
+			multiMgr.AddServer(sc, jellyfin.New(sc))
+		case media.ServerTypeEmby:
+			multiMgr.AddServer(sc, media.NewEmbyAdapter(sc))
+		}
+	}
 
-    // ---- Database Initialization & Migration ----
-    absPath, err := filepath.Abs(cfg.SQLitePath)
-    if err != nil {
-        logger.Error("Failed to resolve SQLite path", "error", err, "path", cfg.SQLitePath)
-        os.Exit(1)
-    }
-    // Ensure DB directory exists and DB file is present (created as current docker user 1000:1000)
-    dbDir := filepath.Dir(absPath)
-    if err := os.MkdirAll(dbDir, 0755); err != nil {
-        logger.Error("Failed to create database directory", "error", err, "dir", dbDir)
-        os.Exit(1)
-    }
-    // Create DB file if missing, and verify read-write access
-    if f, err := os.OpenFile(absPath, os.O_RDWR|os.O_CREATE, 0644); err != nil {
-        logger.Error("Failed to create/open SQLite file", "error", err, "path", absPath)
-        logger.Error("Check that the directory is writable by UID:GID 1000:1000 or adjust host bind mount permissions")
-        os.Exit(1)
-    } else {
-        _ = f.Close()
-    }
+	// ---- Database Initialization & Migration ----
+	absPath, err := filepath.Abs(cfg.SQLitePath)
+	if err != nil {
+		logger.Error("Failed to resolve SQLite path", "error", err, "path", cfg.SQLitePath)
+		os.Exit(1)
+	}
+	// Ensure DB directory exists and DB file is present (created as current docker user 1000:1000)
+	dbDir := filepath.Dir(absPath)
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		logger.Error("Failed to create database directory", "error", err, "dir", dbDir)
+		os.Exit(1)
+	}
+	// Create DB file if missing, and verify read-write access
+	if f, err := os.OpenFile(absPath, os.O_RDWR|os.O_CREATE, 0644); err != nil {
+		logger.Error("Failed to create/open SQLite file", "error", err, "path", absPath)
+		logger.Error("Check that the directory is writable by UID:GID 1000:1000 or adjust host bind mount permissions")
+		os.Exit(1)
+	} else {
+		_ = f.Close()
+	}
 
-    dbURL := fmt.Sprintf("sqlite://file:%s?cache=shared&mode=rwc", filepath.ToSlash(absPath))
+	dbURL := fmt.Sprintf("sqlite://file:%s?cache=shared&mode=rwc", filepath.ToSlash(absPath))
 
-    if err := db.MigrateUp(dbURL); err != nil {
-        logger.Error("Database migrations failed", "error", err, "url", dbURL)
-        os.Exit(1)
-    }
-    logger.Info("Database migrations completed", "path", absPath)
+	if err := db.MigrateUp(dbURL); err != nil {
+		logger.Error("Database migrations failed", "error", err, "url", dbURL)
+		os.Exit(1)
+	}
+	logger.Info("Database migrations completed", "path", absPath)
 
 	// Open database connection for verification
 	sqlDB, err := db.Open(cfg.SQLitePath)
@@ -188,68 +188,72 @@ func main() {
 
 	// Initial user sync AFTER schema is ready.
 	logger.Info("Starting initial user and lifetime stats sync")
-	tasks.RunUserSyncOnce(sqlDB, em)
+	tasks.RunUserSyncOnce(sqlDB, multiMgr)
 	logger.Info("Initial user sync completed")
 
+	// Kick off background sync loops for playback history and user metadata across servers
+	tasks.StartSyncLoop(sqlDB, multiMgr, cfg)
+	tasks.StartUserSyncLoop(sqlDB, multiMgr, cfg)
+
 	// ---- Session Processing (Hybrid State-Polling Approach) ----
-    sessionProcessor := tasks.NewSessionProcessor(sqlDB, multiMgr)
+	sessionProcessor := tasks.NewSessionProcessor(sqlDB, multiMgr)
 	logger.Info("Session processor initialized")
 
 	pollInterval := time.Duration(cfg.NowPollSec) * time.Second
 	if pollInterval <= 0 {
 		pollInterval = 5 * time.Second
 	}
-    broadcaster := now.NewBroadcaster(em, pollInterval)
-    broadcaster.SessionProcessor = sessionProcessor.ProcessActiveSessions
-    now.SetBroadcaster(broadcaster)
-    now.SetMultiServerManager(multiMgr)
-    serversHandler.SetManager(multiMgr)
+	broadcaster := now.NewBroadcaster(em, pollInterval)
+	broadcaster.SessionProcessor = sessionProcessor.ProcessActiveSessions
+	now.SetBroadcaster(broadcaster)
+	now.SetMultiServerManager(multiMgr)
+	serversHandler.SetManager(multiMgr)
 	broadcaster.Start()
 	logger.Info("REST API session polling started", "interval", pollInterval)
 	defer broadcaster.Stop()
 
 	// ---- Fiber App and Routes ----
-    app := fiber.New(fiber.Config{
-        EnableIPValidation: true,
-        ProxyHeader:        fiber.HeaderXForwardedFor,
-    })
-    app.Use(recover.New())
+	app := fiber.New(fiber.Config{
+		EnableIPValidation: true,
+		ProxyHeader:        fiber.HeaderXForwardedFor,
+	})
+	app.Use(recover.New())
 
-    // CORS with credentials support (echo Origin)
-    app.Use(func(c fiber.Ctx) error {
-        origin := c.Get("Origin")
-        if origin != "" {
-            c.Set("Access-Control-Allow-Origin", origin)
-            c.Set("Vary", "Origin")
-            c.Set("Access-Control-Allow-Credentials", "true")
-            c.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Token")
-            c.Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-            if c.Method() == fiber.MethodOptions {
-                return c.SendStatus(fiber.StatusNoContent)
-            }
-        }
-        return c.Next()
-    })
+	// CORS with credentials support (echo Origin)
+	app.Use(func(c fiber.Ctx) error {
+		origin := c.Get("Origin")
+		if origin != "" {
+			c.Set("Access-Control-Allow-Origin", origin)
+			c.Set("Vary", "Origin")
+			c.Set("Access-Control-Allow-Credentials", "true")
+			c.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Admin-Token")
+			c.Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+			if c.Method() == fiber.MethodOptions {
+				return c.SendStatus(fiber.StatusNoContent)
+			}
+		}
+		return c.Next()
+	})
 
-    // Add structured logging middleware
-    app.Use(logging.FiberMiddleware(logger))
+	// Add structured logging middleware
+	app.Use(logging.FiberMiddleware(logger))
 
-    // Attach session user to context
-    app.Use(middleware.AttachUser(sqlDB, cfg))
+	// Attach session user to context
+	app.Use(middleware.AttachUser(sqlDB, cfg))
 
 	// Health Routes
 	// Optional: auto-auth cookie for UI
-    if cfg.AdminAutoCookie && cfg.AdminToken != "" {
-        app.Use(func(c fiber.Ctx) error {
-            c.Cookie(&fiber.Cookie{
-                Name:     "admin_token",
-                Value:    cfg.AdminToken,
-                HTTPOnly: true,
-                Path:     "/",
-            })
-            return c.Next()
-        })
-    }
+	if cfg.AdminAutoCookie && cfg.AdminToken != "" {
+		app.Use(func(c fiber.Ctx) error {
+			c.Cookie(&fiber.Cookie{
+				Name:     "admin_token",
+				Value:    cfg.AdminToken,
+				HTTPOnly: true,
+				Path:     "/",
+			})
+			return c.Next()
+		})
+	}
 
 	// Health Routes
 	app.Get("/health", health.Health(sqlDB))
@@ -262,20 +266,20 @@ func main() {
 	app.Get("/stats/usage", stats.Usage(sqlDB))
 	app.Get("/stats/top/users", stats.TopUsers(sqlDB))
 
-    app.Get("/stats/top/items", stats.TopItems(sqlDB, em))
-    // Inject manager so TopItems can enrich non-Emby items
-    stats.SetMultiServerManager(multiMgr)
+	app.Get("/stats/top/items", stats.TopItems(sqlDB, em))
+	// Inject manager so TopItems can enrich non-Emby items
+	stats.SetMultiServerManager(multiMgr)
 	app.Get("/stats/qualities", stats.Qualities(sqlDB))
 	app.Get("/stats/codecs", stats.Codecs(sqlDB))
 	app.Get("/stats/active-users", stats.ActiveUsersLifetime(sqlDB))
 	app.Get("/stats/users/total", stats.UsersTotal(sqlDB))
-    app.Get("/stats/users/:id", stats.UserDetailHandler(sqlDB, em))
+	app.Get("/stats/users/:id", stats.UserDetailHandler(sqlDB, em))
 	app.Get("/stats/users/:id/watch-time", stats.UserWatchTimeHandler(sqlDB))
 	app.Get("/stats/users/watch-time", stats.AllUsersWatchTimeHandler(sqlDB))
 	app.Get("/stats/play-methods", stats.PlayMethods(sqlDB, em))
-    app.Get("/stats/items/by-codec/:codec", stats.ItemsByCodec(sqlDB))
-    app.Get("/stats/items/by-genre/:genre", stats.ItemsByGenre(sqlDB))
-    app.Get("/stats/series/by-genre/:genre", stats.SeriesByGenre(sqlDB))
+	app.Get("/stats/items/by-codec/:codec", stats.ItemsByCodec(sqlDB))
+	app.Get("/stats/items/by-genre/:genre", stats.ItemsByGenre(sqlDB))
+	app.Get("/stats/series/by-genre/:genre", stats.SeriesByGenre(sqlDB))
 	app.Get("/stats/items/by-quality/:quality", stats.ItemsByQuality(sqlDB))
 	app.Get("/stats/movies", stats.Movies(sqlDB))
 	app.Get("/stats/series", stats.Series(sqlDB))
@@ -290,24 +294,27 @@ func main() {
 	app.Get("/config", configHandler.GetConfig(cfg))
 
 	// Item & Image Routes
-    // Multi-server-aware items lookup (falls back to legacy where needed)
-    app.Get("/items/by-ids", items.ByIDsMS(sqlDB, multiMgr))
+	// Multi-server-aware items lookup (falls back to legacy where needed)
+	app.Get("/items/by-ids", items.ByIDsMS(sqlDB, multiMgr))
 	imgOpts := images.NewOpts(cfg)
 	app.Get("/img/primary/:id", images.Primary(imgOpts))
 	app.Get("/img/backdrop/:id", images.Backdrop(imgOpts))
 	// Multi-server image routes
 	app.Get("/img/primary/:server/:id", images.MultiServerPrimary(multiMgr))
+	app.Get("/img/backdrop/:server/:id", images.MultiServerBackdrop(multiMgr))
 	// Now Playing Routes
-    app.Get("/api/now-playing/summary", now.Summary)
-    // Legacy single-Emby snapshot remains for compatibility with current UI
-    app.Get("/now/snapshot", now.Snapshot)
-    // New multi-server snapshot for updated UI/clients
-    app.Get("/api/now/snapshot", now.MultiSnapshot)
-    // Multi-server WebSocket stream (optional ?server=emby|plex|jellyfin|all)
-    app.Get("/api/now/ws", func(c fiber.Ctx) error {
-        if ws.IsWebSocketUpgrade(c) { return c.Next() }
-        return fiber.ErrUpgradeRequired
-    }, ws.New(now.MultiWS()))
+	app.Get("/api/now-playing/summary", now.Summary)
+	// Legacy single-Emby snapshot remains for compatibility with current UI
+	app.Get("/now/snapshot", now.Snapshot)
+	// New multi-server snapshot for updated UI/clients
+	app.Get("/api/now/snapshot", now.MultiSnapshot)
+	// Multi-server WebSocket stream (optional ?server=emby|plex|jellyfin|all)
+	app.Get("/api/now/ws", func(c fiber.Ctx) error {
+		if ws.IsWebSocketUpgrade(c) {
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	}, ws.New(now.MultiWS()))
 	app.Get("/now/ws", func(c fiber.Ctx) error {
 		if ws.IsWebSocketUpgrade(c) {
 			return c.Next()
@@ -317,44 +324,48 @@ func main() {
 	app.Post("/now/:id/pause", now.PauseSession)
 	app.Post("/now/:id/stop", now.StopSession)
 	app.Post("/now/:id/message", now.MessageSession)
-    // Server list/health
-    app.Get("/api/servers", serversHandler.List())
+	// Server list/health
+	app.Get("/api/servers", serversHandler.List())
 
-    // Server-aware now controls
-    app.Post("/api/now/sessions/:server/:id/pause", now.MultiPauseSession)
-    app.Post("/api/now/sessions/:server/:id/stop", now.MultiStopSession)
-    app.Post("/api/now/sessions/:server/:id/message", now.MultiMessageSession)
+	// Server-aware now controls
+	app.Post("/api/now/sessions/:server/:id/pause", now.MultiPauseSession)
+	app.Post("/api/now/sessions/:server/:id/stop", now.MultiStopSession)
+	app.Post("/api/now/sessions/:server/:id/message", now.MultiMessageSession)
 
-    // Admin Routes with Authentication
-	rm := admin.NewRefreshManager()
+	// Admin Routes with Authentication
+	rm := admin.NewRefreshManager(cfg, multiMgr)
 
-    // Protected admin endpoints (admin session OR ADMIN_TOKEN)
-    adminAuth := middleware.AdminAccess(sqlDB, cfg.AdminToken, cfg)
+	// Protected admin endpoints (admin session OR ADMIN_TOKEN)
+	adminAuth := middleware.AdminAccess(sqlDB, cfg.AdminToken, cfg)
 
 	// Settings Routes (admin-protected for updates)
 	app.Get("/api/settings", settings.GetSettings(sqlDB))
 	app.Put("/api/settings/:key", adminAuth, settings.UpdateSetting(sqlDB))
 
 	app.Post("/admin/refresh/start", adminAuth, admin.StartPostHandler(rm, sqlDB, em, cfg.RefreshChunkSize))
-    app.Post("/admin/refresh/incremental", adminAuth, admin.StartIncrementalHandler(rm, sqlDB, em))
-    app.Post("/admin/enrich/missing-items", adminAuth, admin.EnrichMissingItems(sqlDB, multiMgr))
+	app.Post("/admin/refresh/incremental", adminAuth, admin.StartIncrementalHandler(rm, sqlDB, em))
+	app.Post("/admin/enrich/missing-items", adminAuth, admin.EnrichMissingItems(sqlDB, multiMgr))
 	app.Get("/admin/refresh/status", adminAuth, admin.StatusHandler(rm))
 	app.Get("/admin/webhook/stats", adminAuth, admin.GetWebhookStats())
-	app.Post("/admin/reset-all", adminAuth, admin.ResetAllData(sqlDB, em))
+	app.Post("/admin/reset-all", adminAuth, admin.ResetAllData(sqlDB, multiMgr))
 	app.Post("/admin/reset-lifetime", adminAuth, admin.ResetLifetimeWatch(sqlDB))
-	app.Post("/admin/users/force-sync", adminAuth, admin.ForceUserSync(sqlDB, em))
+	app.Post("/admin/users/force-sync", adminAuth, admin.ForceUserSync(sqlDB, multiMgr))
 	app.All("/admin/fix-pos-units", adminAuth, admin.FixPosUnits(sqlDB))
+	app.Post("/admin/sync/all", adminAuth, admin.SyncAllServers(sqlDB, multiMgr, cfg))
+	app.Post("/admin/sync/server/:id", adminAuth, admin.SyncServer(sqlDB, multiMgr, cfg))
+	app.Delete("/admin/server/:id/media", adminAuth, admin.DeleteServerMedia(sqlDB, multiMgr))
 	app.Get("/admin/debug/users", adminAuth, admin.DebugUsers(em))
 	app.Post("/admin/recover-intervals", adminAuth, admin.RecoverIntervalsHandler(sqlDB))
 	// Backfill series linkage for episodes
-	app.Get("/admin/backfill/series", adminAuth, admin.BackfillSeries(sqlDB, em))
-	app.Post("/admin/backfill/series", adminAuth, admin.BackfillSeries(sqlDB, em))
-    app.Post("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
-    app.Get("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
-    app.Post("/admin/cleanup/intervals/superset", adminAuth, admin.CleanupSupersetIntervals(sqlDB))
-    app.Get("/admin/cleanup/intervals/superset", adminAuth, admin.CleanupSupersetIntervals(sqlDB))
-    // Fix legacy fallback intervals that over-count paused time
-    app.Post("/admin/cleanup/intervals/fix-fallback", adminAuth, admin.FixFallbackIntervals(sqlDB))
+	app.Get("/admin/backfill/series", adminAuth, admin.BackfillSeries(sqlDB, em, multiMgr))
+	app.Get("/admin/library/runtime-outliers", adminAuth, stats.RuntimeOutliers(sqlDB))
+	app.Post("/admin/backfill/series", adminAuth, admin.BackfillSeries(sqlDB, em, multiMgr))
+	app.Post("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
+	app.Get("/admin/cleanup/intervals/dedupe", adminAuth, admin.CleanupDuplicateIntervals(sqlDB))
+	app.Post("/admin/cleanup/intervals/superset", adminAuth, admin.CleanupSupersetIntervals(sqlDB))
+	app.Get("/admin/cleanup/intervals/superset", adminAuth, admin.CleanupSupersetIntervals(sqlDB))
+	// Fix legacy fallback intervals that over-count paused time
+	app.Post("/admin/cleanup/intervals/fix-fallback", adminAuth, admin.FixFallbackIntervals(sqlDB))
 	// Cleanup missing items: scan library_item against Emby and delete safe orphans
 	app.Get("/admin/cleanup/missing-items", adminAuth, admin.CleanupMissingItems(sqlDB, em))
 	app.Post("/admin/cleanup/missing-items", adminAuth, admin.CleanupMissingItems(sqlDB, em))
@@ -370,9 +381,9 @@ func main() {
 	app.Get("/admin/debug/sessions", adminAuth, admin.DebugSessions(sqlDB))
 
 	// Backfill playback methods for historical sessions (reason/codec-based)
-    app.Post("/admin/cleanup/backfill-playmethods", adminAuth, admin.BackfillPlayMethods(sqlDB))
-    // Enrich missing usernames for Plex/Jellyfin sessions
-    app.Post("/admin/enrich/user-names", adminAuth, admin.EnrichUserNames(sqlDB, multiMgr))
+	app.Post("/admin/cleanup/backfill-playmethods", adminAuth, admin.BackfillPlayMethods(sqlDB))
+	// Enrich missing usernames for Plex/Jellyfin sessions
+	app.Post("/admin/enrich/user-names", adminAuth, admin.EnrichUserNames(sqlDB, multiMgr))
 
 	// Admin: backfill started_at from events/intervals
 	app.Post("/admin/cleanup/backfill-started-at", adminAuth, admin.BackfillStartedAt(sqlDB))
@@ -384,29 +395,29 @@ func main() {
 
 	// Debug: resolve Series Id by name
 	app.Get("/admin/debug/series-id", adminAuth, admin.DebugFindSeriesID(em))
-    // Debug: resolve Series Id from episode id
-    app.Get("/admin/debug/series-from-episode", adminAuth, admin.DebugSeriesFromEpisode(em))
+	// Debug: resolve Series Id from episode id
+	app.Get("/admin/debug/series-from-episode", adminAuth, admin.DebugSeriesFromEpisode(em))
 
 	// Admin diagnostics for media metadata coverage
 	app.Get("/admin/diagnostics/media-field-coverage", adminAuth, admin.MediaFieldCoverage(sqlDB))
 	app.Get("/admin/diagnostics/items/missing", adminAuth, admin.MissingItems(sqlDB))
 
-    // Webhook endpoint with separate authentication
-    webhookAuth := middleware.WebhookAuth(cfg.WebhookSecret)
-    app.Post("/admin/webhook/emby", webhookAuth, admin.WebhookHandler(rm, sqlDB, em))
+	// Webhook endpoint with separate authentication
+	webhookAuth := middleware.WebhookAuth(cfg.WebhookSecret)
+	app.Post("/admin/webhook/emby", webhookAuth, admin.WebhookHandler(rm, sqlDB, em))
 
-    // Auth endpoints
-    app.Post("/auth/login", auth.LoginHandler(sqlDB, cfg))
-    app.Post("/auth/logout", auth.LogoutHandler(sqlDB, cfg))
-    app.Post("/auth/register", auth.RegisterHandler(sqlDB, cfg))
-    app.Get("/auth/me", auth.MeHandler(sqlDB, cfg))
-    app.Get("/auth/config", auth.ConfigHandler(sqlDB, cfg))
+	// Auth endpoints
+	app.Post("/auth/login", auth.LoginHandler(sqlDB, cfg))
+	app.Post("/auth/logout", auth.LogoutHandler(sqlDB, cfg))
+	app.Post("/auth/register", auth.RegisterHandler(sqlDB, cfg))
+	app.Get("/auth/me", auth.MeHandler(sqlDB, cfg))
+	app.Get("/auth/config", auth.ConfigHandler(sqlDB, cfg))
 
-    // Static UI Serving
-    if cfg.AuthEnabled {
-        app.Use(middleware.RequireUserForUI(cfg))
-    }
-    app.Use("/", static.New(cfg.WebPath))
+	// Static UI Serving
+	if cfg.AuthEnabled {
+		app.Use(middleware.RequireUserForUI(cfg))
+	}
+	app.Use("/", static.New(cfg.WebPath))
 	app.Use(func(c fiber.Ctx) error {
 		if c.Method() == fiber.MethodGet && !startsWithAny(c.Path(), "/stats", "/health", "/admin", "/now", "/config", "/api", "/items", "/img") {
 			// If a static exported page exists at /path/index.html, serve it (supports clean URLs without trailing slash)
@@ -461,13 +472,13 @@ func main() {
 	})
 
 	// System metrics endpoint (protected)
-    app.Get("/admin/metrics", adminAuth, admin.SystemMetricsHandler(sqlDB))
+	app.Get("/admin/metrics", adminAuth, admin.SystemMetricsHandler(sqlDB))
 
-    // App user management (admin-only)
-    app.Get("/admin/app-users", adminAuth, auth.ListAppUsers(sqlDB))
-    app.Post("/admin/app-users", adminAuth, auth.CreateAppUser(sqlDB))
-    app.Put("/admin/app-users/:id", adminAuth, auth.UpdateAppUser(sqlDB))
-    app.Delete("/admin/app-users/:id", adminAuth, auth.DeleteAppUser(sqlDB))
+	// App user management (admin-only)
+	app.Get("/admin/app-users", adminAuth, auth.ListAppUsers(sqlDB))
+	app.Post("/admin/app-users", adminAuth, auth.CreateAppUser(sqlDB))
+	app.Put("/admin/app-users/:id", adminAuth, auth.UpdateAppUser(sqlDB))
+	app.Delete("/admin/app-users/:id", adminAuth, auth.DeleteAppUser(sqlDB))
 
 	// Start Server
 	addr := ":8080"
@@ -492,88 +503,88 @@ func startsWithAny(s string, prefixes ...string) bool {
 
 // ensureAuthTables defensively creates auth tables if they are missing.
 func ensureAuthTables(db *sql.DB, logger logging.Logger) {
-    // app_user
-    if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS app_user (
+	// app_user
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS app_user (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
         role TEXT NOT NULL DEFAULT 'user',
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     );`); err != nil {
-        logger.Warn("Failed to ensure app_user table", "error", err)
-    } else {
-        logger.Info("Auth: ensured app_user table")
-    }
-    // app_session
-    if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS app_session (
+		logger.Warn("Failed to ensure app_user table", "error", err)
+	} else {
+		logger.Info("Auth: ensured app_user table")
+	}
+	// app_session
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS app_session (
         token TEXT PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         expires_at TIMESTAMP NOT NULL
     );`); err != nil {
-        logger.Warn("Failed to ensure app_session table", "error", err)
-    } else {
-        logger.Info("Auth: ensured app_session table")
-    }
-    // indexes
-    if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_app_session_user ON app_session(user_id);`); err != nil {
-        logger.Warn("Failed to ensure idx_app_session_user", "error", err)
-    }
-    if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_app_user_username ON app_user(username);`); err != nil {
-        logger.Warn("Failed to ensure idx_app_user_username", "error", err)
-    }
+		logger.Warn("Failed to ensure app_session table", "error", err)
+	} else {
+		logger.Info("Auth: ensured app_session table")
+	}
+	// indexes
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_app_session_user ON app_session(user_id);`); err != nil {
+		logger.Warn("Failed to ensure idx_app_session_user", "error", err)
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_app_user_username ON app_user(username);`); err != nil {
+		logger.Warn("Failed to ensure idx_app_user_username", "error", err)
+	}
 }
 
 func ensureGenresColumn(db *sql.DB, logger logging.Logger) {
-    // Check if column exists
-    rows, err := db.Query(`PRAGMA table_info(library_item);`)
-    if err != nil {
-        logger.Warn("Failed to inspect library_item schema", "error", err)
-        return
-    }
-    defer rows.Close()
-    has := false
-    for rows.Next() {
-        var cid int
-        var name, ctype string
-        var notnull int
-        var dflt interface{}
-        var pk int
-        _ = rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk)
-        if strings.EqualFold(name, "genres") {
-            has = true
-            break
-        }
-    }
-    if !has {
-        if _, err := db.Exec(`ALTER TABLE library_item ADD COLUMN genres TEXT;`); err != nil {
-            logger.Warn("Failed to add genres column (may already exist)", "error", err)
-        } else {
-            logger.Info("Auth: ensured library_item.genres column")
-        }
-    }
+	// Check if column exists
+	rows, err := db.Query(`PRAGMA table_info(library_item);`)
+	if err != nil {
+		logger.Warn("Failed to inspect library_item schema", "error", err)
+		return
+	}
+	defer rows.Close()
+	has := false
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull int
+		var dflt interface{}
+		var pk int
+		_ = rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk)
+		if strings.EqualFold(name, "genres") {
+			has = true
+			break
+		}
+	}
+	if !has {
+		if _, err := db.Exec(`ALTER TABLE library_item ADD COLUMN genres TEXT;`); err != nil {
+			logger.Warn("Failed to add genres column (may already exist)", "error", err)
+		} else {
+			logger.Info("Auth: ensured library_item.genres column")
+		}
+	}
 }
 
 func bumpLegacyMigrationVersion(db *sql.DB, logger logging.Logger) {
-    // Determine if app_user and app_session exist
-    var cnt int
-    _ = db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='app_user'`).Scan(&cnt)
-    if cnt == 0 {
-        return
-    }
-    _ = db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='app_session'`).Scan(&cnt)
-    if cnt == 0 {
-        return
-    }
-    // Check migration version
-    var version int
-    var dirty int
-    if err := db.QueryRow(`SELECT version, dirty FROM schema_migrations`).Scan(&version, &dirty); err != nil {
-        return
-    }
-    if version < 14 {
-        if _, err := db.Exec(`UPDATE schema_migrations SET version=14, dirty=0`); err == nil {
-            logger.Info("Auth: bumped schema_migrations version to 14 to reflect ensured tables")
-        }
-    }
+	// Determine if app_user and app_session exist
+	var cnt int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='app_user'`).Scan(&cnt)
+	if cnt == 0 {
+		return
+	}
+	_ = db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='app_session'`).Scan(&cnt)
+	if cnt == 0 {
+		return
+	}
+	// Check migration version
+	var version int
+	var dirty int
+	if err := db.QueryRow(`SELECT version, dirty FROM schema_migrations`).Scan(&version, &dirty); err != nil {
+		return
+	}
+	if version < 14 {
+		if _, err := db.Exec(`UPDATE schema_migrations SET version=14, dirty=0`); err == nil {
+			logger.Info("Auth: bumped schema_migrations version to 14 to reflect ensured tables")
+		}
+	}
 }

@@ -1,8 +1,8 @@
 package admin
 
 import (
-	"emby-analytics/internal/logging"
 	"database/sql"
+	"emby-analytics/internal/logging"
 	"strconv"
 	"strings"
 	"time"

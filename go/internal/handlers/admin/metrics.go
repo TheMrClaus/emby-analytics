@@ -1,8 +1,8 @@
 package admin
 
 import (
-	"emby-analytics/internal/logging"
 	"database/sql"
+	"emby-analytics/internal/logging"
 	"runtime"
 	"time"
 
@@ -10,24 +10,24 @@ import (
 )
 
 type SystemMetrics struct {
-	Timestamp    string           `json:"timestamp"`
-	Database     DatabaseMetrics  `json:"database"`
-	Runtime      RuntimeMetrics   `json:"runtime"`
-	Performance  PerformanceMetrics `json:"performance"`
+	Timestamp   string             `json:"timestamp"`
+	Database    DatabaseMetrics    `json:"database"`
+	Runtime     RuntimeMetrics     `json:"runtime"`
+	Performance PerformanceMetrics `json:"performance"`
 }
 
 type DatabaseMetrics struct {
-	OpenConnections     int    `json:"open_connections"`
-	InUse               int    `json:"in_use"`
-	Idle                int    `json:"idle"`
-	WaitCount           int64  `json:"wait_count"`
-	WaitDuration        string `json:"wait_duration"`
-	MaxIdleClosed       int64  `json:"max_idle_closed"`
-	MaxIdleTimeClosed   int64  `json:"max_idle_time_closed"`
-	MaxLifetimeClosed   int64  `json:"max_lifetime_closed"`
-	MaxOpenConnections  int    `json:"max_open_connections"`
-	QueryCount          int    `json:"query_count,omitempty"` // Custom counter
-	SlowQueryCount      int    `json:"slow_query_count,omitempty"` // Custom counter
+	OpenConnections    int    `json:"open_connections"`
+	InUse              int    `json:"in_use"`
+	Idle               int    `json:"idle"`
+	WaitCount          int64  `json:"wait_count"`
+	WaitDuration       string `json:"wait_duration"`
+	MaxIdleClosed      int64  `json:"max_idle_closed"`
+	MaxIdleTimeClosed  int64  `json:"max_idle_time_closed"`
+	MaxLifetimeClosed  int64  `json:"max_lifetime_closed"`
+	MaxOpenConnections int    `json:"max_open_connections"`
+	QueryCount         int    `json:"query_count,omitempty"`      // Custom counter
+	SlowQueryCount     int    `json:"slow_query_count,omitempty"` // Custom counter
 }
 
 type RuntimeMetrics struct {
@@ -35,19 +35,19 @@ type RuntimeMetrics struct {
 	NumGoroutine int    `json:"num_goroutine"`
 	NumCPU       int    `json:"num_cpu"`
 	MemStats     struct {
-		Alloc        uint64 `json:"alloc_bytes"`
-		TotalAlloc   uint64 `json:"total_alloc_bytes"`
-		Sys          uint64 `json:"sys_bytes"`
-		NumGC        uint32 `json:"num_gc"`
+		Alloc      uint64 `json:"alloc_bytes"`
+		TotalAlloc uint64 `json:"total_alloc_bytes"`
+		Sys        uint64 `json:"sys_bytes"`
+		NumGC      uint32 `json:"num_gc"`
 	} `json:"mem_stats"`
 }
 
 type PerformanceMetrics struct {
-	UptimeSeconds     float64            `json:"uptime_seconds"`
-	AvgResponseTime   string             `json:"avg_response_time"`
-	ErrorCount        int                `json:"error_count,omitempty"`
-	RequestCounts     map[string]int     `json:"request_counts,omitempty"`
-	SlowEndpoints     []SlowEndpointInfo `json:"slow_endpoints,omitempty"`
+	UptimeSeconds   float64            `json:"uptime_seconds"`
+	AvgResponseTime string             `json:"avg_response_time"`
+	ErrorCount      int                `json:"error_count,omitempty"`
+	RequestCounts   map[string]int     `json:"request_counts,omitempty"`
+	SlowEndpoints   []SlowEndpointInfo `json:"slow_endpoints,omitempty"`
 }
 
 type SlowEndpointInfo struct {
@@ -60,9 +60,9 @@ type SlowEndpointInfo struct {
 var (
 	appStartTime = time.Now()
 	queryMetrics = struct {
-		totalQueries   int
-		slowQueries    int
-		totalDuration  time.Duration
+		totalQueries  int
+		slowQueries   int
+		totalDuration time.Duration
 	}{}
 )
 
@@ -85,30 +85,30 @@ func SystemMetricsHandler(db *sql.DB) fiber.Handler {
 		if db != nil {
 			stats := db.Stats()
 			metrics.Database = DatabaseMetrics{
-				OpenConnections:     stats.OpenConnections,
-				InUse:               stats.InUse,
-				Idle:                stats.Idle,
-				WaitCount:           stats.WaitCount,
-				WaitDuration:        stats.WaitDuration.String(),
-				MaxIdleClosed:       stats.MaxIdleClosed,
-				MaxIdleTimeClosed:   stats.MaxIdleTimeClosed,
-				MaxLifetimeClosed:   stats.MaxLifetimeClosed,
-				MaxOpenConnections:  stats.MaxOpenConnections,
-				QueryCount:          queryMetrics.totalQueries,
-				SlowQueryCount:      queryMetrics.slowQueries,
+				OpenConnections:    stats.OpenConnections,
+				InUse:              stats.InUse,
+				Idle:               stats.Idle,
+				WaitCount:          stats.WaitCount,
+				WaitDuration:       stats.WaitDuration.String(),
+				MaxIdleClosed:      stats.MaxIdleClosed,
+				MaxIdleTimeClosed:  stats.MaxIdleTimeClosed,
+				MaxLifetimeClosed:  stats.MaxLifetimeClosed,
+				MaxOpenConnections: stats.MaxOpenConnections,
+				QueryCount:         queryMetrics.totalQueries,
+				SlowQueryCount:     queryMetrics.slowQueries,
 			}
 		}
 
 		// Runtime metrics
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)
-		
+
 		metrics.Runtime = RuntimeMetrics{
 			GoVersion:    runtime.Version(),
 			NumGoroutine: runtime.NumGoroutine(),
 			NumCPU:       runtime.NumCPU(),
 		}
-		
+
 		metrics.Runtime.MemStats.Alloc = m.Alloc
 		metrics.Runtime.MemStats.TotalAlloc = m.TotalAlloc
 		metrics.Runtime.MemStats.Sys = m.Sys
@@ -119,7 +119,7 @@ func SystemMetricsHandler(db *sql.DB) fiber.Handler {
 		metrics.Performance = PerformanceMetrics{
 			UptimeSeconds: uptime.Seconds(),
 		}
-		
+
 		if queryMetrics.totalQueries > 0 {
 			avgDuration := queryMetrics.totalDuration / time.Duration(queryMetrics.totalQueries)
 			metrics.Performance.AvgResponseTime = avgDuration.String()
@@ -128,7 +128,7 @@ func SystemMetricsHandler(db *sql.DB) fiber.Handler {
 		// Log metrics periodically
 		logging.Debug("[metrics] DB connections: open=%d, in_use=%d, idle=%d, wait_count=%d",
 			metrics.Database.OpenConnections,
-			metrics.Database.InUse, 
+			metrics.Database.InUse,
 			metrics.Database.Idle,
 			metrics.Database.WaitCount)
 

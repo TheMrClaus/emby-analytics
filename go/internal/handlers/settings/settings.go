@@ -3,10 +3,13 @@ package settings
 import (
 	"database/sql"
 	"emby-analytics/internal/logging"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
+
+const syncEnabledPrefix = "sync_enabled_"
 
 type Setting struct {
 	Key       string `json:"key" db:"key"`
@@ -81,6 +84,13 @@ func UpdateSetting(db *sql.DB) fiber.Handler {
 
 // Helper function to validate setting keys and values
 func isValidSetting(key, value string) bool {
+	if strings.HasPrefix(key, syncEnabledPrefix) {
+		suffix := strings.TrimPrefix(key, syncEnabledPrefix)
+		if !isValidSyncKeySuffix(suffix) {
+			return false
+		}
+		return value == "true" || value == "false"
+	}
 	switch key {
 	case "include_trakt_items":
 		return value == "true" || value == "false"
@@ -115,4 +125,27 @@ func GetSettingBool(db *sql.DB, key string, defaultValue bool) bool {
 	default:
 		return defaultValue
 	}
+}
+
+func isValidSyncKeySuffix(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == ':' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+// SyncSettingKey returns the storage key for a server sync toggle
+func SyncSettingKey(serverID string) string {
+	return syncEnabledPrefix + serverID
+}
+
+// GetSyncEnabled returns whether sync is enabled for a given server, falling back to the provided default
+func GetSyncEnabled(db *sql.DB, serverID string, defaultValue bool) bool {
+	return GetSettingBool(db, SyncSettingKey(serverID), defaultValue)
 }

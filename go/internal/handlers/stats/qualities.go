@@ -2,6 +2,7 @@ package stats
 
 import (
 	"database/sql"
+	"fmt"
 	"regexp"
 
 	"github.com/gofiber/fiber/v3"
@@ -56,21 +57,30 @@ func getQualityLabel(width sql.NullInt64, displayTitle sql.NullString) string {
 // Qualities returns counts grouped by quality label using WIDTH from library_item.
 func Qualities(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Query tailored to your schema:
-		// - table: library_item
-		// - columns: width (nullable), display_title (nullable), media_type ('Movie'|'Episode'|NULL)
-		q := `
+		serverType, serverID := normalizeServerParam(c.Query("server", ""))
+
+		condition := excludeLiveTvFilter()
+		condition, args := appendServerFilter(condition, "", serverType, serverID)
+		q := fmt.Sprintf(`
+			WITH base AS (
+				SELECT
+					width,
+					display_title,
+					%s AS media_type
+				FROM library_item
+				WHERE %s
+			)
 			SELECT
 				width,
 				display_title,
-				COALESCE(media_type, 'Unknown') AS media_type,
+				media_type,
 				COUNT(*) AS count
-			FROM library_item
-			WHERE COALESCE(media_type, 'Unknown') IN ('Movie', 'Episode', 'Unknown')
+			FROM base
+			WHERE media_type IN ('Movie', 'Episode')
 			GROUP BY width, display_title, media_type
-		`
+		`, normalizedMediaTypeExpr(""), condition)
 
-		rows, err := db.Query(q)
+		rows, err := db.Query(q, args...)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error":   "query failed",

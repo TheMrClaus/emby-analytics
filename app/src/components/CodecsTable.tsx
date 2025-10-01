@@ -4,9 +4,12 @@ import Link from "next/link";
 import { useCodecs } from "../hooks/useData";
 import { fmtInt } from "../lib/format";
 import Card from "./ui/Card";
+import { useLibraryServer } from "../contexts/LibraryServerContext";
 
 export default function CodecsTable() {
-  const { data, isLoading } = useCodecs();
+  const { server } = useLibraryServer();
+  const { data, isLoading } = useCodecs(server);
+  const serverLabel = server === "all" ? "" : server.charAt(0).toUpperCase() + server.slice(1);
 
   const rows = useMemo(() => {
     if (!data?.codecs || isLoading) return [];
@@ -22,7 +25,15 @@ export default function CodecsTable() {
   return (
     <Card
       title={
-        <>Media Codecs {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}</>
+        <>
+          Media Codecs
+          {serverLabel && (
+            <span className="ml-2 text-xs text-gray-400 uppercase tracking-wide">
+              {serverLabel}
+            </span>
+          )}
+          {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}
+        </>
       }
     >
       <table className="w-full text-sm text-left text-gray-300">

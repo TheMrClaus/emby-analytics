@@ -73,12 +73,12 @@ type NowEntry struct {
 	TransAudioBitrate int64 `json:"trans_audio_bitrate,omitempty"`
 	TransVideoBitrate int64 `json:"trans_video_bitrate,omitempty"`
 
-    // Playback state
-    IsPaused bool `json:"is_paused,omitempty"`
+	// Playback state
+	IsPaused bool `json:"is_paused,omitempty"`
 
-    // Server metadata (for multi-server UI)
-    ServerID   string `json:"server_id,omitempty"`
-    ServerType string `json:"server_type,omitempty"`
+	// Server metadata (for multi-server UI)
+	ServerID   string `json:"server_id,omitempty"`
+	ServerType string `json:"server_type,omitempty"`
 }
 
 // sanitizeMessageInput cleans user input to prevent injection attacks

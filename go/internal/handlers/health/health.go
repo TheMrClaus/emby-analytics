@@ -88,18 +88,18 @@ func Health(db *sql.DB) fiber.Handler {
 				}
 			}
 
-            if dataOK {
-                err = db.QueryRow(`SELECT COUNT(*) FROM play_sessions WHERE COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')`).Scan(&status.DataIntegrity.SessionCount)
-            if err != nil {
-                dataOK = false
-                dataError = "Failed to count sessions: " + err.Error()
-            }
-            }
+			if dataOK {
+				err = db.QueryRow(`SELECT COUNT(*) FROM play_sessions WHERE COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')`).Scan(&status.DataIntegrity.SessionCount)
+				if err != nil {
+					dataOK = false
+					dataError = "Failed to count sessions: " + err.Error()
+				}
+			}
 
 			// Check for recent activity
 			if dataOK {
 				var lastSession sql.NullString
-                err = db.QueryRow(`SELECT MAX(started_at) FROM play_sessions WHERE started_at IS NOT NULL AND COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')`).Scan(&lastSession)
+				err = db.QueryRow(`SELECT MAX(started_at) FROM play_sessions WHERE started_at IS NOT NULL AND COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')`).Scan(&lastSession)
 				if err != nil {
 					dataOK = false
 					dataError = "Failed to get last session: " + err.Error()

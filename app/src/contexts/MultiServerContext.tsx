@@ -35,72 +35,117 @@ export function MultiServerProvider({ children }: { children: ReactNode }) {
   const [server, setServerState] = useState<ServerAlias>(getInitialServer());
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<NodeJS.Timeout | null>(null);
+  const snapshotRetryRef = useRef<NodeJS.Timeout | null>(null);
+  const loadSnapshotRef = useRef<((alias: ServerAlias) => Promise<void>) | null>(null);
 
   const updateServer = useCallback((s: ServerAlias) => {
     setServerState(s);
-    try { if (typeof window !== "undefined") window.localStorage.setItem(STORAGE_KEY, s); } catch {}
+    try {
+      if (typeof window !== "undefined") window.localStorage.setItem(STORAGE_KEY, s);
+    } catch {}
     // Reconnect WS
-    if (wsRef.current) { wsRef.current.close(); }
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
   }, []);
 
   const orderRef = useRef<Map<string, number>>(new Map());
   const orderCounter = useRef(0);
   const orderSessions = useCallback((arr: MultiNowEntry[]): MultiNowEntry[] => {
     for (const s of arr) {
-      if (!orderRef.current.has(s.session_id)) orderRef.current.set(s.session_id, orderCounter.current++);
+      if (!orderRef.current.has(s.session_id))
+        orderRef.current.set(s.session_id, orderCounter.current++);
     }
     const present = new Set(arr.map((s) => s.session_id));
-    for (const k of Array.from(orderRef.current.keys())) { if (!present.has(k)) orderRef.current.delete(k); }
-    return [...arr].sort((a,b) => (orderRef.current.get(a.session_id) ?? 0) - (orderRef.current.get(b.session_id) ?? 0));
+    for (const k of Array.from(orderRef.current.keys())) {
+      if (!present.has(k)) orderRef.current.delete(k);
+    }
+    return [...arr].sort(
+      (a, b) =>
+        (orderRef.current.get(a.session_id) ?? 0) - (orderRef.current.get(b.session_id) ?? 0)
+    );
   }, []);
 
-  const loadSnapshot = useCallback(async (alias: ServerAlias) => {
-    try {
-      const res = await fetch(`/api/now/snapshot?server=${alias}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: MultiNowEntry[] = await res.json();
-      setSessions(orderSessions(Array.isArray(data) ? data : []));
-      setError(null);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(`Failed to load now playing: ${msg}`);
-    }
-  }, [orderSessions]);
+  const loadSnapshot = useCallback(
+    async (alias: ServerAlias) => {
+      try {
+        const res = await fetch(`/api/now/snapshot?server=${alias}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: MultiNowEntry[] = await res.json();
+        setSessions(orderSessions(Array.isArray(data) ? data : []));
+        setError(null);
+        if (snapshotRetryRef.current) {
+          clearTimeout(snapshotRetryRef.current);
+          snapshotRetryRef.current = null;
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(`Failed to load now playing: ${msg}`);
+        if (!snapshotRetryRef.current) {
+          snapshotRetryRef.current = setTimeout(() => {
+            snapshotRetryRef.current = null;
+            void loadSnapshotRef.current?.(alias);
+          }, 3000);
+        }
+      }
+    },
+    [orderSessions]
+  );
 
-  const connectWS = useCallback((alias: ServerAlias) => {
-    if (typeof window === "undefined") return;
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const wsURL = `${proto}://${window.location.host}/api/now/ws?server=${alias}`;
-    try {
-      const ws = new WebSocket(wsURL);
-      wsRef.current = ws;
-      ws.onopen = () => {
-        setIsConnected(true);
-        if (reconnectRef.current) { clearTimeout(reconnectRef.current); reconnectRef.current = null; }
-      };
-      ws.onmessage = (ev) => {
-        try {
-          const data: MultiNowEntry[] = JSON.parse(ev.data);
-          setSessions(orderSessions(Array.isArray(data) ? data : []));
-        } catch {}
-      };
-      ws.onerror = () => {
-        setIsConnected(false);
-        void loadSnapshot(alias);
-      };
-      ws.onclose = () => {
+  useEffect(() => {
+    loadSnapshotRef.current = loadSnapshot;
+  }, [loadSnapshot]);
+
+  const connectWS = useCallback(
+    (alias: ServerAlias) => {
+      if (typeof window === "undefined") return;
+      const proto = window.location.protocol === "https:" ? "wss" : "ws";
+      const wsURL = `${proto}://${window.location.host}/api/now/ws?server=${alias}`;
+      try {
+        const ws = new WebSocket(wsURL);
+        wsRef.current = ws;
+        ws.onopen = () => {
+          setIsConnected(true);
+          if (reconnectRef.current) {
+            clearTimeout(reconnectRef.current);
+            reconnectRef.current = null;
+          }
+          if (snapshotRetryRef.current) {
+            clearTimeout(snapshotRetryRef.current);
+            snapshotRetryRef.current = null;
+          }
+        };
+        ws.onmessage = (ev) => {
+          try {
+            const data: MultiNowEntry[] = JSON.parse(ev.data);
+            setSessions(orderSessions(Array.isArray(data) ? data : []));
+          } catch {}
+        };
+        ws.onerror = () => {
+          setIsConnected(false);
+          void loadSnapshot(alias);
+        };
+        ws.onclose = () => {
+          setIsConnected(false);
+          if (!reconnectRef.current) {
+            reconnectRef.current = setTimeout(() => {
+              reconnectRef.current = null;
+              connectWS(alias);
+            }, 2000);
+          }
+        };
+      } catch {
         setIsConnected(false);
         if (!reconnectRef.current) {
-          reconnectRef.current = setTimeout(() => { reconnectRef.current = null; connectWS(alias); }, 2000);
+          reconnectRef.current = setTimeout(() => {
+            reconnectRef.current = null;
+            connectWS(alias);
+          }, 2000);
         }
-      };
-    } catch {
-      setIsConnected(false);
-      if (!reconnectRef.current) {
-        reconnectRef.current = setTimeout(() => { reconnectRef.current = null; connectWS(alias); }, 2000);
       }
-    }
-  }, [loadSnapshot, orderSessions]);
+    },
+    [loadSnapshot, orderSessions]
+  );
 
   useEffect(() => {
     void loadSnapshot(server);
@@ -108,6 +153,10 @@ export function MultiServerProvider({ children }: { children: ReactNode }) {
     return () => {
       if (wsRef.current) wsRef.current.close();
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
+      if (snapshotRetryRef.current) {
+        clearTimeout(snapshotRetryRef.current);
+        snapshotRetryRef.current = null;
+      }
     };
   }, [server, connectWS, loadSnapshot]);
 

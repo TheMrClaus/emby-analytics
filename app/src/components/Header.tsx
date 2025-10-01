@@ -1,41 +1,63 @@
 // app/src/components/Header.tsx
 import { useRef } from "react";
 import Link from "next/link";
-import { useUsage, useNowSnapshot, useRefreshStatus, useVersion } from "../hooks/useData";
-import { startRefresh, setAdminToken } from "../lib/api";
+import { useUsage, useRefreshStatus, useVersion } from "../hooks/useData";
+import { startRefresh, setAdminToken, syncAllServers } from "../lib/api";
 import { useRouter } from "next/router";
 import { fmtHours } from "../lib/format";
-
-type SnapshotEntry = {
-  play_method?: string;
-};
 
 export default function Header() {
   // SWR-powered data
   const { data: weeklyUsage = [], error: usageError } = useUsage(7);
-  const { data: nowPlaying = [], error: snapshotError } = useNowSnapshot();
   const { data: refreshStatus } = useRefreshStatus(true); // poll regularly
   const { data: versionInfo } = useVersion();
 
   // Derived UI counters
   const weeklyHours = weeklyUsage.reduce((acc, r) => acc + (r.hours || 0), 0);
-  const streamsTotal = nowPlaying.length;
-  // Backend provides play_method as "Direct" or "Transcode".
-  const directPlay = nowPlaying.filter((s: SnapshotEntry) => s.play_method !== "Transcode").length;
-  const transcoding = streamsTotal - directPlay;
 
   // Progress %
-  const imported = Number(refreshStatus?.imported ?? 0);
-  const total = Number(refreshStatus?.total ?? 0);
-  const progress = total > 0 ? Math.max(0, Math.min(100, (imported / total) * 100)) : 0;
+  const aggregateProcessed = Number(
+    refreshStatus?.aggregate_processed ?? refreshStatus?.imported ?? 0
+  );
+  const aggregateTotal = Number(refreshStatus?.aggregate_total ?? refreshStatus?.total ?? 0);
+  const refreshOnly = refreshStatus?.refresh_only;
 
-  // The running state is now driven directly by the SWR hook
+  let displayTotal = aggregateTotal;
+  let displayProcessed = aggregateProcessed;
+  if (!displayTotal && refreshOnly?.total) {
+    displayTotal = Number(refreshOnly.total ?? 0);
+    displayProcessed = Number(refreshOnly.imported ?? 0);
+  }
+
+  const progress =
+    displayTotal > 0 ? Math.max(0, Math.min(100, (displayProcessed / displayTotal) * 100)) : 0;
+
+  // The running state is now driven directly by the aggregated status
   const isRunning = Boolean(refreshStatus?.running);
 
   // ---- Double-click / spam click guard ----
   const clickLockRef = useRef(false);
 
   const router = useRouter();
+
+  const performSyncs = async () => {
+    let primaryError: unknown = null;
+    try {
+      await startRefresh();
+    } catch (err) {
+      primaryError = err;
+    }
+    try {
+      await syncAllServers();
+    } catch (err) {
+      if (primaryError == null) {
+        primaryError = err;
+      }
+    }
+    if (primaryError) {
+      throw primaryError;
+    }
+  };
 
   const handleRefresh = async () => {
     // Block if lock engaged, UI already refreshing, or backend says it's running.
@@ -48,7 +70,7 @@ export default function Header() {
     }, 1200);
 
     try {
-      await startRefresh(); // Fiber v3: kicks off the job; progress read via useRefreshStatus
+      await performSyncs();
     } catch (err: unknown) {
       const msg = String((err as Error)?.message || err || "");
       // If unauthorized, prompt for admin token and retry once
@@ -57,7 +79,7 @@ export default function Header() {
         if (t && t.trim()) {
           setAdminToken(t.trim());
           try {
-            await startRefresh();
+            await performSyncs();
             return;
           } catch (e) {
             console.error("Failed to start refresh after setting token:", e);
@@ -136,29 +158,6 @@ export default function Header() {
             </div>
           </div>
 
-          {/* Current Streams */}
-          <div className="text-center">
-            <div className="text-sm text-gray-400">Streams</div>
-            <div className="text-xl font-bold text-white">
-              {snapshotError ? (
-                <span className="text-red-400 text-sm">Error</span>
-              ) : (
-                <>
-                  {streamsTotal}
-                  {streamsTotal > 0 && (
-                    <span className="text-sm ml-1">
-                      (
-                      <span className="text-green-400">{directPlay}D</span>
-                      /
-                      <span className="text-orange-400">{transcoding}T</span>
-                      )
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
           {/* Refresh Control (always yellow) */}
           <div className="relative">
             <button
@@ -179,9 +178,9 @@ export default function Header() {
                   <>
                     {"Refreshing… "}
                     {Math.round(progress)}%
-                    {total > 0 && (
+                    {displayTotal > 0 && (
                       <span className="text-xs ml-1 opacity-90">
-                        ({imported}/{total})
+                        ({displayProcessed}/{displayTotal})
                       </span>
                     )}
                   </>

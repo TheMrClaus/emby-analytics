@@ -1,10 +1,10 @@
 package admin
 
 import (
-    "database/sql"
-    "strconv"
+	"database/sql"
+	"strconv"
 
-    "github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3"
 )
 
 // BackfillPlayMethods updates historical play_sessions rows to derive
@@ -13,16 +13,16 @@ import (
 // within the last N days (default 90) and preserves explicit Transcode
 // values.
 func BackfillPlayMethods(db *sql.DB) fiber.Handler {
-    return func(c fiber.Ctx) error {
-        days := 90
-        if d := c.Query("days"); d != "" {
-            if n, err := strconv.Atoi(d); err == nil && n > 0 {
-                days = n
-            }
-        }
+	return func(c fiber.Ctx) error {
+		days := 90
+		if d := c.Query("days"); d != "" {
+			if n, err := strconv.Atoi(d); err == nil && n > 0 {
+				days = n
+			}
+		}
 
-        // Update video_method: respect explicit Transcode, otherwise derive
-        vidSQL := `
+		// Update video_method: respect explicit Transcode, otherwise derive
+		vidSQL := `
             UPDATE play_sessions
             SET video_method = (
                 CASE 
@@ -41,12 +41,12 @@ func BackfillPlayMethods(db *sql.DB) fiber.Handler {
               AND (COALESCE(video_method,'') = '' OR lower(video_method) = 'directplay')
         `
 
-        if _, err := db.Exec(vidSQL, days); err != nil {
-            return c.Status(500).JSON(fiber.Map{"error": "video backfill failed", "details": err.Error()})
-        }
+		if _, err := db.Exec(vidSQL, days); err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "video backfill failed", "details": err.Error()})
+		}
 
-        // Update audio_method: respect explicit Transcode, otherwise derive
-        audSQL := `
+		// Update audio_method: respect explicit Transcode, otherwise derive
+		audSQL := `
             UPDATE play_sessions
             SET audio_method = (
                 CASE 
@@ -61,10 +61,10 @@ func BackfillPlayMethods(db *sql.DB) fiber.Handler {
               AND (COALESCE(audio_method,'') = '' OR lower(audio_method) = 'directplay')
         `
 
-        if _, err := db.Exec(audSQL, days); err != nil {
-            return c.Status(500).JSON(fiber.Map{"error": "audio backfill failed", "details": err.Error()})
-        }
+		if _, err := db.Exec(audSQL, days); err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "audio backfill failed", "details": err.Error()})
+		}
 
-        return c.JSON(fiber.Map{"ok": true, "updated_window_days": days})
-    }
+		return c.JSON(fiber.Map{"ok": true, "updated_window_days": days})
+	}
 }

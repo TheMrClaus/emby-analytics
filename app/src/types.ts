@@ -41,16 +41,37 @@ export type TopItem = {
   hours: number;
   display?: string;
   server_type?: string;
+  server_id?: string;
 };
 
 export type ItemRow = { id: string; name?: string; type?: string; display?: string };
+
+export type ServerSyncProgress = {
+  server_id: string;
+  server_name?: string;
+  total: number;
+  processed: number;
+  stage?: string;
+  running: boolean;
+  done: boolean;
+  error?: string | null;
+  updated_at?: string;
+};
 
 export type RefreshState = {
   running: boolean;
   imported: number;
   total?: number;
+  aggregate_processed?: number;
+  aggregate_total?: number;
   page: number;
   error: string | null;
+  servers?: ServerSyncProgress[];
+  refresh_only?: {
+    running: boolean;
+    imported: number;
+    total: number;
+  };
 };
 
 // Now Playing (UI-friendly subset)
@@ -160,4 +181,23 @@ export type SeriesStats = {
   newest_series: { name: string; date: string };
   episodes_added_this_month: number;
   popular_genres: GenreStats[];
+};
+
+export type RuntimeOutlier = {
+  library_id: string;
+  server_id?: string;
+  server_type?: string;
+  item_id: string;
+  name: string;
+  runtime_minutes: number;
+  runtime_hours: string;
+  runtime_ticks: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RuntimeOutlierResponse = {
+  threshold_minutes: number;
+  has_more: boolean;
+  items: RuntimeOutlier[];
 };

@@ -140,14 +140,14 @@ type cacheEntry struct {
 //
 
 type EmbyItem struct {
-    Id                string `json:"Id"`
-    Name              string `json:"Name"`
-    Type              string `json:"Type"`
-    SeriesId          string `json:"SeriesId,omitempty"`
-    SeriesName        string `json:"SeriesName"`
-    ParentIndexNumber *int   `json:"ParentIndexNumber"` // season
-    IndexNumber       *int   `json:"IndexNumber"`       // episode
-    ProductionYear    *int   `json:"ProductionYear"`    // year for movies
+	Id                string `json:"Id"`
+	Name              string `json:"Name"`
+	Type              string `json:"Type"`
+	SeriesId          string `json:"SeriesId,omitempty"`
+	SeriesName        string `json:"SeriesName"`
+	ParentIndexNumber *int   `json:"ParentIndexNumber"` // season
+	IndexNumber       *int   `json:"IndexNumber"`       // episode
+	ProductionYear    *int   `json:"ProductionYear"`    // year for movies
 }
 
 type embyItemsResp struct {
@@ -215,27 +215,27 @@ func (c *Client) ItemsByIDs(ids []string) ([]EmbyItem, error) {
 	// Generate cache key
 	cacheKey := c.generateCacheKey(ids)
 
-    // Check cache first, but ensure we have required linkage fields for episodes
-    if cachedItems, found := c.getCachedItems(cacheKey); found {
-        needsRefresh := false
-        for _, it := range cachedItems {
-            if strings.EqualFold(it.Type, "Episode") && it.SeriesId == "" {
-                needsRefresh = true
-                break
-            }
-        }
-        if !needsRefresh {
-            return cachedItems, nil
-        }
-    }
+	// Check cache first, but ensure we have required linkage fields for episodes
+	if cachedItems, found := c.getCachedItems(cacheKey); found {
+		needsRefresh := false
+		for _, it := range cachedItems {
+			if strings.EqualFold(it.Type, "Episode") && it.SeriesId == "" {
+				needsRefresh = true
+				break
+			}
+		}
+		if !needsRefresh {
+			return cachedItems, nil
+		}
+	}
 
 	// Cache miss - fetch from API
 	endpoint := fmt.Sprintf("%s/emby/Items", c.BaseURL)
-    q := url.Values{}
-    q.Set("api_key", c.APIKey)
-    q.Set("Ids", strings.Join(ids, ","))
-    // Ensure we get series linkage and episode codes when requesting
-    q.Set("Fields", "SeriesId,SeriesName,ParentIndexNumber,IndexNumber")
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("Ids", strings.Join(ids, ","))
+	// Ensure we get series linkage and episode codes when requesting
+	q.Set("Fields", "SeriesId,SeriesName,ParentIndexNumber,IndexNumber")
 
 	req, _ := http.NewRequest("GET", endpoint+"?"+q.Encode(), nil)
 	req.Header.Set("X-Emby-Token", c.APIKey)
@@ -258,115 +258,115 @@ func (c *Client) ItemsByIDs(ids []string) ([]EmbyItem, error) {
 
 // SeriesGenres fetches Genres for a given Series ID.
 func (c *Client) SeriesGenres(seriesID string) ([]string, error) {
-    if c == nil || c.BaseURL == "" || c.APIKey == "" || strings.TrimSpace(seriesID) == "" {
-        return []string{}, nil
-    }
-    u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
-    q := url.Values{}
-    q.Set("api_key", c.APIKey)
-    q.Set("Ids", seriesID)
-    q.Set("Fields", "Genres")
-    req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
-    req.Header.Set("X-Emby-Token", c.APIKey)
-    resp, err := c.doWithRetry(req, 2)
-    if err != nil {
-        return nil, err
-    }
-    var out struct {
-        Items []struct{
-            Id string `json:"Id"`
-            Genres []string `json:"Genres"`
-        } `json:"Items"`
-    }
-    if err := readJSON(resp, &out); err != nil {
-        return nil, err
-    }
-    if len(out.Items) == 0 {
-        return []string{}, nil
-    }
-    return out.Items[0].Genres, nil
+	if c == nil || c.BaseURL == "" || c.APIKey == "" || strings.TrimSpace(seriesID) == "" {
+		return []string{}, nil
+	}
+	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
+	q := url.Values{}
+	q.Set("api_key", c.APIKey)
+	q.Set("Ids", seriesID)
+	q.Set("Fields", "Genres")
+	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+	req.Header.Set("X-Emby-Token", c.APIKey)
+	resp, err := c.doWithRetry(req, 2)
+	if err != nil {
+		return nil, err
+	}
+	var out struct {
+		Items []struct {
+			Id     string   `json:"Id"`
+			Genres []string `json:"Genres"`
+		} `json:"Items"`
+	}
+	if err := readJSON(resp, &out); err != nil {
+		return nil, err
+	}
+	if len(out.Items) == 0 {
+		return []string{}, nil
+	}
+	return out.Items[0].Genres, nil
 }
 
 type LibraryItem struct {
-    Id            string `json:"Id"`
-    Name          string `json:"Name"`
-    Type          string `json:"Type"`
-    Height        *int   `json:"Height,omitempty"`
-    Width         *int   `json:"Width,omitempty"`
-    Codec         string `json:"VideoCodec,omitempty"`
-    Container     string `json:"Container,omitempty"`
-    RunTimeTicks  *int64 `json:"RunTimeTicks,omitempty"`
-    BitrateBps    *int64 `json:"Bitrate,omitempty"`
-    FileSizeBytes *int64 `json:"Size,omitempty"`
-    ProductionYear *int  `json:"ProductionYear,omitempty"`
-    Genres        []string `json:"Genres,omitempty"`
+	Id             string   `json:"Id"`
+	Name           string   `json:"Name"`
+	Type           string   `json:"Type"`
+	Height         *int     `json:"Height,omitempty"`
+	Width          *int     `json:"Width,omitempty"`
+	Codec          string   `json:"VideoCodec,omitempty"`
+	Container      string   `json:"Container,omitempty"`
+	RunTimeTicks   *int64   `json:"RunTimeTicks,omitempty"`
+	BitrateBps     *int64   `json:"Bitrate,omitempty"`
+	FileSizeBytes  *int64   `json:"Size,omitempty"`
+	ProductionYear *int     `json:"ProductionYear,omitempty"`
+	Genres         []string `json:"Genres,omitempty"`
 }
 
 // Detailed struct for fetching media info with codec data
 type DetailedLibraryItem struct {
-    Id           string `json:"Id"`
-    Name         string `json:"Name"`
-    Type         string `json:"Type"`
-    Container    string `json:"Container"`
-    RunTimeTicks int64  `json:"RunTimeTicks"`
-    Genres       []string `json:"Genres"`
-    MediaSources []struct {
-        Bitrate      int64 `json:"Bitrate"`
-        Size         int64 `json:"Size"`
-        MediaStreams []struct {
-            Type   string `json:"Type"`
-            Codec  string `json:"Codec"`
-            Height *int   `json:"Height"`
-            Width  *int   `json:"Width"`
-        } `json:"MediaStreams"`
-    } `json:"MediaSources"`
+	Id           string   `json:"Id"`
+	Name         string   `json:"Name"`
+	Type         string   `json:"Type"`
+	Container    string   `json:"Container"`
+	RunTimeTicks int64    `json:"RunTimeTicks"`
+	Genres       []string `json:"Genres"`
+	MediaSources []struct {
+		Bitrate      int64 `json:"Bitrate"`
+		Size         int64 `json:"Size"`
+		MediaStreams []struct {
+			Type   string `json:"Type"`
+			Codec  string `json:"Codec"`
+			Height *int   `json:"Height"`
+			Width  *int   `json:"Width"`
+		} `json:"MediaStreams"`
+	} `json:"MediaSources"`
 }
 
 // FindSeriesIDByName looks up a Series by name and returns its Id, if found.
 func (c *Client) FindSeriesIDByName(name string) (string, error) {
-    if c == nil || c.BaseURL == "" || c.APIKey == "" || strings.TrimSpace(name) == "" {
-        return "", nil
-    }
-    // helper to query Emby with a given search term
-    query := func(term string) (string, error) {
-        u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
-        q := url.Values{}
-        q.Set("api_key", c.APIKey)
-        q.Set("IncludeItemTypes", "Series")
-        q.Set("Recursive", "true")
-        q.Set("SearchTerm", term)
-        q.Set("Limit", "1")
-        req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
-        req.Header.Set("X-Emby-Token", c.APIKey)
-        resp, err := c.doWithRetry(req, 2)
-        if err != nil {
-            return "", err
-        }
-        var out itemsResp
-        if err := readJSON(resp, &out); err != nil {
-            return "", err
-        }
-        if len(out.Items) == 0 {
-            return "", nil
-        }
-        return out.Items[0].Id, nil
-    }
+	if c == nil || c.BaseURL == "" || c.APIKey == "" || strings.TrimSpace(name) == "" {
+		return "", nil
+	}
+	// helper to query Emby with a given search term
+	query := func(term string) (string, error) {
+		u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
+		q := url.Values{}
+		q.Set("api_key", c.APIKey)
+		q.Set("IncludeItemTypes", "Series")
+		q.Set("Recursive", "true")
+		q.Set("SearchTerm", term)
+		q.Set("Limit", "1")
+		req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
+		req.Header.Set("X-Emby-Token", c.APIKey)
+		resp, err := c.doWithRetry(req, 2)
+		if err != nil {
+			return "", err
+		}
+		var out itemsResp
+		if err := readJSON(resp, &out); err != nil {
+			return "", err
+		}
+		if len(out.Items) == 0 {
+			return "", nil
+		}
+		return out.Items[0].Id, nil
+	}
 
-    // Try exact input first
-    if id, err := query(name); err != nil || id != "" {
-        return id, err
-    }
-    // Fallback: strip year suffix like " (2025)"
-    short := name
-    if i := strings.LastIndex(short, " ("); i > 0 && strings.HasSuffix(short, ")") {
-        short = short[:i]
-    }
-    if short != name {
-        if id, err := query(short); err != nil || id != "" {
-            return id, err
-        }
-    }
-    return "", nil
+	// Try exact input first
+	if id, err := query(name); err != nil || id != "" {
+		return id, err
+	}
+	// Fallback: strip year suffix like " (2025)"
+	short := name
+	if i := strings.LastIndex(short, " ("); i > 0 && strings.HasSuffix(short, ")") {
+		short = short[:i]
+	}
+	if short != name {
+		if id, err := query(short); err != nil || id != "" {
+			return id, err
+		}
+	}
+	return "", nil
 }
 
 type itemsResp struct {
@@ -378,7 +378,7 @@ func (c *Client) TotalItems() (int, error) {
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-    q.Set("IncludeItemTypes", "Movie,Episode") // Only count video items (exclude Series)
+	q.Set("IncludeItemTypes", "Movie,Episode") // Only count video items (exclude Series)
 	q.Set("Recursive", "true")
 	q.Set("StartIndex", "0")
 	q.Set("Limit", "1")
@@ -403,10 +403,10 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-    q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container,ProductionYear,Genres")
-    q.Set("Recursive", "true")
-    q.Set("Limit", fmt.Sprintf("%d", limit))
-    q.Set("IncludeItemTypes", "Series,Movie,Episode")
+	q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container,ProductionYear,Genres")
+	q.Set("Recursive", "true")
+	q.Set("Limit", fmt.Sprintf("%d", limit))
+	q.Set("IncludeItemTypes", "Series,Movie,Episode")
 
 	// Add incremental sync parameter
 	if minDateLastSaved != nil {
@@ -473,19 +473,19 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 		if firstSize > 0 {
 			szPtr = &firstSize
 		}
-        result = append(result, LibraryItem{
-            Id:            item.Id, // Use original ID without suffix
-            Name:          item.Name,
-            Type:          item.Type,
-            Height:        firstVideoHeight,
-            Width:         firstVideoWidth,
-            Codec:         firstVideoCodec,
-            Container:     item.Container,
-            RunTimeTicks:  &rt,
-            BitrateBps:    brPtr,
-            FileSizeBytes: szPtr,
-            Genres:        item.Genres,
-        })
+		result = append(result, LibraryItem{
+			Id:            item.Id, // Use original ID without suffix
+			Name:          item.Name,
+			Type:          item.Type,
+			Height:        firstVideoHeight,
+			Width:         firstVideoWidth,
+			Codec:         firstVideoCodec,
+			Container:     item.Container,
+			RunTimeTicks:  &rt,
+			BitrateBps:    brPtr,
+			FileSizeBytes: szPtr,
+			Genres:        item.Genres,
+		})
 	}
 
 	return result, out.TotalRecordCount, nil
@@ -496,11 +496,11 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-    q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container,ProductionYear,Genres")
-    q.Set("Recursive", "true")
-    q.Set("StartIndex", fmt.Sprintf("%d", page*limit))
-    q.Set("Limit", fmt.Sprintf("%d", limit))
-    q.Set("IncludeItemTypes", "Series,Movie,Episode")
+	q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container,ProductionYear,Genres")
+	q.Set("Recursive", "true")
+	q.Set("StartIndex", fmt.Sprintf("%d", page*limit))
+	q.Set("Limit", fmt.Sprintf("%d", limit))
+	q.Set("IncludeItemTypes", "Series,Movie,Episode")
 
 	req, _ := http.NewRequest("GET", u+"?"+q.Encode(), nil)
 	req.Header.Set("X-Emby-Token", c.APIKey)
@@ -561,19 +561,19 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 		if firstSize > 0 {
 			szPtr = &firstSize
 		}
-        result = append(result, LibraryItem{
-            Id:            item.Id, // Use original ID without suffix
-            Name:          item.Name,
-            Type:          item.Type,
-            Height:        firstVideoHeight,
-            Width:         firstVideoWidth,
-            Codec:         firstVideoCodec,
-            Container:     item.Container,
-            RunTimeTicks:  &rt,
-            BitrateBps:    brPtr,
-            FileSizeBytes: szPtr,
-            Genres:        item.Genres,
-        })
+		result = append(result, LibraryItem{
+			Id:            item.Id, // Use original ID without suffix
+			Name:          item.Name,
+			Type:          item.Type,
+			Height:        firstVideoHeight,
+			Width:         firstVideoWidth,
+			Codec:         firstVideoCodec,
+			Container:     item.Container,
+			RunTimeTicks:  &rt,
+			BitrateBps:    brPtr,
+			FileSizeBytes: szPtr,
+			Genres:        item.Genres,
+		})
 	}
 
 	return result, nil

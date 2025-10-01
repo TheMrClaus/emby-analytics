@@ -13,10 +13,14 @@ const apiBase =
 export default function NowPlaying() {
   // Get sessions from context instead of managing WebSocket locally
   const { sessions, error } = useNowPlaying();
-  const [summary, setSummary] = useState<{ outbound_mbps: number; active_streams: number; active_transcodes: number } | null>(null);
+  const [summary, setSummary] = useState<{
+    outbound_mbps: number;
+    active_streams: number;
+    active_transcodes: number;
+  } | null>(null);
   const [msgOpen, setMsgOpen] = useState<Record<string, boolean>>({});
   const [msgText, setMsgText] = useState<Record<string, string>>({});
-  const keyFor = (s: NowEntry) => `${(s.server_type || 'emby').toLowerCase()}|${s.session_id}`;
+  const keyFor = (s: NowEntry) => `${(s.server_type || "emby").toLowerCase()}|${s.session_id}`;
 
   // Poll summary every 5s
   useEffect(() => {
@@ -40,11 +44,15 @@ export default function NowPlaying() {
 
   // If any card is transcoding, we’ll render invisible placeholders
   // in non-transcoding cards to visually equalize heights subtly.
-  const anyTranscoding = useMemo(() =>
-    sessions.some(
-      (s) => (s.video_method || "Direct Play") === "Transcode" || (s.audio_method || "Direct Play") === "Transcode"
-    ),
-  [sessions]);
+  const anyTranscoding = useMemo(
+    () =>
+      sessions.some(
+        (s) =>
+          (s.video_method || "Direct Play") === "Transcode" ||
+          (s.audio_method || "Direct Play") === "Transcode"
+      ),
+    [sessions]
+  );
 
   // Crossfade + parallax state
   const [bgA, setBgA] = useState<string>("");
@@ -56,8 +64,11 @@ export default function NowPlaying() {
   const nextHeroUrl = useMemo(() => {
     const first = sessions[0];
     if (!first?.item_id) return "";
-    return `${apiBase}/img/backdrop/${encodeURIComponent(first.item_id)}`;
-  }, [sessions]);
+    const server = (first.server_type || "emby").toLowerCase();
+    const path = `/img/backdrop/${server}/${encodeURIComponent(first.item_id)}`;
+    if (!apiBase) return path;
+    return `${apiBase}${path}`;
+  }, [sessions, apiBase]);
 
   // When the first session changes, crossfade layers
   useEffect(() => {
@@ -175,7 +186,13 @@ export default function NowPlaying() {
   );
 
   // Small inline icons for admin controls (no external deps)
-  const Icon = ({ name, className }: { name: "pause" | "play" | "stop" | "message"; className?: string }) => {
+  const Icon = ({
+    name,
+    className,
+  }: {
+    name: "pause" | "play" | "stop" | "message";
+    className?: string;
+  }) => {
     if (name === "pause") {
       return (
         <svg viewBox="0 0 24 24" fill="currentColor" className={className || "w-4 h-4"} aria-hidden>
@@ -288,7 +305,9 @@ export default function NowPlaying() {
             const rgb = hexToRgb(th.hex);
             return (
               <>
-                <h2 className="ty-title" style={{ color: th.hex }}>Now Playing</h2>
+                <h2 className="ty-title" style={{ color: th.hex }}>
+                  Now Playing
+                </h2>
                 <div className="flex items-center gap-2 text-xs">
                   <span
                     className="px-2 py-1 rounded-full border"
@@ -334,7 +353,14 @@ export default function NowPlaying() {
                   )
                 : undefined;
               const progress = hasTime
-                ? Math.max(0, Math.min(100, ((s.is_paused ? (s.position_sec || 0) : (livePos || 0)) / (s.duration_sec || 1)) * 100))
+                ? Math.max(
+                    0,
+                    Math.min(
+                      100,
+                      ((s.is_paused ? s.position_sec || 0 : livePos || 0) / (s.duration_sec || 1)) *
+                        100
+                    )
+                  )
                 : progressServer;
               const top = topBadge(s);
               const v = videoStatus(s);
@@ -377,7 +403,9 @@ export default function NowPlaying() {
                       </h3>
                       <div className="text-xs text-gray-300 space-y-0.5 mb-2">
                         <div>
-                          <span className={`font-medium ${theme(s.server_type).text}`}>{s.user}</span>
+                          <span className={`font-medium ${theme(s.server_type).text}`}>
+                            {s.user}
+                          </span>
                         </div>
                         <div>{s.app || s.device || "Unknown Client"}</div>
                       </div>
@@ -389,7 +417,8 @@ export default function NowPlaying() {
                         {(() => {
                           const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
                           const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
-                          const remuxOnly = (s.play_method || "") === "Transcode" && !isVideoTrans && !isAudioTrans;
+                          const remuxOnly =
+                            (s.play_method || "") === "Transcode" && !isVideoTrans && !isAudioTrans;
                           if (!remuxOnly) return null;
                           const sp = (s.stream_path || "").toUpperCase();
                           const label = sp ? `Remux/${sp}` : "Remux";
@@ -408,26 +437,37 @@ export default function NowPlaying() {
                       {/* Slim inline rows with no large spacing */}
                       <div className="text-gray-300">
                         <span className="text-gray-400">Video: </span>
-                        <span className="text-white">{s.video || "Unknown"}</span>
-                        {" "}
-                        <span className={v.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{v.label}</span>
+                        <span className="text-white">{s.video || "Unknown"}</span>{" "}
+                        <span
+                          className={v.tone === "warn" ? "text-orange-400" : "text-emerald-400"}
+                        >
+                          {v.label}
+                        </span>
                       </div>
                       <div className="text-gray-300">
                         <span className="text-gray-400">Audio: </span>
-                        <span className="text-white">{s.audio || "Unknown"}</span>
-                        {" "}
-                        <span className={a.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{a.label}</span>
+                        <span className="text-white">{s.audio || "Unknown"}</span>{" "}
+                        <span
+                          className={a.tone === "warn" ? "text-orange-400" : "text-emerald-400"}
+                        >
+                          {a.label}
+                        </span>
                       </div>
                       <div className="text-gray-300">
                         <span className="text-gray-400">Subtitles: </span>
-                        <span className="text-white">{s.subs || "None"}</span>
-                        {" "}
-                        <span className={sub.tone === "warn" ? "text-orange-400" : "text-emerald-400"}>{sub.label}</span>
+                        <span className="text-white">{s.subs || "None"}</span>{" "}
+                        <span
+                          className={sub.tone === "warn" ? "text-orange-400" : "text-emerald-400"}
+                        >
+                          {sub.label}
+                        </span>
                       </div>
                       {s.bitrate > 0 && (
                         <div className="text-gray-300">
                           <span className="text-gray-400">Bitrate: </span>
-                          <span className="text-white">{(s.bitrate / 1_000_000).toFixed(1)} Mbps</span>
+                          <span className="text-white">
+                            {(s.bitrate / 1_000_000).toFixed(1)} Mbps
+                          </span>
                         </div>
                       )}
                       {/* Progress bound to the width of this block */}
@@ -447,79 +487,97 @@ export default function NowPlaying() {
                           />
                         </div>
                       </div>
-                    {/* If anything is transcoding, show the reason */}
-                    {(isVideoTrans || isAudioTrans) && s.trans_reason && (
-                      <div className="text-xs text-gray-400">
-                        Reason: <span className="text-white">{s.trans_reason}</span>
-                      </div>
-                    )}
-                    {/* Placeholder to balance height if any card is transcoding */}
-                    {anyTranscoding && !(isVideoTrans || isAudioTrans) && (
-                      <div className="text-xs text-transparent select-none" aria-hidden>
-                        Reason: placeholder
-                      </div>
-                    )}
-                    {/* Transcoding progress bar (only if transcoding) */}
-                    {(isVideoTrans || isAudioTrans) && s.trans_pct !== undefined && (
-                      <div>
-                        <div className="flex items-center justify-between text-[11px] text-gray-400 mb-1">
-                          <span>Transcoding</span>
-                          <span>{pct(s.trans_pct)}%</span>
+                      {/* If anything is transcoding, show the reason */}
+                      {(isVideoTrans || isAudioTrans) && s.trans_reason && (
+                        <div className="text-xs text-gray-400">
+                          Reason: <span className="text-white">{s.trans_reason}</span>
                         </div>
-                        <div className="h-1.5 bg-neutral-700 rounded-full overflow-hidden w-full">
-                          <div
-                            className="h-full bg-orange-500 transition-all duration-300"
-                            style={{ width: `${pct(s.trans_pct)}%` }}
-                          />
+                      )}
+                      {/* Placeholder to balance height if any card is transcoding */}
+                      {anyTranscoding && !(isVideoTrans || isAudioTrans) && (
+                        <div className="text-xs text-transparent select-none" aria-hidden>
+                          Reason: placeholder
                         </div>
-                      </div>
-                    )}
-                    {/* Placeholder bar to balance height if any card is transcoding */}
-                    {anyTranscoding && !(isVideoTrans || isAudioTrans) && (
-                      <div aria-hidden>
-                        <div className="flex items-center justify-between text-[11px] text-transparent mb-1">
-                          <span>Transcoding</span>
-                          <span>00%</span>
+                      )}
+                      {/* Transcoding progress bar (only if transcoding) */}
+                      {(isVideoTrans || isAudioTrans) && s.trans_pct !== undefined && (
+                        <div>
+                          <div className="flex items-center justify-between text-[11px] text-gray-400 mb-1">
+                            <span>Transcoding</span>
+                            <span>{pct(s.trans_pct)}%</span>
+                          </div>
+                          <div className="h-1.5 bg-neutral-700 rounded-full overflow-hidden w-full">
+                            <div
+                              className="h-full bg-orange-500 transition-all duration-300"
+                              style={{ width: `${pct(s.trans_pct)}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="h-1.5 bg-transparent rounded-full overflow-hidden w-full">
-                          <div className="h-full" />
+                      )}
+                      {/* Placeholder bar to balance height if any card is transcoding */}
+                      {anyTranscoding && !(isVideoTrans || isAudioTrans) && (
+                        <div aria-hidden>
+                          <div className="flex items-center justify-between text-[11px] text-transparent mb-1">
+                            <span>Transcoding</span>
+                            <span>00%</span>
+                          </div>
+                          <div className="h-1.5 bg-transparent rounded-full overflow-hidden w-full">
+                            <div className="h-full" />
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
                     </div>
                     {/* Admin controls - icon-only, tight spacing; width bound to same block */}
                     <div className="pt-2 w-max">
                       <div className="flex items-center gap-2">
-                        {(() => { const isPlex = (s.server_type || '').toLowerCase() === 'plex'; return (
-                        <button
-                          onClick={() => { if (!isPlex) void sendServer(s, "pause") }}
-                          className={`p-2 rounded transition-colors ${isPlex ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' : 'bg-neutral-700 hover:bg-neutral-600'}`}
-                          aria-label="Pause"
-                          title={isPlex ? "Not supported" : "Pause"}
-                          disabled={isPlex}
-                        >
-                          <Icon name="pause" />
-                        </button>); })()}
-                        {(() => { const isPlex = (s.server_type || '').toLowerCase() === 'plex'; return (
-                        <button
-                          onClick={() => { if (!isPlex) void sendServer(s, "unpause") }}
-                          className={`p-2 rounded transition-colors ${isPlex ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' : 'bg-neutral-700 hover:bg-neutral-600'}`}
-                          aria-label="Resume"
-                          title={isPlex ? "Not supported" : "Resume"}
-                          disabled={isPlex}
-                        >
-                          <Icon name="play" />
-                        </button>); })()}
-                        {(() => { const isPlex = (s.server_type || '').toLowerCase() === 'plex'; return (
-                        <button
-                          onClick={() => { if (!isPlex) toggleMsg(s.session_id) }}
-                          className={`p-2 rounded transition-colors ${isPlex ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' : 'bg-neutral-700 hover:bg-neutral-600'}`}
-                          aria-label="Message"
-                          title={isPlex ? "Not supported" : "Message"}
-                          disabled={isPlex}
-                        >
-                          <Icon name="message" />
-                        </button>); })()}
+                        {(() => {
+                          const isPlex = (s.server_type || "").toLowerCase() === "plex";
+                          return (
+                            <button
+                              onClick={() => {
+                                if (!isPlex) void sendServer(s, "pause");
+                              }}
+                              className={`p-2 rounded transition-colors ${isPlex ? "bg-neutral-800 text-neutral-500 cursor-not-allowed" : "bg-neutral-700 hover:bg-neutral-600"}`}
+                              aria-label="Pause"
+                              title={isPlex ? "Not supported" : "Pause"}
+                              disabled={isPlex}
+                            >
+                              <Icon name="pause" />
+                            </button>
+                          );
+                        })()}
+                        {(() => {
+                          const isPlex = (s.server_type || "").toLowerCase() === "plex";
+                          return (
+                            <button
+                              onClick={() => {
+                                if (!isPlex) void sendServer(s, "unpause");
+                              }}
+                              className={`p-2 rounded transition-colors ${isPlex ? "bg-neutral-800 text-neutral-500 cursor-not-allowed" : "bg-neutral-700 hover:bg-neutral-600"}`}
+                              aria-label="Resume"
+                              title={isPlex ? "Not supported" : "Resume"}
+                              disabled={isPlex}
+                            >
+                              <Icon name="play" />
+                            </button>
+                          );
+                        })()}
+                        {(() => {
+                          const isPlex = (s.server_type || "").toLowerCase() === "plex";
+                          return (
+                            <button
+                              onClick={() => {
+                                if (!isPlex) toggleMsg(s.session_id);
+                              }}
+                              className={`p-2 rounded transition-colors ${isPlex ? "bg-neutral-800 text-neutral-500 cursor-not-allowed" : "bg-neutral-700 hover:bg-neutral-600"}`}
+                              aria-label="Message"
+                              title={isPlex ? "Not supported" : "Message"}
+                              disabled={isPlex}
+                            >
+                              <Icon name="message" />
+                            </button>
+                          );
+                        })()}
                         <button
                           onClick={() => sendServer(s, "stop")}
                           className="p-2 bg-red-700 hover:bg-red-600 rounded transition-colors"

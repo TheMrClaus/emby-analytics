@@ -29,22 +29,22 @@ func Overview(db *sql.DB) fiber.Handler {
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to count users"})
 		}
 
-        // Count library items (excluding live TV)
-        err = db.QueryRow(`SELECT COUNT(*) FROM library_item WHERE media_type NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')`).Scan(&data.TotalItems)
+		// Count library items (excluding live TV)
+		err = db.QueryRow(`SELECT COUNT(*) FROM library_item WHERE media_type NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')`).Scan(&data.TotalItems)
 		if err != nil {
 			log.Printf("[overview] Error counting library items: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to count library items"})
 		}
 
-        // Count total play sessions (exclude Live TV)
-        err = db.QueryRow(`SELECT COUNT(*) FROM play_sessions WHERE started_at IS NOT NULL AND COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')`).Scan(&data.TotalPlays)
+		// Count total play sessions (exclude Live TV)
+		err = db.QueryRow(`SELECT COUNT(*) FROM play_sessions WHERE started_at IS NOT NULL AND COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')`).Scan(&data.TotalPlays)
 		if err != nil {
 			log.Printf("[overview] Error counting play sessions: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to count play sessions"})
 		}
 
-        // Count unique items played (exclude Live TV)
-        err = db.QueryRow(`SELECT COUNT(DISTINCT item_id) FROM play_sessions WHERE started_at IS NOT NULL AND COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')`).Scan(&data.UniquePlays)
+		// Count unique items played (exclude Live TV)
+		err = db.QueryRow(`SELECT COUNT(DISTINCT item_id) FROM play_sessions WHERE started_at IS NOT NULL AND COALESCE(item_type,'') NOT IN ('TvChannel','LiveTv','Channel','TvProgram')`).Scan(&data.UniquePlays)
 		if err != nil {
 			log.Printf("[overview] Error counting unique plays: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to count unique plays"})

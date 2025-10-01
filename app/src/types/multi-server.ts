@@ -44,4 +44,3 @@ export type MultiNowEntry = {
 };
 
 export type ServerAlias = "all" | "emby" | "plex" | "jellyfin";
-

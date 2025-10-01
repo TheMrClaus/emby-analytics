@@ -2,6 +2,7 @@ package stats
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -18,28 +19,36 @@ type CodecBuckets struct {
 func Codecs(db *sql.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		limit := parseQueryInt(c, "limit", 0) // 0 = no limit
+		serverType, serverID := normalizeServerParam(c.Query("server", ""))
 
-		// Use real column names and normalize NULLs to "Unknown".
-		// Exclude live/TV channel types from the rollup, like before.
-		q := `
+		condition := excludeLiveTvFilterAlias("li")
+		condition, args := appendServerFilter(condition, "li", serverType, serverID)
+		q := fmt.Sprintf(`
+			WITH base AS (
+				SELECT
+					COALESCE(li.video_codec, 'Unknown') AS codec,
+					%s AS media_type
+				FROM library_item li
+				WHERE %s
+			)
 			SELECT
-				COALESCE(li.video_codec, 'Unknown') AS codec,
-				COALESCE(li.media_type, 'Unknown') AS media_type,
+				codec,
+				media_type,
 				COUNT(*) AS count
-			FROM library_item li
-			WHERE COALESCE(li.media_type, 'Unknown') NOT IN ('TvChannel', 'LiveTv', 'Channel')
-			GROUP BY COALESCE(li.video_codec, 'Unknown'),
-					COALESCE(li.media_type, 'Unknown')
-			ORDER BY COUNT(*) DESC
-			`
+			FROM base
+			WHERE media_type IN ('Movie', 'Episode')
+			GROUP BY codec, media_type
+			ORDER BY count DESC
+			`, normalizedMediaTypeExpr("li"), condition)
 
 		var rows *sql.Rows
 		var err error
 		if limit > 0 && limit <= 100 {
 			q = q + " LIMIT ?"
-			rows, err = db.Query(q, limit)
+			args = append(args, limit)
+			rows, err = db.Query(q, args...)
 		} else {
-			rows, err = db.Query(q)
+			rows, err = db.Query(q, args...)
 		}
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})

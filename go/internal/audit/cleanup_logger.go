@@ -11,15 +11,15 @@ import (
 
 // CleanupJob represents an audit log entry for cleanup operations
 type CleanupJob struct {
-	ID               string    `json:"id"`
-	OperationType    string    `json:"operation_type"`
-	Status           string    `json:"status"`
-	StartedAt        time.Time `json:"started_at"`
-	CompletedAt      *time.Time `json:"completed_at,omitempty"`
-	TotalItemsChecked int      `json:"total_items_checked"`
-	ItemsProcessed   int       `json:"items_processed"`
-	Summary          string    `json:"summary,omitempty"`
-	CreatedBy        string    `json:"created_by,omitempty"`
+	ID                string     `json:"id"`
+	OperationType     string     `json:"operation_type"`
+	Status            string     `json:"status"`
+	StartedAt         time.Time  `json:"started_at"`
+	CompletedAt       *time.Time `json:"completed_at,omitempty"`
+	TotalItemsChecked int        `json:"total_items_checked"`
+	ItemsProcessed    int        `json:"items_processed"`
+	Summary           string     `json:"summary,omitempty"`
+	CreatedBy         string     `json:"created_by,omitempty"`
 }
 
 // CleanupAuditItem represents an individual item action in a cleanup job
@@ -44,16 +44,16 @@ type CleanupLogger struct {
 // NewCleanupLogger creates a new cleanup audit logger
 func NewCleanupLogger(db *sql.DB, operationType string, createdBy string) (*CleanupLogger, error) {
 	jobID := uuid.New().String()
-	
+
 	_, err := db.Exec(`
 		INSERT INTO cleanup_jobs (id, operation_type, status, started_at, created_by)
 		VALUES (?, ?, 'running', ?, ?)
 	`, jobID, operationType, time.Now().Unix(), createdBy)
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &CleanupLogger{db: db, jobID: jobID}, nil
 }
 
@@ -67,12 +67,12 @@ func (cl *CleanupLogger) LogItemAction(actionType, itemID, itemName, itemType, t
 		}
 		metadataJSON = string(b)
 	}
-	
+
 	_, err := cl.db.Exec(`
 		INSERT INTO cleanup_audit_items (job_id, action_type, item_id, item_name, item_type, target_item_id, metadata, timestamp)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`, cl.jobID, actionType, itemID, itemName, itemType, targetItemID, metadataJSON, time.Now().Unix())
-	
+
 	return err
 }
 
@@ -84,13 +84,13 @@ func (cl *CleanupLogger) CompleteJob(totalChecked, itemsProcessed int, summary m
 			summaryJSON = string(b)
 		}
 	}
-	
+
 	_, err := cl.db.Exec(`
 		UPDATE cleanup_jobs 
 		SET status = 'completed', completed_at = ?, total_items_checked = ?, items_processed = ?, summary = ?
 		WHERE id = ?
 	`, time.Now().Unix(), totalChecked, itemsProcessed, summaryJSON, cl.jobID)
-	
+
 	return err
 }
 
@@ -98,13 +98,13 @@ func (cl *CleanupLogger) CompleteJob(totalChecked, itemsProcessed int, summary m
 func (cl *CleanupLogger) FailJob(errorMsg string) error {
 	summary := map[string]interface{}{"error": errorMsg}
 	summaryJSON, _ := json.Marshal(summary)
-	
+
 	_, err := cl.db.Exec(`
 		UPDATE cleanup_jobs 
 		SET status = 'failed', completed_at = ?, summary = ?
 		WHERE id = ?
 	`, time.Now().Unix(), string(summaryJSON), cl.jobID)
-	
+
 	return err
 }
 
@@ -118,7 +118,7 @@ func GetCleanupJobs(db *sql.DB, limit int) ([]CleanupJob, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	
+
 	rows, err := db.Query(`
 		SELECT id, operation_type, status, started_at, completed_at, 
 		       total_items_checked, items_processed, summary, created_by
@@ -130,29 +130,29 @@ func GetCleanupJobs(db *sql.DB, limit int) ([]CleanupJob, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	
+
 	var jobs []CleanupJob
 	for rows.Next() {
 		var job CleanupJob
 		var startedAtUnix int64
 		var completedAtUnix *int64
-		
-		err := rows.Scan(&job.ID, &job.OperationType, &job.Status, 
-			&startedAtUnix, &completedAtUnix, &job.TotalItemsChecked, &job.ItemsProcessed, 
+
+		err := rows.Scan(&job.ID, &job.OperationType, &job.Status,
+			&startedAtUnix, &completedAtUnix, &job.TotalItemsChecked, &job.ItemsProcessed,
 			&job.Summary, &job.CreatedBy)
 		if err != nil {
 			continue
 		}
-		
+
 		job.StartedAt = time.Unix(startedAtUnix, 0)
 		if completedAtUnix != nil {
 			t := time.Unix(*completedAtUnix, 0)
 			job.CompletedAt = &t
 		}
-		
+
 		jobs = append(jobs, job)
 	}
-	
+
 	return jobs, nil
 }
 
@@ -161,19 +161,19 @@ func GetCleanupJobDetails(db *sql.DB, jobID string) (*CleanupJob, []CleanupAudit
 	// Get job info
 	var job CleanupJob
 	var startedAtUnix, completedAtUnix *int64
-	
+
 	err := db.QueryRow(`
 		SELECT id, operation_type, status, started_at, completed_at,
 		       total_items_checked, items_processed, summary, created_by
 		FROM cleanup_jobs WHERE id = ?
 	`, jobID).Scan(&job.ID, &job.OperationType, &job.Status,
-		&startedAtUnix, &completedAtUnix, &job.TotalItemsChecked, 
+		&startedAtUnix, &completedAtUnix, &job.TotalItemsChecked,
 		&job.ItemsProcessed, &job.Summary, &job.CreatedBy)
-	
+
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	if startedAtUnix != nil {
 		job.StartedAt = time.Unix(*startedAtUnix, 0)
 	}
@@ -181,7 +181,7 @@ func GetCleanupJobDetails(db *sql.DB, jobID string) (*CleanupJob, []CleanupAudit
 		t := time.Unix(*completedAtUnix, 0)
 		job.CompletedAt = &t
 	}
-	
+
 	// Get audit items
 	rows, err := db.Query(`
 		SELECT id, job_id, action_type, item_id, item_name, item_type, 
@@ -194,21 +194,21 @@ func GetCleanupJobDetails(db *sql.DB, jobID string) (*CleanupJob, []CleanupAudit
 		return &job, nil, err
 	}
 	defer rows.Close()
-	
+
 	var items []CleanupAuditItem
 	for rows.Next() {
 		var item CleanupAuditItem
 		var timestampUnix int64
-		
+
 		err := rows.Scan(&item.ID, &item.JobID, &item.ActionType, &item.ItemID,
 			&item.ItemName, &item.ItemType, &item.TargetItemID, &item.Metadata, &timestampUnix)
 		if err != nil {
 			continue
 		}
-		
+
 		item.Timestamp = time.Unix(timestampUnix, 0)
 		items = append(items, item)
 	}
-	
+
 	return &job, items, nil
 }

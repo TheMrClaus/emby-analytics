@@ -5,11 +5,14 @@ import { useQualities } from "../hooks/useData";
 import { fmtInt } from "../lib/format";
 
 import { colors } from "../theme/colors";
+import { useLibraryServer } from "../contexts/LibraryServerContext";
 
 type QualityRow = { label: string; Movie: number; Episode: number };
 
 export default function QualitiesChart() {
-  const { data, error, isLoading } = useQualities();
+  const { server } = useLibraryServer();
+  const { data, error, isLoading } = useQualities(server);
+  const serverLabel = server === "all" ? "" : server.charAt(0).toUpperCase() + server.slice(1);
 
   const rows = useMemo<QualityRow[]>(() => {
     if (!data) return [];
@@ -33,6 +36,9 @@ export default function QualitiesChart() {
     <div className="bg-neutral-800 rounded-2xl p-4 shadow">
       <div className="text-sm text-gray-400 mb-2">
         Media Quality
+        {serverLabel && (
+          <span className="ml-2 text-xs text-gray-400 uppercase tracking-wide">{serverLabel}</span>
+        )}
         {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}
       </div>
       <div style={{ height: 300 }}>

@@ -38,22 +38,22 @@ func normalize(method string) string {
 
 // PlayMethods returns a breakdown of playback methods over the last N days (default 30).
 type SessionDetail struct {
-    ItemName          string `json:"item_name"`
-    ItemType          string `json:"item_type"`
-    ItemID            string `json:"item_id"`
-    DeviceID          string `json:"device_id"`
-    DeviceName        string `json:"device_name"`
-    ClientName        string `json:"client_name"`
-    VideoMethod       string `json:"video_method"`
-    AudioMethod       string `json:"audio_method"`
-    SubtitleTranscode bool   `json:"subtitle_transcode"`
-    UserID            string `json:"user_id"`
-    UserName          string `json:"user_name"`
-    StartedAt         int64  `json:"started_at"`
-    EndedAt           *int64 `json:"ended_at"`
-    SessionID         string `json:"session_id"`
-    PlayMethod        string `json:"play_method"`
-    ServerType        string `json:"server_type,omitempty"`
+	ItemName          string `json:"item_name"`
+	ItemType          string `json:"item_type"`
+	ItemID            string `json:"item_id"`
+	DeviceID          string `json:"device_id"`
+	DeviceName        string `json:"device_name"`
+	ClientName        string `json:"client_name"`
+	VideoMethod       string `json:"video_method"`
+	AudioMethod       string `json:"audio_method"`
+	SubtitleTranscode bool   `json:"subtitle_transcode"`
+	UserID            string `json:"user_id"`
+	UserName          string `json:"user_name"`
+	StartedAt         int64  `json:"started_at"`
+	EndedAt           *int64 `json:"ended_at"`
+	SessionID         string `json:"session_id"`
+	PlayMethod        string `json:"play_method"`
+	ServerType        string `json:"server_type,omitempty"`
 }
 
 func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
@@ -101,7 +101,7 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 		}
 
 		// Enhanced query with new columns - handle empty strings and NULLs properly
-        query := `
+		query := `
             WITH derived AS (
                 SELECT 
                     -- Per-stream derivation (no blanket fallback)
@@ -139,7 +139,7 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
         `
 
 		// Build session query with filters
-        sessionQueryBase := `
+		sessionQueryBase := `
             SELECT 
                 ps.item_name, 
                 ps.item_type, 
@@ -311,27 +311,27 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 		}
 
 		// Fetch detailed session information
-        sessionRows, sessionErr := db.Query(sessionQuery, queryParams...)
-        if sessionErr != nil {
-            logging.Debug("Session query failed: %v", sessionErr)
-        } else {
-            defer sessionRows.Close()
-            for sessionRows.Next() {
-                var session SessionDetail
-                var subtitleTranscodeInt int
-                if err := sessionRows.Scan(
-                    &session.ItemName, &session.ItemType, &session.DeviceID, &session.DeviceName,
-                    &session.ClientName, &session.ItemID, &session.UserID, &session.UserName,
-                    &session.StartedAt, &session.EndedAt, &session.SessionID, &session.PlayMethod,
-                    &session.ServerType,
-                    &session.VideoMethod, &session.AudioMethod, &subtitleTranscodeInt); err != nil {
-                    logging.Debug("Session scan error: %v", err)
-                    continue
-                }
-                session.SubtitleTranscode = subtitleTranscodeInt == 1
-                sessionDetails = append(sessionDetails, session)
-            }
-        }
+		sessionRows, sessionErr := db.Query(sessionQuery, queryParams...)
+		if sessionErr != nil {
+			logging.Debug("Session query failed: %v", sessionErr)
+		} else {
+			defer sessionRows.Close()
+			for sessionRows.Next() {
+				var session SessionDetail
+				var subtitleTranscodeInt int
+				if err := sessionRows.Scan(
+					&session.ItemName, &session.ItemType, &session.DeviceID, &session.DeviceName,
+					&session.ClientName, &session.ItemID, &session.UserID, &session.UserName,
+					&session.StartedAt, &session.EndedAt, &session.SessionID, &session.PlayMethod,
+					&session.ServerType,
+					&session.VideoMethod, &session.AudioMethod, &subtitleTranscodeInt); err != nil {
+					logging.Debug("Session scan error: %v", err)
+					continue
+				}
+				session.SubtitleTranscode = subtitleTranscodeInt == 1
+				sessionDetails = append(sessionDetails, session)
+			}
+		}
 
 		// Count subtitle transcoding from transcode_reasons field
 		subtitleQuery := `
@@ -397,7 +397,7 @@ func PlayMethods(db *sql.DB, em *emby.Client) fiber.Handler {
 
 // legacyPlayMethods provides the original functionality when new columns don't exist
 func legacyPlayMethods(c fiber.Ctx, db *sql.DB, days int, limit int, offset int) error {
-    query := `
+	query := `
         SELECT
             COALESCE(play_method, '') AS raw_method,
             COUNT(*) AS cnt

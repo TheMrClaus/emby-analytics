@@ -1,8 +1,8 @@
 package admin
 
 import (
-	"emby-analytics/internal/logging"
 	"database/sql"
+	"emby-analytics/internal/logging"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
@@ -12,11 +12,11 @@ import (
 
 // EmbyWebhookPayload represents the structure of webhook data from Emby
 type EmbyWebhookPayload struct {
-	Server      ServerInfo `json:"Server"`
-	Event       string     `json:"Event"`
-	User        UserInfo   `json:"User,omitempty"`
-	Item        ItemInfo   `json:"Item,omitempty"`
-	Timestamp   string     `json:"Timestamp"`
+	Server    ServerInfo `json:"Server"`
+	Event     string     `json:"Event"`
+	User      UserInfo   `json:"User,omitempty"`
+	Item      ItemInfo   `json:"Item,omitempty"`
+	Timestamp string     `json:"Timestamp"`
 }
 
 type ServerInfo struct {
@@ -53,7 +53,7 @@ func WebhookHandler(rm *RefreshManager, db *sql.DB, em *emby.Client) fiber.Handl
 			// Check if this is a media item we care about
 			if isMediaItem(payload.Item.Type) {
 				logging.Debug("📚 Library change detected: %s - %s (%s)", payload.Event, payload.Item.Name, payload.Item.Type)
-				
+
 				// Trigger incremental sync
 				go func() {
 					logging.Debug("[webhook] 🔄 Triggering incremental sync due to library change")
@@ -76,14 +76,14 @@ func isLibraryEvent(event string) bool {
 		"media.scan",
 		"library.refresh",
 	}
-	
+
 	eventLower := strings.ToLower(event)
 	for _, libEvent := range libraryEvents {
 		if strings.Contains(eventLower, libEvent) || strings.Contains(libEvent, eventLower) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -94,13 +94,13 @@ func isMediaItem(itemType string) bool {
 		"Episode",
 		"Video",
 	}
-	
+
 	for _, mediaType := range mediaTypes {
 		if strings.EqualFold(itemType, mediaType) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -113,7 +113,7 @@ func GetWebhookStats() fiber.Handler {
 			"webhook_endpoint": "/admin/webhook/emby",
 			"supported_events": []string{
 				"library.new",
-				"item.added", 
+				"item.added",
 				"item.updated",
 				"item.removed",
 				"media.scan",

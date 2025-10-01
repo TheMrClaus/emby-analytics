@@ -14,13 +14,21 @@ import {
   TopUser,
   UsageRow,
   UserDetail,
+  RuntimeOutlierResponse,
 } from "../types";
+import type { ServerAlias } from "../types/multi-server";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
 // --- Admin token handling ---
 // Source order: localStorage (runtime) -> NEXT_PUBLIC_ADMIN_TOKEN (build time)
 const ADMIN_TOKEN_STORAGE_KEY = "emby_admin_token";
+
+function appendServerParam(path: string, server?: ServerAlias | string) {
+  if (!server || server === "all") return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}server=${encodeURIComponent(server)}`;
+}
 
 function readAdminToken(): string | null {
   try {
@@ -95,23 +103,50 @@ export const fetchTopUsers = (days = 14, limit = 10, timeframe?: string) => {
   }
   return j<TopUser[]>(`/stats/top/users?days=${days}&limit=${limit}`);
 };
-export const fetchTopItems = (days = 14, limit = 10, timeframe?: string) => {
+export const fetchTopItems = (
+  days = 14,
+  limit = 10,
+  timeframe?: string,
+  server?: ServerAlias | string
+) => {
+  let path: string;
   if (timeframe) {
-    return j<TopItem[]>(`/stats/top/items?timeframe=${timeframe}&limit=${limit}`);
+    path = `/stats/top/items?timeframe=${timeframe}&limit=${limit}`;
+  } else {
+    path = `/stats/top/items?days=${days}&limit=${limit}`;
   }
-  return j<TopItem[]>(`/stats/top/items?days=${days}&limit=${limit}`);
+  return j<TopItem[]>(appendServerParam(path, server));
 };
-export const fetchQualities = () => j<QualityBuckets>("/stats/qualities");
-export const fetchCodecs = () => j<CodecBuckets>("/stats/codecs");
+export const fetchQualities = (server?: ServerAlias | string) =>
+  j<QualityBuckets>(appendServerParam("/stats/qualities", server));
+export const fetchCodecs = (server?: ServerAlias | string) =>
+  j<CodecBuckets>(appendServerParam("/stats/codecs", server));
 export const fetchActiveUsersLifetime = (limit = 10) =>
   j<ActiveUserLifetime[]>(`/stats/active-users?limit=${limit}`);
-export const fetchMovieStats = () => j<MovieStats>("/stats/movies");
-export const fetchSeriesStats = () => j<SeriesStats>("/stats/series");
+export const fetchMovieStats = (server?: ServerAlias | string) =>
+  j<MovieStats>(appendServerParam("/stats/movies", server));
+export const fetchSeriesStats = (server?: ServerAlias | string) =>
+  j<SeriesStats>(appendServerParam("/stats/series", server));
 export const fetchTotalUsers = () => j<number>("/stats/users/total");
+
+export interface MediaServerInfo {
+  id: string;
+  type: string;
+  name: string;
+  enabled: boolean;
+  health?: {
+    is_reachable?: boolean;
+    error?: string;
+  };
+}
+
+export const fetchServers = () => j<MediaServerInfo[]>("/api/servers");
 export const fetchUserDetail = (userId: string, days = 30, limit = 10) =>
   j<UserDetail>(`/stats/users/${userId}?days=${days}&limit=${limit}`);
 export const fetchItemsByIds = (ids: string[]) =>
   j<ItemRow[]>(`/items/by-ids?ids=${encodeURIComponent(ids.join(","))}`);
+export const fetchRuntimeOutliers = (limit = 50) =>
+  j<RuntimeOutlierResponse>(`/admin/library/runtime-outliers?limit=${limit}`);
 type SessionDetail = {
   item_name: string;
   item_type: string;
@@ -167,6 +202,18 @@ export const fetchPlayMethods = (
 // Admin refresh
 export const startRefresh = () =>
   j<{ started: boolean }>("/admin/refresh/start", { method: "POST" });
+
+export const syncAllServers = () => j<{ started: boolean }>("/admin/sync/all", { method: "POST" });
+
+export const syncServer = (serverId: string) =>
+  j<{ started: boolean }>(`/admin/sync/server/${encodeURIComponent(serverId)}`, {
+    method: "POST",
+  });
+
+export const deleteServerMedia = (serverId: string) =>
+  j<{ success: boolean }>(`/admin/server/${encodeURIComponent(serverId)}/media`, {
+    method: "DELETE",
+  });
 
 export const fetchRefreshStatus = () => j<RefreshState>("/admin/refresh/status");
 

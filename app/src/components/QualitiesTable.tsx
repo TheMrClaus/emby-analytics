@@ -4,11 +4,14 @@ import Link from "next/link";
 import { useQualities } from "../hooks/useData";
 import { fmtInt } from "../lib/format";
 import Card from "./ui/Card";
+import { useLibraryServer } from "../contexts/LibraryServerContext";
 
 const ORDER = ["8K", "4K", "1080p", "720p", "SD", "Resolution Not Available"] as const;
 
 export default function QualitiesTable() {
-  const { data, isLoading } = useQualities();
+  const { server } = useLibraryServer();
+  const { data, isLoading } = useQualities(server);
+  const serverLabel = server === "all" ? "" : server.charAt(0).toUpperCase() + server.slice(1);
 
   const rows = useMemo(() => {
     if (!data?.buckets || isLoading) return [];
@@ -23,7 +26,13 @@ export default function QualitiesTable() {
     <Card
       title={
         <>
-          Media Qualities {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}
+          Media Qualities
+          {serverLabel && (
+            <span className="ml-2 text-xs text-gray-400 uppercase tracking-wide">
+              {serverLabel}
+            </span>
+          )}
+          {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}
         </>
       }
     >
