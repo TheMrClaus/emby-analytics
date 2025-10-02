@@ -234,8 +234,12 @@ func (m *MultiServerManager) UpdateAllSessions(ctx context.Context) error {
 
 // PublishSessionsToCache stores processed sessions in cache
 func (m *MultiServerManager) PublishSessionsToCache(serverID string, sessions []Session, status sessioncache.CacheStatus) {
-	if m.cache != nil && len(sessions) > 0 {
-		m.cache.Set(serverID, sessions, string(sessions[0].ServerType), status)
+	if m.cache != nil {
+		var serverType string
+		if config, ok := m.configs[serverID]; ok {
+			serverType = string(config.Type)
+		}
+		m.cache.Set(serverID, sessions, serverType, status)
 	}
 }
 
