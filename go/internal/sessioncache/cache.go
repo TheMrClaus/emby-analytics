@@ -74,7 +74,7 @@ func (c *SessionCache) Get(serverID string) (*CacheEntry, bool) {
 
 // Set stores sessions for a given server with the specified status
 // sessions should be []media.Session
-func (c *SessionCache) Set(serverID string, sessions interface{}, serverType string, status CacheStatus) {
+func (c *SessionCache) Set(serverID string, sessions interface{}, status CacheStatus, serverType string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
