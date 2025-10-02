@@ -238,7 +238,7 @@ func TestConcurrency(t *testing.T) {
 			sessions := []media.Session{
 				{ServerID: serverID, SessionID: "session1"},
 			}
-			cache.Set(serverID, sessions, Fresh)
+			cache.Set(serverID, sessions, Fresh, media.ServerTypeEmby)
 		}(i)
 	}
 
