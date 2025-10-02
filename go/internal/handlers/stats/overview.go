@@ -35,9 +35,24 @@ func Overview(db *sql.DB) fiber.Handler {
 		err = db.QueryRow(`
 			SELECT COUNT(DISTINCT
 				COALESCE(
-					NULLIF(SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/movies/') + 1), ''),
-					NULLIF(SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/tv/') + 1), ''),
-					NULLIF(SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/shows/') + 1), ''),
+					NULLIF(
+						CASE WHEN INSTR(LOWER(REPLACE(file_path, '\', '/')), '/movies/') > 0
+							THEN SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/movies/') + LENGTH('/movies/'))
+							ELSE NULL END, 
+						''
+					),
+					NULLIF(
+						CASE WHEN INSTR(LOWER(REPLACE(file_path, '\', '/')), '/tv/') > 0
+							THEN SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/tv/') + LENGTH('/tv/'))
+							ELSE NULL END,
+						''
+					),
+					NULLIF(
+						CASE WHEN INSTR(LOWER(REPLACE(file_path, '\', '/')), '/shows/') > 0
+							THEN SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/shows/') + LENGTH('/shows/'))
+							ELSE NULL END,
+						''
+					),
 					file_path
 				)
 			)
