@@ -121,6 +121,7 @@ type MediaItem struct {
 	RuntimeMs      *int64     `json:"runtime_ms,omitempty"`
 	BitrateBps     *int64     `json:"bitrate_bps,omitempty"`
 	FileSizeBytes  *int64     `json:"file_size_bytes,omitempty"`
+	FilePath       string     `json:"file_path,omitempty"` // Physical file path for deduplication
 	ProductionYear *int       `json:"production_year,omitempty"`
 	Genres         []string   `json:"genres,omitempty"`
 

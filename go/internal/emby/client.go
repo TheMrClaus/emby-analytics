@@ -298,6 +298,7 @@ type LibraryItem struct {
 	RunTimeTicks   *int64   `json:"RunTimeTicks,omitempty"`
 	BitrateBps     *int64   `json:"Bitrate,omitempty"`
 	FileSizeBytes  *int64   `json:"Size,omitempty"`
+	FilePath       string   `json:"Path,omitempty"`
 	ProductionYear *int     `json:"ProductionYear,omitempty"`
 	Genres         []string `json:"Genres,omitempty"`
 }
@@ -307,12 +308,14 @@ type DetailedLibraryItem struct {
 	Id           string   `json:"Id"`
 	Name         string   `json:"Name"`
 	Type         string   `json:"Type"`
+	Path         string   `json:"Path"`
 	Container    string   `json:"Container"`
 	RunTimeTicks int64    `json:"RunTimeTicks"`
 	Genres       []string `json:"Genres"`
 	MediaSources []struct {
-		Bitrate      int64 `json:"Bitrate"`
-		Size         int64 `json:"Size"`
+		Bitrate      int64  `json:"Bitrate"`
+		Size         int64  `json:"Size"`
+		Path         string `json:"Path"`
 		MediaStreams []struct {
 			Type   string `json:"Type"`
 			Codec  string `json:"Codec"`
@@ -403,7 +406,7 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-	q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container,ProductionYear,Genres")
+	q.Set("Fields", "Path,MediaSources,MediaStreams,RunTimeTicks,Container,ProductionYear,Genres")
 	q.Set("Recursive", "true")
 	q.Set("Limit", fmt.Sprintf("%d", limit))
 	q.Set("IncludeItemTypes", "Series,Movie,Episode")
@@ -438,6 +441,12 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 		var firstVideoWidth *int
 		var firstBitrate int64
 		var firstSize int64
+		var firstPath string
+
+		// Use top-level Path first (Emby API returns it here), fallback to MediaSources[0].Path
+		if item.Path != "" {
+			firstPath = item.Path
+		}
 
 		// Find the FIRST video stream only (matches C# plugin logic)
 		for _, source := range item.MediaSources {
@@ -446,6 +455,9 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 			}
 			if firstSize == 0 && source.Size > 0 {
 				firstSize = source.Size
+			}
+			if firstPath == "" && source.Path != "" {
+				firstPath = source.Path
 			}
 			for _, stream := range source.MediaStreams {
 				if stream.Type == "Video" && stream.Codec != "" {
@@ -484,6 +496,7 @@ func (c *Client) GetItemsIncremental(limit int, minDateLastSaved *time.Time) ([]
 			RunTimeTicks:  &rt,
 			BitrateBps:    brPtr,
 			FileSizeBytes: szPtr,
+			FilePath:      firstPath,
 			Genres:        item.Genres,
 		})
 	}
@@ -496,7 +509,7 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 	u := fmt.Sprintf("%s/emby/Items", c.BaseURL)
 	q := url.Values{}
 	q.Set("api_key", c.APIKey)
-	q.Set("Fields", "MediaSources,MediaStreams,RunTimeTicks,Container,ProductionYear,Genres")
+	q.Set("Fields", "Path,MediaSources,MediaStreams,RunTimeTicks,Container,ProductionYear,Genres")
 	q.Set("Recursive", "true")
 	q.Set("StartIndex", fmt.Sprintf("%d", page*limit))
 	q.Set("Limit", fmt.Sprintf("%d", limit))
@@ -526,6 +539,12 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 		var firstVideoWidth *int
 		var firstBitrate int64
 		var firstSize int64
+		var firstPath string
+
+		// Use top-level Path first (Emby API returns it here), fallback to MediaSources[0].Path
+		if item.Path != "" {
+			firstPath = item.Path
+		}
 
 		// Find the FIRST video stream only (matches C# plugin logic)
 		for _, source := range item.MediaSources {
@@ -534,6 +553,9 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 			}
 			if firstSize == 0 && source.Size > 0 {
 				firstSize = source.Size
+			}
+			if firstPath == "" && source.Path != "" {
+				firstPath = source.Path
 			}
 			for _, stream := range source.MediaStreams {
 				if stream.Type == "Video" && stream.Codec != "" {
@@ -572,6 +594,7 @@ func (c *Client) GetItemsChunk(limit, page int) ([]LibraryItem, error) {
 			RunTimeTicks:  &rt,
 			BitrateBps:    brPtr,
 			FileSizeBytes: szPtr,
+			FilePath:      firstPath,
 			Genres:        item.Genres,
 		})
 	}

@@ -162,8 +162,8 @@ func upsertMediaItems(db *sql.DB, sc media.ServerConfig, items []media.MediaItem
 		}
 
 		_, err := db.Exec(`
-			INSERT INTO library_item (id, server_id, server_type, item_id, name, media_type, height, width, run_time_ticks, container, video_codec, file_size_bytes, bitrate_bps, genres, series_id, series_name, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			INSERT INTO library_item (id, server_id, server_type, item_id, name, media_type, height, width, run_time_ticks, container, video_codec, file_size_bytes, bitrate_bps, file_path, genres, series_id, series_name, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 			ON CONFLICT(id) DO UPDATE SET
 				server_id = COALESCE(excluded.server_id, library_item.server_id),
 				server_type = COALESCE(excluded.server_type, library_item.server_type),
@@ -177,11 +177,12 @@ func upsertMediaItems(db *sql.DB, sc media.ServerConfig, items []media.MediaItem
 				video_codec = COALESCE(excluded.video_codec, library_item.video_codec),
 				file_size_bytes = COALESCE(excluded.file_size_bytes, library_item.file_size_bytes),
 				bitrate_bps = COALESCE(excluded.bitrate_bps, library_item.bitrate_bps),
+				file_path = COALESCE(NULLIF(excluded.file_path, ''), library_item.file_path),
 				genres = COALESCE(NULLIF(excluded.genres, ''), library_item.genres),
 				series_id = COALESCE(NULLIF(excluded.series_id, ''), library_item.series_id),
 				series_name = COALESCE(NULLIF(excluded.series_name, ''), library_item.series_name),
 				updated_at = CURRENT_TIMESTAMP
-		`, storedID, sc.ID, string(sc.Type), item.ID, item.Name, item.Type, height, width, runtimeTicks, item.Container, item.Codec, item.FileSizeBytes, item.BitrateBps, genres, blankToNil(item.SeriesID), blankToNil(item.SeriesName))
+		`, storedID, sc.ID, string(sc.Type), item.ID, item.Name, item.Type, height, width, runtimeTicks, item.Container, item.Codec, item.FileSizeBytes, item.BitrateBps, blankToNil(item.FilePath), genres, blankToNil(item.SeriesID), blankToNil(item.SeriesName))
 		if err != nil {
 			return err
 		}

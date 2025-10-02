@@ -29,8 +29,38 @@ func Overview(db *sql.DB) fiber.Handler {
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to count users"})
 		}
 
-		// Count library items (excluding live TV)
-		err = db.QueryRow(`SELECT COUNT(*) FROM library_item WHERE media_type NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')`).Scan(&data.TotalItems)
+		// Count unique library items (excluding live TV, deduplicated by normalized file_path across servers)
+		// Only count items that have file_path populated (excludes servers without path support)
+		// Normalize paths by extracting everything after common library folders (Movies/, TV/, etc)
+		err = db.QueryRow(`
+			SELECT COUNT(DISTINCT
+				COALESCE(
+					NULLIF(
+						CASE WHEN INSTR(LOWER(REPLACE(file_path, '\', '/')), '/movies/') > 0
+							THEN SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/movies/') + LENGTH('/movies/'))
+							ELSE NULL END, 
+						''
+					),
+					NULLIF(
+						CASE WHEN INSTR(LOWER(REPLACE(file_path, '\', '/')), '/tv/') > 0
+							THEN SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/tv/') + LENGTH('/tv/'))
+							ELSE NULL END,
+						''
+					),
+					NULLIF(
+						CASE WHEN INSTR(LOWER(REPLACE(file_path, '\', '/')), '/shows/') > 0
+							THEN SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/shows/') + LENGTH('/shows/'))
+							ELSE NULL END,
+						''
+					),
+					file_path
+				)
+			)
+			FROM library_item
+			WHERE media_type NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')
+				AND file_path IS NOT NULL
+				AND file_path != ''
+		`).Scan(&data.TotalItems)
 		if err != nil {
 			log.Printf("[overview] Error counting library items: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to count library items"})

@@ -667,6 +667,7 @@ func (c *Client) FetchLibraryItems(includeTypes []string) ([]media.MediaItem, er
 					Container string `json:"Container"`
 					Bitrate   *int64 `json:"Bitrate"`
 					Size      *int64 `json:"Size"`
+					Path      string `json:"Path"`
 				} `json:"MediaSources"`
 				MediaStreams []struct {
 					Type   string `json:"Type"`
@@ -703,6 +704,9 @@ func (c *Client) FetchLibraryItems(includeTypes []string) ([]media.MediaItem, er
 				}
 				item.BitrateBps = source.Bitrate
 				item.FileSizeBytes = source.Size
+				if source.Path != "" {
+					item.FilePath = source.Path
+				}
 			}
 			for _, stream := range raw.MediaStreams {
 				if strings.EqualFold(stream.Type, "Video") {
