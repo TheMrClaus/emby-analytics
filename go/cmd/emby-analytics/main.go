@@ -33,6 +33,7 @@ import (
 	"emby-analytics/internal/jellyfin"
 	"emby-analytics/internal/media"
 	"emby-analytics/internal/plex"
+	"emby-analytics/internal/sessioncache"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/recover"
@@ -104,7 +105,11 @@ func main() {
 	em := emby.New(cfg.EmbyBaseURL, cfg.EmbyAPIKey)
 
 	// Build MultiServerManager (Plex/Jellyfin for now; Emby support via legacy paths)
-	multiMgr := media.NewMultiServerManager()
+	// Create session cache
+	cacheTTL := time.Duration(cfg.NowCacheTTL) * time.Second
+	sessionCache := sessioncache.New(cacheTTL)
+
+	multiMgr := media.NewMultiServerManager(sessionCache)
 	for _, sc := range cfg.MediaServers {
 		switch sc.Type {
 		case media.ServerTypePlex:
@@ -379,6 +384,50 @@ func main() {
 
 	// Debug: inspect recent play_sessions
 	app.Get("/admin/debug/sessions", adminAuth, admin.DebugSessions(sqlDB))
+
+
+	// Cache stats endpoint (protected) - Enhanced with per-server details
+	app.Get("/admin/cache/stats", adminAuth, func(c fiber.Ctx) error {
+		metrics := sessionCache.GetMetrics()
+		entries := sessionCache.GetAll()
+		
+		// Build detailed per-server status
+		serverDetails := make([]fiber.Map, 0, len(entries))
+		for serverID, entry := range entries {
+			sessCount := 0
+			if sessions, ok := entry.Sessions.([]media.Session); ok {
+				sessCount = len(sessions)
+			}
+			
+			detail := fiber.Map{
+				"server_id":   serverID,
+				"server_type": entry.ServerType,
+				"status":      entry.Status.String(),
+				"sessions":    sessCount,
+				"last_update": entry.Timestamp,
+				"age_seconds": int(time.Since(entry.Timestamp).Seconds()),
+			}
+			if entry.Error != nil {
+				detail["error"] = entry.Error.Error()
+			}
+			serverDetails = append(serverDetails, detail)
+		}
+		
+		return c.JSON(fiber.Map{
+			"metrics": metrics,
+			"servers": serverDetails,
+			"summary": fiber.Map{
+				"total_servers": len(entries),
+				"hit_rate":     func() float64 {
+					total := metrics.Hits + metrics.Misses
+					if total == 0 {
+						return 0
+					}
+					return float64(metrics.Hits) / float64(total) * 100
+				}(),
+			},
+		})
+	})
 
 	// Backfill playback methods for historical sessions (reason/codec-based)
 	app.Post("/admin/cleanup/backfill-playmethods", adminAuth, admin.BackfillPlayMethods(sqlDB))

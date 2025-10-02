@@ -1,5 +1,13 @@
 package media
 
+import (
+	"context"
+	"sync"
+	"time"
+
+	"emby-analytics/internal/sessioncache"
+)
+
 // MediaServerClient defines the unified interface for all media server types
 // This interface abstracts common operations across Emby, Plex, and Jellyfin servers
 type MediaServerClient interface {
@@ -37,13 +45,15 @@ type ClientFactory interface {
 type MultiServerManager struct {
 	clients map[string]MediaServerClient
 	configs map[string]ServerConfig
+	cache   *sessioncache.SessionCache
 }
 
 // NewMultiServerManager creates a new multi-server manager
-func NewMultiServerManager() *MultiServerManager {
+func NewMultiServerManager(cache *sessioncache.SessionCache) *MultiServerManager {
 	return &MultiServerManager{
 		clients: make(map[string]MediaServerClient),
 		configs: make(map[string]ServerConfig),
+		cache:   cache,
 	}
 }
 
@@ -119,6 +129,114 @@ func (m *MultiServerManager) GetAllSessions() ([]Session, error) {
 	}
 
 	return allSessions, nil
+}
+
+// GetAllSessionsCached returns sessions from cache if fresh, otherwise fetches from servers
+func (m *MultiServerManager) GetAllSessionsCached(ctx context.Context, ttl time.Duration) ([]Session, error) {
+	var allSessions []Session
+
+	// Check if all enabled servers have fresh cache
+	allFresh := true
+	enabledClients := m.GetEnabledClients()
+
+	for serverID := range enabledClients {
+		if !m.cache.IsFresh(serverID) {
+			allFresh = false
+			break
+		}
+	}
+
+	// If all fresh, return from cache immediately
+	if allFresh && len(enabledClients) > 0 {
+		entries := m.cache.GetAll()
+		for serverID := range enabledClients {
+			if entry, exists := entries[serverID]; exists {
+				if sessions, ok := entry.Sessions.([]Session); ok {
+					allSessions = append(allSessions, sessions...)
+				}
+			}
+		}
+		return allSessions, nil
+	}
+
+	// Otherwise, trigger refresh in background if any are stale
+	// For first request (cold start), wait for refresh
+	if !allFresh {
+		// Check if we have ANY cache entries
+		hasCachedData := false
+		entries := m.cache.GetAll()
+		for serverID := range enabledClients {
+			if _, exists := entries[serverID]; exists {
+				hasCachedData = true
+				break
+			}
+		}
+
+		if !hasCachedData {
+			// Cold start: block and wait for refresh
+			err := m.UpdateAllSessions(ctx)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// Have stale data: refresh in background, return cached
+			go m.UpdateAllSessions(context.Background())
+		}
+	}
+
+	// Return from cache
+	entries := m.cache.GetAll()
+	for serverID := range enabledClients {
+		if entry, exists := entries[serverID]; exists {
+			if sessions, ok := entry.Sessions.([]Session); ok {
+				allSessions = append(allSessions, sessions...)
+			}
+		}
+	}
+
+	return allSessions, nil
+}
+
+// UpdateAllSessions force-refreshes cache from all servers in parallel
+func (m *MultiServerManager) UpdateAllSessions(ctx context.Context) error {
+	enabledClients := m.GetEnabledClients()
+
+	var wg sync.WaitGroup
+
+	// Fan out to all servers in parallel
+	for serverID, client := range enabledClients {
+		wg.Add(1)
+		go func(sID string, c MediaServerClient) {
+			defer wg.Done()
+
+			// Fetch sessions with timeout
+			sessions, err := c.GetActiveSessions()
+
+			if err != nil {
+				// Mark as degraded but keep last known sessions
+				entry, exists := m.cache.Get(sID)
+				if exists {
+					m.cache.SetWithError(sID, entry.Sessions, entry.ServerType, sessioncache.Degraded, err)
+				} else {
+					m.cache.SetWithError(sID, []Session{}, string(c.GetServerType()), sessioncache.Degraded, err)
+				}
+				return
+			}
+
+			// Update cache with fresh data
+			m.cache.Set(sID, sessions, string(c.GetServerType()), sessioncache.Fresh)
+		}(serverID, client)
+	}
+
+	wg.Wait()
+	return nil
+}
+
+// PublishSessionsToCache stores processed sessions in cache
+func (m *MultiServerManager) PublishSessionsToCache(serverID string, sessions []Session, status sessioncache.CacheStatus) {
+	if m.cache != nil && len(sessions) > 0 {
+		m.cache.Set(serverID, sessions, string(sessions[0].ServerType), status)
+	}
 }
 
 // GetServerConfigs returns all server configurations

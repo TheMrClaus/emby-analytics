@@ -8,6 +8,7 @@ import (
 	ws "github.com/saveblush/gofiber3-contrib/websocket"
 
 	"emby-analytics/internal/media"
+	"context"
 )
 
 // MultiWS upgrades to WebSocket and periodically sends aggregated multi-server NowEntry snapshots.
@@ -66,7 +67,7 @@ func fetchMultiNowEntries(filter string) ([]NowEntry, error) {
 	lf := strings.ToLower(strings.TrimSpace(filter))
 	switch lf {
 	case "", "all":
-		ss, err := multiServerMgr.GetAllSessions()
+		ss, err := multiServerMgr.GetAllSessionsCached(context.Background(), 5*time.Second)
 		if err != nil {
 			return nil, err
 		}
