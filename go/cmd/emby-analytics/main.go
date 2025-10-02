@@ -418,13 +418,7 @@ func main() {
 			"servers": serverDetails,
 			"summary": fiber.Map{
 				"total_servers": len(entries),
-				"hit_rate":     func() float64 {
-					total := metrics.Hits + metrics.Misses
-					if total == 0 {
-						return 0
-					}
-					return float64(metrics.Hits) / float64(total) * 100
-				}(),
+				"hit_rate":     metrics.HitRate(),
 			},
 		})
 	})
