@@ -30,7 +30,7 @@ func MultiSnapshot(c fiber.Ctx) error {
 		lf := strings.ToLower(serverFilter)
 		switch lf {
 		case "", "all":
-			if ss, err := multiServerMgr.GetAllSessionsCached(context.Background(), 5*time.Second); err == nil {
+			if ss, err := multiServerMgr.GetAllSessionsCached(context.Background()); err == nil {
 				sessions = ss
 			}
 		case string(media.ServerTypeEmby), string(media.ServerTypePlex), string(media.ServerTypeJellyfin):

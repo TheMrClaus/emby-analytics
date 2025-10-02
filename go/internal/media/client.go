@@ -3,7 +3,6 @@ package media
 import (
 	"context"
 	"sync"
-	"time"
 
 	"emby-analytics/internal/sessioncache"
 )
@@ -132,7 +131,7 @@ func (m *MultiServerManager) GetAllSessions() ([]Session, error) {
 }
 
 // GetAllSessionsCached returns sessions from cache if fresh, otherwise fetches from servers
-func (m *MultiServerManager) GetAllSessionsCached(ctx context.Context, ttl time.Duration) ([]Session, error) {
+func (m *MultiServerManager) GetAllSessionsCached(ctx context.Context) ([]Session, error) {
 	var allSessions []Session
 
 	// Check if all enabled servers have fresh cache

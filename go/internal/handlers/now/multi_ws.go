@@ -67,7 +67,7 @@ func fetchMultiNowEntries(filter string) ([]NowEntry, error) {
 	lf := strings.ToLower(strings.TrimSpace(filter))
 	switch lf {
 	case "", "all":
-		ss, err := multiServerMgr.GetAllSessionsCached(context.Background(), 5*time.Second)
+		ss, err := multiServerMgr.GetAllSessionsCached(context.Background())
 		if err != nil {
 			return nil, err
 		}
