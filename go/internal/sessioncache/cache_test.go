@@ -4,9 +4,16 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"emby-analytics/internal/media"
 )
+
+// Test session struct to avoid circular import
+type testSession struct {
+	ServerID   string
+	ServerType string
+	SessionID  string
+	UserName   string
+	ItemName   string
+}
 
 func TestNew(t *testing.T) {
 	ttl := 5 * time.Second
@@ -30,10 +37,10 @@ func TestSetAndGet(t *testing.T) {
 	cache := New(5 * time.Second)
 	serverID := "test-server"
 
-	sessions := []media.Session{
+	sessions := []testSession{
 		{
 			ServerID:   serverID,
-			ServerType: media.ServerTypeEmby,
+			ServerType: "emby",
 			SessionID:  "session1",
 			UserName:   "testuser",
 			ItemName:   "Test Movie",
@@ -41,7 +48,7 @@ func TestSetAndGet(t *testing.T) {
 	}
 
 	// Set sessions
-	cache.Set(serverID, sessions, Fresh)
+	cache.Set(serverID, sessions, "emby", Fresh)
 
 	// Get sessions
 	entry, exists := cache.Get(serverID)
@@ -51,11 +58,16 @@ func TestSetAndGet(t *testing.T) {
 	if entry.ServerID != serverID {
 		t.Errorf("Expected ServerID %s, got %s", serverID, entry.ServerID)
 	}
-	if len(entry.Sessions) != 1 {
-		t.Errorf("Expected 1 session, got %d", len(entry.Sessions))
+	
+	retrievedSessions, ok := entry.Sessions.([]testSession)
+	if !ok {
+		t.Fatal("Sessions type assertion failed")
 	}
-	if entry.Sessions[0].SessionID != "session1" {
-		t.Errorf("Expected SessionID session1, got %s", entry.Sessions[0].SessionID)
+	if len(retrievedSessions) != 1 {
+		t.Errorf("Expected 1 session, got %d", len(retrievedSessions))
+	}
+	if retrievedSessions[0].SessionID != "session1" {
+		t.Errorf("Expected SessionID session1, got %s", retrievedSessions[0].SessionID)
 	}
 	if entry.Status != Fresh {
 		t.Errorf("Expected status Fresh, got %v", entry.Status)
@@ -84,7 +96,7 @@ func TestIsFresh(t *testing.T) {
 	}
 
 	// Add fresh entry
-	cache.Set(serverID, []media.Session{}, Fresh)
+	cache.Set(serverID, []testSession{}, "emby", Fresh)
 	if !cache.IsFresh(serverID) {
 		t.Error("Expected true for fresh entry")
 	}
@@ -99,9 +111,9 @@ func TestIsFresh(t *testing.T) {
 func TestGetAll(t *testing.T) {
 	cache := New(5 * time.Second)
 
-	cache.Set("server1", []media.Session{}, Fresh)
-	cache.Set("server2", []media.Session{}, Stale)
-	cache.Set("server3", []media.Session{}, Degraded)
+	cache.Set("server1", []testSession{}, "emby", Fresh)
+	cache.Set("server2", []testSession{}, "plex", Stale)
+	cache.Set("server3", []testSession{}, "jellyfin", Degraded)
 
 	all := cache.GetAll()
 	if len(all) != 3 {
@@ -116,115 +128,6 @@ func TestGetAll(t *testing.T) {
 	}
 }
 
-func TestMergeAdd(t *testing.T) {
-	cache := New(5 * time.Second)
-	serverID := "test-server"
-
-	session1 := media.Session{
-		ServerID:   serverID,
-		ServerType: media.ServerTypeEmby,
-		SessionID:  "session1",
-		UserName:   "user1",
-	}
-
-	// Merge into empty cache
-	cache.Merge(serverID, session1, MergeAdd)
-
-	entry, exists := cache.Get(serverID)
-	if !exists {
-		t.Fatal("Expected entry to exist")
-	}
-	if len(entry.Sessions) != 1 {
-		t.Fatalf("Expected 1 session, got %d", len(entry.Sessions))
-	}
-	if entry.Sessions[0].SessionID != "session1" {
-		t.Errorf("Expected session1, got %s", entry.Sessions[0].SessionID)
-	}
-
-	// Add another session
-	session2 := media.Session{
-		ServerID:   serverID,
-		ServerType: media.ServerTypeEmby,
-		SessionID:  "session2",
-		UserName:   "user2",
-	}
-	cache.Merge(serverID, session2, MergeAdd)
-
-	entry, _ = cache.Get(serverID)
-	if len(entry.Sessions) != 2 {
-		t.Errorf("Expected 2 sessions, got %d", len(entry.Sessions))
-	}
-}
-
-func TestMergeUpdate(t *testing.T) {
-	cache := New(5 * time.Second)
-	serverID := "test-server"
-
-	session := media.Session{
-		ServerID:   serverID,
-		ServerType: media.ServerTypeEmby,
-		SessionID:  "session1",
-		UserName:   "user1",
-		ItemName:   "Movie A",
-	}
-
-	cache.Merge(serverID, session, MergeAdd)
-
-	// Update the session
-	updatedSession := media.Session{
-		ServerID:   serverID,
-		ServerType: media.ServerTypeEmby,
-		SessionID:  "session1",
-		UserName:   "user1",
-		ItemName:   "Movie B", // Changed
-	}
-	cache.Merge(serverID, updatedSession, MergeUpdate)
-
-	entry, _ := cache.Get(serverID)
-	if len(entry.Sessions) != 1 {
-		t.Errorf("Expected 1 session, got %d", len(entry.Sessions))
-	}
-	if entry.Sessions[0].ItemName != "Movie B" {
-		t.Errorf("Expected ItemName 'Movie B', got '%s'", entry.Sessions[0].ItemName)
-	}
-}
-
-func TestMergeRemove(t *testing.T) {
-	cache := New(5 * time.Second)
-	serverID := "test-server"
-
-	// Add two sessions
-	session1 := media.Session{
-		ServerID:   serverID,
-		ServerType: media.ServerTypeEmby,
-		SessionID:  "session1",
-	}
-	session2 := media.Session{
-		ServerID:   serverID,
-		ServerType: media.ServerTypeEmby,
-		SessionID:  "session2",
-	}
-
-	cache.Merge(serverID, session1, MergeAdd)
-	cache.Merge(serverID, session2, MergeAdd)
-
-	entry, _ := cache.Get(serverID)
-	if len(entry.Sessions) != 2 {
-		t.Fatalf("Expected 2 sessions, got %d", len(entry.Sessions))
-	}
-
-	// Remove session1
-	cache.Merge(serverID, session1, MergeRemove)
-
-	entry, _ = cache.Get(serverID)
-	if len(entry.Sessions) != 1 {
-		t.Errorf("Expected 1 session, got %d", len(entry.Sessions))
-	}
-	if entry.Sessions[0].SessionID != "session2" {
-		t.Errorf("Expected session2 to remain, got %s", entry.Sessions[0].SessionID)
-	}
-}
-
 func TestConcurrency(t *testing.T) {
 	cache := New(5 * time.Second)
 	var wg sync.WaitGroup
@@ -234,11 +137,9 @@ func TestConcurrency(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			serverID := "server-" + string(rune('0'+id))
-			sessions := []media.Session{
-				{ServerID: serverID, SessionID: "session1"},
-			}
-			cache.Set(serverID, sessions, Fresh)
+			serverID := "server"
+			sessions := []testSession{{ServerID: serverID, SessionID: "session1"}}
+			cache.Set(serverID, sessions, "emby", Fresh)
 		}(i)
 	}
 
@@ -247,7 +148,7 @@ func TestConcurrency(t *testing.T) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			serverID := "server-" + string(rune('0'+id))
+			serverID := "server"
 			cache.Get(serverID)
 		}(i)
 	}
@@ -265,7 +166,7 @@ func TestMetrics(t *testing.T) {
 	}
 
 	// Set and get should increment metrics
-	cache.Set("server1", []media.Session{}, Fresh)
+	cache.Set("server1", []testSession{}, "emby", Fresh)
 	cache.Get("server1") // Hit
 	cache.Get("server2") // Miss
 
@@ -284,8 +185,8 @@ func TestMetrics(t *testing.T) {
 func TestClear(t *testing.T) {
 	cache := New(5 * time.Second)
 
-	cache.Set("server1", []media.Session{}, Fresh)
-	cache.Set("server2", []media.Session{}, Fresh)
+	cache.Set("server1", []testSession{}, "emby", Fresh)
+	cache.Set("server2", []testSession{}, "plex", Fresh)
 
 	all := cache.GetAll()
 	if len(all) != 2 {
@@ -305,7 +206,7 @@ func TestSetWithError(t *testing.T) {
 	serverID := "test-server"
 
 	// Set with error (degraded mode)
-	cache.SetWithError(serverID, []media.Session{}, Degraded, nil)
+	cache.SetWithError(serverID, []testSession{}, "emby", Degraded, nil)
 
 	entry, exists := cache.Get(serverID)
 	if !exists {
