@@ -922,6 +922,14 @@ const endpoints: Endpoint[] = [
     usage: "Compare Emby vs DB.",
   },
   {
+    id: "admin-cache-stats",
+    category: "Admin",
+    method: "GET",
+    path: "/admin/cache/stats",
+    description: "Session cache metrics and health status.",
+    usage: "Monitor cache performance (hits, misses, refresh failures).",
+  },
+  {
     id: "admin-debug-ingest-active",
     category: "Admin",
     method: "POST",

@@ -31,6 +31,11 @@ type Config struct {
 	KeepAliveSec int
 	NowPollSec   int
 
+	// Session cache configuration
+	NowCacheTTL      int // Cache freshness duration in seconds (default: 5)
+	NowCacheDebounce int // WebSocket event debounce in milliseconds (default: 250)
+	NowPollFallback  int // Fallback poll interval for servers without WebSocket (default: 10)
+
 	// Background sync
 	SyncIntervalSec int // e.g. 300 (5 minutes)
 	HistoryDays     int // e.g. 2
@@ -88,6 +93,9 @@ func Load() Config {
 		WebPath:                webPath,
 		KeepAliveSec:           envInt("KEEPALIVE_SEC", 15),
 		NowPollSec:             envInt("NOW_POLL_SEC", 5),
+		NowCacheTTL:            envInt("NOW_CACHE_TTL", 5),
+		NowCacheDebounce:       envInt("NOW_CACHE_DEBOUNCE", 250),
+		NowPollFallback:        envInt("NOW_POLL_FALLBACK", 10),
 		SyncIntervalSec:        envInt("SYNC_INTERVAL", 300), // Changed from 60 to 300 (5 minutes)
 		HistoryDays:            envInt("HISTORY_DAYS", 2),
 		ImgQuality:             envInt("IMG_QUALITY", 90),
