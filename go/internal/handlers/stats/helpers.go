@@ -78,3 +78,38 @@ func appendServerFilter(baseCondition, alias, serverType, serverID string) (stri
 	}
 	return baseCondition + " AND " + predicate, args
 }
+
+// normalizedFilePathExpr returns SQL expression for normalizing file paths for deduplication
+// Strips common library folder prefixes (/movies/, /tv/, /shows/) to deduplicate across servers
+func normalizedFilePathExpr(alias string) string {
+	col := "file_path"
+	if alias != "" {
+		col = alias + ".file_path"
+	}
+	normalizedCol := fmt.Sprintf("LOWER(REPLACE(%s, '\\', '/'))", col)
+	return fmt.Sprintf(`COALESCE(
+		NULLIF(
+			CASE WHEN INSTR(%s, '/movies/') > 0
+				THEN SUBSTR(%s, INSTR(%s, '/movies/') + LENGTH('/movies/'))
+				ELSE NULL END,
+			''
+		),
+		NULLIF(
+			CASE WHEN INSTR(%s, '/tv/') > 0
+				THEN SUBSTR(%s, INSTR(%s, '/tv/') + LENGTH('/tv/'))
+				ELSE NULL END,
+			''
+		),
+		NULLIF(
+			CASE WHEN INSTR(%s, '/shows/') > 0
+				THEN SUBSTR(%s, INSTR(%s, '/shows/') + LENGTH('/shows/'))
+				ELSE NULL END,
+			''
+		),
+		%s
+	)`, 
+		normalizedCol, normalizedCol, normalizedCol,
+		normalizedCol, normalizedCol, normalizedCol,
+		normalizedCol, normalizedCol, normalizedCol,
+		col)
+}
