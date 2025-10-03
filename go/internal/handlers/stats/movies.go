@@ -49,11 +49,23 @@ func Movies(db *sql.DB) fiber.Handler {
 		movieAliasBase := "(" + movieMediaPredicate("li") + ") AND " + excludeLiveTvFilterAlias("li")
 		movieAliasWhere, movieAliasArgs := appendServerFilter(movieAliasBase, "li", serverType, serverID)
 
-		// Count total movies
-		err := db.QueryRow(fmt.Sprintf(`
-			SELECT COUNT(*) 
-			FROM library_item 
-			WHERE %s`, movieWhere), movieArgs...).Scan(&data.TotalMovies)
+		// Count total movies (deduplicated by file_path for All Servers, item_id for single server)
+		var countQuery string
+		if serverType == "" && serverID == "" {
+			// All Servers: deduplicate by file_path
+			countQuery = fmt.Sprintf(`
+				SELECT COUNT(DISTINCT %s)
+				FROM library_item
+				WHERE %s AND file_path IS NOT NULL AND file_path != ''`,
+				normalizedFilePathExpr(""), movieWhere)
+		} else {
+			// Single server: use item_id
+			countQuery = fmt.Sprintf(`
+				SELECT COUNT(DISTINCT item_id)
+				FROM library_item
+				WHERE %s`, movieWhere)
+		}
+		err := db.QueryRow(countQuery, movieArgs...).Scan(&data.TotalMovies)
 		if err != nil {
 			log.Printf("[movies] Error counting movies: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to count movies"})

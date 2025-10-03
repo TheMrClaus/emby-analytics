@@ -84,12 +84,23 @@ func Series(db *sql.DB) fiber.Handler {
 			}
 		}
 
-		// Total episodes
-		err = db.QueryRow(fmt.Sprintf(`
-            SELECT COUNT(*)
-            FROM library_item
-            WHERE %s
-        `, episodeWhere), episodeArgs...).Scan(&data.TotalEpisodes)
+		// Total episodes (deduplicated by file_path for All Servers, item_id for single server)
+		var episodeCountQuery string
+		if serverType == "" && serverID == "" {
+			// All Servers: deduplicate by file_path
+			episodeCountQuery = fmt.Sprintf(`
+				SELECT COUNT(DISTINCT %s)
+				FROM library_item
+				WHERE %s AND file_path IS NOT NULL AND file_path != ''`,
+				normalizedFilePathExpr(""), episodeWhere)
+		} else {
+			// Single server: use item_id
+			episodeCountQuery = fmt.Sprintf(`
+				SELECT COUNT(DISTINCT item_id)
+				FROM library_item
+				WHERE %s`, episodeWhere)
+		}
+		err = db.QueryRow(episodeCountQuery, episodeArgs...).Scan(&data.TotalEpisodes)
 		if err != nil {
 			log.Printf("[series] Error counting episodes: %v", err)
 		}
