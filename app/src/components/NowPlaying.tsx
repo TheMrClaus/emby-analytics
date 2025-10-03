@@ -173,6 +173,24 @@ export default function NowPlaying() {
     if (!m) return { r: 82, g: 181, b: 75 };
     return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
   };
+
+  const getPosterUrl = (entry: NowEntry): string => {
+    // Episodes use series poster for consistent aspect ratio
+    if (entry.item_type === "Episode" && entry.series_id) {
+      const server = (entry.server_type || "emby").toLowerCase();
+      return `${apiBase}/img/primary/${server}/${entry.series_id}`;
+    }
+
+    // Use provided poster
+    if (entry.poster) {
+      return entry.poster.startsWith("/img/")
+        ? `${apiBase}${entry.poster}`
+        : entry.poster;
+    }
+
+    // Fallback to placeholder
+    return "/placeholder-poster.jpg";
+  };
   const Chip = ({ tone, label }: { tone: "ok" | "warn"; label: string }) => (
     <span
       className={[
@@ -380,13 +398,7 @@ export default function NowPlaying() {
                     {/* Poster column - fixed size to align all cards */}
                     <div className="shrink-0">
                       <Image
-                        src={
-                          s.item_type === "Episode" && s.series_id
-                            ? `${apiBase}/img/primary/${(s.server_type || "emby").toLowerCase()}/${s.series_id}`
-                            : s.poster?.startsWith("/img/")
-                            ? `${apiBase}${s.poster}`
-                            : s.poster || "/placeholder-poster.jpg"
-                        }
+                        src={getPosterUrl(s)}
                         alt={s.title || "Unknown"}
                         width={64}
                         height={96}
