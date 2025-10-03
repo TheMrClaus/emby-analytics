@@ -82,6 +82,23 @@ type NowEntry struct {
 	SeriesID   string `json:"series_id,omitempty"`
 }
 
+// getPosterURL returns the appropriate poster URL for a media session
+// Episodes use series poster for consistent aspect ratio
+func getPosterURL(itemType, itemID, seriesID, serverType string) string {
+	if itemType == "Episode" && seriesID != "" {
+		return "/img/primary/" + serverType + "/" + seriesID
+	}
+	return "/img/primary/" + serverType + "/" + itemID
+}
+
+// getPosterURLLegacy returns poster URL for legacy EmbySession (no server type in path)
+func getPosterURLLegacy(itemType, itemID, seriesID string) string {
+	if itemType == "Episode" && seriesID != "" {
+		return "/img/primary/" + seriesID
+	}
+	return "/img/primary/" + itemID
+}
+
 // sanitizeMessageInput cleans user input to prevent injection attacks
 func sanitizeMessageInput(input string, maxLength int) string {
 	if input == "" {
@@ -327,11 +344,7 @@ func Snapshot(c fiber.Ctx) error {
 		}
 		poster := ""
 		if s.ItemID != "" {
-			if s.ItemType == "Episode" && s.SeriesID != "" {
-				poster = "/img/primary/" + s.SeriesID
-			} else {
-				poster = "/img/primary/" + s.ItemID
-			}
+			poster = getPosterURLLegacy(s.ItemType, s.ItemID, s.SeriesID)
 		}
 		out = append(out, NowEntry{
 			Timestamp:   nowMs,
@@ -504,11 +517,7 @@ func Stream(c fiber.Ctx) error {
 			}
 			poster := ""
 			if s.ItemID != "" {
-				if s.ItemType == "Episode" && s.SeriesID != "" {
-					poster = "/img/primary/" + s.SeriesID
-				} else {
-					poster = "/img/primary/" + s.ItemID
-				}
+				poster = getPosterURLLegacy(s.ItemType, s.ItemID, s.SeriesID)
 			}
 			out = append(out, NowEntry{
 				Timestamp:   nowMs,
