@@ -73,7 +73,7 @@ func MultiSnapshot(c fiber.Ctx) error {
 					}
 					poster := ""
 					if s.ItemID != "" {
-						poster = "/img/primary/" + s.ItemID
+						poster = getPosterURLLegacy(s.ItemType, s.ItemID, s.SeriesID)
 					}
 					out = append(out, NowEntry{
 						Timestamp:   nowMs,
@@ -157,7 +157,7 @@ func MultiSnapshot(c fiber.Ctx) error {
 		}
 		poster := ""
 		if s.ItemID != "" {
-			poster = "/img/primary/" + string(s.ServerType) + "/" + s.ItemID
+			poster = getPosterURL(s.ItemType, s.ItemID, s.SeriesID, string(s.ServerType))
 		}
 
 		entry := NowEntry{

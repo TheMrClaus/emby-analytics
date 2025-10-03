@@ -52,6 +52,7 @@ export type NowEntry = {
   // Multi-server extras
   server_id?: string;
   server_type?: string;
+  series_id?: string;
 };
 
 interface NowPlayingContextType {

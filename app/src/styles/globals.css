@@ -270,3 +270,29 @@ body {
 .table-dark tbody tr:hover {
   @apply bg-white/5;
 }
+
+/* Ticker animation for long titles */
+@keyframes ticker {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-wrapper {
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.ticker-content {
+  display: inline-block;
+  white-space: nowrap;
+  animation: ticker 15s linear infinite;
+}
+
+.ticker-content:hover {
+  animation-play-state: paused;
+}

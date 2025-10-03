@@ -178,7 +178,7 @@ func (b *Broadcaster) fetchNowPlayingEntries() ([]NowEntry, error) {
 				}
 				return 0
 			}(),
-			Poster:         "/img/primary/" + s.ItemID,
+			Poster:         getPosterURLLegacy(s.ItemType, s.ItemID, s.SeriesID),
 			SessionID:      s.SessionID,
 			ItemID:         s.ItemID,
 			ItemType:       s.ItemType,

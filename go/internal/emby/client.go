@@ -818,6 +818,7 @@ type EmbySession struct {
 	ItemID    string `json:"ItemId"`
 	ItemName  string `json:"ItemName"`
 	ItemType  string `json:"ItemType"`
+	SeriesID  string `json:"SeriesId,omitempty"`
 
 	// Timestamp when playback position was last updated
 	PosTicks      int64 `json:"PosTicks"`
@@ -883,6 +884,7 @@ type rawSession struct {
 		Id           string `json:"Id"`
 		Name         string `json:"Name"`
 		Type         string `json:"Type"`
+		SeriesId     string `json:"SeriesId"`
 		RunTimeTicks int64  `json:"RunTimeTicks"`
 
 		Container string `json:"Container"`
@@ -983,6 +985,7 @@ func (c *Client) GetActiveSessions() ([]EmbySession, error) {
 		es.ItemID = rs.NowPlayingItem.Id
 		es.ItemName = rs.NowPlayingItem.Name
 		es.ItemType = rs.NowPlayingItem.Type
+		es.SeriesID = rs.NowPlayingItem.SeriesId
 		es.DurationTicks = rs.NowPlayingItem.RunTimeTicks
 
 		// Capture additional media info defaults

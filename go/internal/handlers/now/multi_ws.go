@@ -102,7 +102,7 @@ func fetchMultiNowEntries(filter string) ([]NowEntry, error) {
 		}
 		poster := ""
 		if s.ItemID != "" {
-			poster = "/img/primary/" + string(s.ServerType) + "/" + s.ItemID
+			poster = getPosterURL(s.ItemType, s.ItemID, s.SeriesID, string(s.ServerType))
 		}
 
 		e := NowEntry{
