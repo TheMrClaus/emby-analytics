@@ -86,25 +86,30 @@ func normalizedFilePathExpr(alias string) string {
 	if alias != "" {
 		col = alias + ".file_path"
 	}
+	normalizedCol := fmt.Sprintf("LOWER(REPLACE(%s, '\\', '/'))", col)
 	return fmt.Sprintf(`COALESCE(
 		NULLIF(
-			CASE WHEN INSTR(LOWER(REPLACE(%s, '\', '/')), '/movies/') > 0
-				THEN SUBSTR(%s, INSTR(LOWER(REPLACE(%s, '\', '/')), '/movies/') + LENGTH('/movies/'))
+			CASE WHEN INSTR(%s, '/movies/') > 0
+				THEN SUBSTR(%s, INSTR(%s, '/movies/') + LENGTH('/movies/'))
 				ELSE NULL END,
 			''
 		),
 		NULLIF(
-			CASE WHEN INSTR(LOWER(REPLACE(%s, '\', '/')), '/tv/') > 0
-				THEN SUBSTR(%s, INSTR(LOWER(REPLACE(%s, '\', '/')), '/tv/') + LENGTH('/tv/'))
+			CASE WHEN INSTR(%s, '/tv/') > 0
+				THEN SUBSTR(%s, INSTR(%s, '/tv/') + LENGTH('/tv/'))
 				ELSE NULL END,
 			''
 		),
 		NULLIF(
-			CASE WHEN INSTR(LOWER(REPLACE(%s, '\', '/')), '/shows/') > 0
-				THEN SUBSTR(%s, INSTR(LOWER(REPLACE(%s, '\', '/')), '/shows/') + LENGTH('/shows/'))
+			CASE WHEN INSTR(%s, '/shows/') > 0
+				THEN SUBSTR(%s, INSTR(%s, '/shows/') + LENGTH('/shows/'))
 				ELSE NULL END,
 			''
 		),
 		%s
-	)`, col, col, col, col, col, col, col, col, col, col)
+	)`, 
+		normalizedCol, normalizedCol, normalizedCol,
+		normalizedCol, normalizedCol, normalizedCol,
+		normalizedCol, normalizedCol, normalizedCol,
+		col)
 }
