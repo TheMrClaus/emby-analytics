@@ -73,7 +73,11 @@ func MultiSnapshot(c fiber.Ctx) error {
 					}
 					poster := ""
 					if s.ItemID != "" {
-						poster = "/img/primary/" + s.ItemID
+						if s.ItemType == "Episode" && s.SeriesID != "" {
+							poster = "/img/primary/" + s.SeriesID
+						} else {
+							poster = "/img/primary/" + s.ItemID
+						}
 					}
 					out = append(out, NowEntry{
 						Timestamp:   nowMs,
@@ -157,7 +161,11 @@ func MultiSnapshot(c fiber.Ctx) error {
 		}
 		poster := ""
 		if s.ItemID != "" {
-			poster = "/img/primary/" + string(s.ServerType) + "/" + s.ItemID
+			if s.ItemType == "Episode" && s.SeriesID != "" {
+				poster = "/img/primary/" + string(s.ServerType) + "/" + s.SeriesID
+			} else {
+				poster = "/img/primary/" + string(s.ServerType) + "/" + s.ItemID
+			}
 		}
 
 		entry := NowEntry{

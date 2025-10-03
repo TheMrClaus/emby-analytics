@@ -20,6 +20,7 @@ export default function NowPlaying() {
   } | null>(null);
   const [msgOpen, setMsgOpen] = useState<Record<string, boolean>>({});
   const [msgText, setMsgText] = useState<Record<string, string>>({});
+  const [overflowTitles, setOverflowTitles] = useState<Record<string, boolean>>({});
   const keyFor = (s: NowEntry) => `${(s.server_type || "emby").toLowerCase()}|${s.session_id}`;
 
   // Poll summary every 5s
@@ -68,7 +69,7 @@ export default function NowPlaying() {
     const path = `/img/backdrop/${server}/${encodeURIComponent(first.item_id)}`;
     if (!apiBase) return path;
     return `${apiBase}${path}`;
-  }, [sessions, apiBase]);
+  }, [sessions]);
 
   // When the first session changes, crossfade layers
   useEffect(() => {
@@ -175,7 +176,7 @@ export default function NowPlaying() {
   const Chip = ({ tone, label }: { tone: "ok" | "warn"; label: string }) => (
     <span
       className={[
-        "px-2 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap",
+        "px-1.5 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap",
         tone === "ok"
           ? "bg-green-500/20 text-green-400 border-green-400/30"
           : "bg-orange-500/20 text-orange-400 border-orange-400/30",
@@ -371,7 +372,7 @@ export default function NowPlaying() {
               return (
                 <article
                   key={s.session_id}
-                  className="card overflow-hidden flex flex-col p-3 flex-none w-auto rounded-lg"
+                  className="card overflow-hidden flex flex-col p-3 flex-none w-[290px] rounded-lg"
                   style={{ borderColor: th.hex, borderWidth: 3, borderStyle: "solid" }}
                 >
                   {/* Top row: poster + title/meta arranged symmetrically */}
@@ -380,7 +381,9 @@ export default function NowPlaying() {
                     <div className="shrink-0">
                       <Image
                         src={
-                          s.poster?.startsWith("/img/")
+                          s.item_type === "Episode" && s.series_id
+                            ? `${apiBase}/img/primary/${(s.server_type || "emby").toLowerCase()}/${s.series_id}`
+                            : s.poster?.startsWith("/img/")
                             ? `${apiBase}${s.poster}`
                             : s.poster || "/placeholder-poster.jpg"
                         }
@@ -395,35 +398,57 @@ export default function NowPlaying() {
 
                     {/* Content column - variable width to balance card design */}
                     <div className="flex-1 min-w-0">
-                      <h3
-                        className="font-semibold text-base text-white leading-snug mb-1.5 line-clamp-2 break-words break-all whitespace-normal"
-                        style={{ wordBreak: "break-word", overflowWrap: "anywhere" }}
+                      <div
+                        className="ticker-wrapper mb-1.5 pl-2 h-[24px] overflow-hidden whitespace-nowrap"
+                        ref={(wrapper) => {
+                          if (wrapper) {
+                            const key = keyFor(s);
+                            const title = wrapper.querySelector("h3");
+                            if (title) {
+                              // Check on next frame to ensure proper measurement
+                              requestAnimationFrame(() => {
+                                const isOverflowing = title.scrollWidth > wrapper.clientWidth;
+                                if (overflowTitles[key] !== isOverflowing) {
+                                  setOverflowTitles((prev) => ({ ...prev, [key]: isOverflowing }));
+                                }
+                              });
+                            }
+                          }
+                        }}
                       >
-                        {s.title || "Unknown Title"}
-                      </h3>
+                        <h3
+                          className={`font-semibold text-base text-white leading-snug inline-block ${
+                            overflowTitles[keyFor(s)] ? "ticker-content" : ""
+                          }`}
+                        >
+                          {overflowTitles[keyFor(s)]
+                            ? `${s.title || "Unknown Title"} \u00A0\u00A0\u00A0 ${s.title || "Unknown Title"}`
+                            : s.title || "Unknown Title"}
+                        </h3>
+                      </div>
                       <div className="text-xs text-gray-300 space-y-0.5 mb-2">
-                        <div>
+                        <div className="flex items-center justify-between gap-2">
                           <span className={`font-medium ${theme(s.server_type).text}`}>
                             {s.user}
                           </span>
+                          <Chip tone={top.tone} label={top.label} />
                         </div>
-                        <div>{s.app || s.device || "Unknown Client"}</div>
-                      </div>
-
-                      {/* NEW: top status + tech chips */}
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        <Chip tone={top.tone} label={top.label} />
-                        {s.width && s.height && <Chip tone="ok" label={`${s.width}×${s.height}`} />}
-                        {(() => {
-                          const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
-                          const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
-                          const remuxOnly =
-                            (s.play_method || "") === "Transcode" && !isVideoTrans && !isAudioTrans;
-                          if (!remuxOnly) return null;
-                          const sp = (s.stream_path || "").toUpperCase();
-                          const label = sp ? `Remux/${sp}` : "Remux";
-                          return <Chip tone="ok" label={label} />;
-                        })()}
+                        <div className="flex items-center justify-between gap-2">
+                          <div>{s.app || s.device || "Unknown Client"}</div>
+                          <div className="flex gap-1">
+                            {s.width && s.height && <Chip tone="ok" label={`${s.width}×${s.height}`} />}
+                            {(() => {
+                              const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
+                              const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
+                              const remuxOnly =
+                                (s.play_method || "") === "Transcode" && !isVideoTrans && !isAudioTrans;
+                              if (!remuxOnly) return null;
+                              const sp = (s.stream_path || "").toUpperCase();
+                              const label = sp ? `Remux/${sp}` : "Remux";
+                              return <Chip tone="ok" label={label} />;
+                            })()}
+                          </div>
+                        </div>
                       </div>
 
                       {/* Progress moved below media rows to match their width */}
@@ -432,8 +457,8 @@ export default function NowPlaying() {
 
                   {/* Quality indicators */}
                   <div className="mt-3 flex-1 text-sm">
-                    {/* Wrap details + progress in a max-content block so the bar width equals the longest row */}
-                    <div className="inline-grid w-max gap-1.5">
+                    {/* Wrap details + progress to card width for proper mobile layout */}
+                    <div className="grid w-full gap-1.5">
                       {/* Slim inline rows with no large spacing */}
                       <div className="text-gray-300">
                         <span className="text-gray-400">Video: </span>
@@ -528,7 +553,7 @@ export default function NowPlaying() {
                       )}
                     </div>
                     {/* Admin controls - icon-only, tight spacing; width bound to same block */}
-                    <div className="pt-2 w-max">
+                    <div className="pt-2 w-full">
                       <div className="flex items-center gap-2">
                         {(() => {
                           const isPlex = (s.server_type || "").toLowerCase() === "plex";

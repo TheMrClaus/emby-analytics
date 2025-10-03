@@ -55,6 +55,7 @@ type Session struct {
 	ItemID     string `json:"item_id"`
 	ItemName   string `json:"item_name"`
 	ItemType   string `json:"item_type"`
+	SeriesID   string `json:"series_id,omitempty"`
 	PositionMs int64  `json:"position_ms"` // Position in milliseconds (normalized)
 	DurationMs int64  `json:"duration_ms"` // Duration in milliseconds (normalized)
 

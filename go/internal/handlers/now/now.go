@@ -79,6 +79,7 @@ type NowEntry struct {
 	// Server metadata (for multi-server UI)
 	ServerID   string `json:"server_id,omitempty"`
 	ServerType string `json:"server_type,omitempty"`
+	SeriesID   string `json:"series_id,omitempty"`
 }
 
 // sanitizeMessageInput cleans user input to prevent injection attacks
@@ -326,7 +327,11 @@ func Snapshot(c fiber.Ctx) error {
 		}
 		poster := ""
 		if s.ItemID != "" {
-			poster = "/img/primary/" + s.ItemID
+			if s.ItemType == "Episode" && s.SeriesID != "" {
+				poster = "/img/primary/" + s.SeriesID
+			} else {
+				poster = "/img/primary/" + s.ItemID
+			}
 		}
 		out = append(out, NowEntry{
 			Timestamp:   nowMs,
@@ -356,6 +361,7 @@ func Snapshot(c fiber.Ctx) error {
 			SessionID: s.SessionID,
 			ItemID:    s.ItemID,
 			ItemType:  s.ItemType,
+			SeriesID:  s.SeriesID,
 
 			Container: s.Container,
 
@@ -498,7 +504,11 @@ func Stream(c fiber.Ctx) error {
 			}
 			poster := ""
 			if s.ItemID != "" {
-				poster = "/img/primary/" + s.ItemID
+				if s.ItemType == "Episode" && s.SeriesID != "" {
+					poster = "/img/primary/" + s.SeriesID
+				} else {
+					poster = "/img/primary/" + s.ItemID
+				}
 			}
 			out = append(out, NowEntry{
 				Timestamp:   nowMs,
@@ -528,6 +538,7 @@ func Stream(c fiber.Ctx) error {
 				SessionID: s.SessionID,
 				ItemID:    s.ItemID,
 				ItemType:  s.ItemType,
+				SeriesID:  s.SeriesID,
 
 				Container: s.Container,
 

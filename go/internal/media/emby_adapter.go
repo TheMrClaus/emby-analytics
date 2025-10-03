@@ -160,6 +160,7 @@ func (e *EmbyAdapter) convertSession(s emby.EmbySession) Session {
 		ItemID:              s.ItemID,
 		ItemName:            s.ItemName,
 		ItemType:            s.ItemType,
+		SeriesID:            s.SeriesID,
 		PositionMs:          s.PosTicks / 10_000,
 		DurationMs:          s.DurationTicks / 10_000,
 		ClientApp:           s.App,

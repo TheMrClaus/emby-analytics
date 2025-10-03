@@ -102,7 +102,11 @@ func fetchMultiNowEntries(filter string) ([]NowEntry, error) {
 		}
 		poster := ""
 		if s.ItemID != "" {
-			poster = "/img/primary/" + string(s.ServerType) + "/" + s.ItemID
+			if s.ItemType == "Episode" && s.SeriesID != "" {
+				poster = "/img/primary/" + string(s.ServerType) + "/" + s.SeriesID
+			} else {
+				poster = "/img/primary/" + string(s.ServerType) + "/" + s.ItemID
+			}
 		}
 
 		e := NowEntry{
