@@ -259,50 +259,10 @@ func (rm *RefreshManager) triggerMultiServerSync(db *sql.DB) {
 	}()
 }
 
-func (rm *RefreshManager) legacyEmbyIdentity() (string, media.ServerType) {
-	// Prefer an explicit multi-server config match for the legacy Emby client.
-	if rm.multiMgr != nil {
-		configs := rm.multiMgr.GetServerConfigs()
-		embyBase := strings.TrimRight(strings.ToLower(rm.cfg.EmbyBaseURL), "/")
-		if embyBase != "" {
-			for id, sc := range configs {
-				if sc.Type == media.ServerTypeEmby {
-					base := strings.TrimRight(strings.ToLower(sc.BaseURL), "/")
-					if base == embyBase {
-						return id, sc.Type
-					}
-				}
-			}
-		}
-		// Fallback to the configured default server if it is Emby.
-		if def := rm.cfg.DefaultServerID; def != "" {
-			if sc, ok := configs[def]; ok && sc.Type == media.ServerTypeEmby {
-				return sc.ID, sc.Type
-			}
-		}
-		// Otherwise pick the first Emby entry in the map.
-		for id, sc := range configs {
-			if sc.Type == media.ServerTypeEmby {
-				return id, sc.Type
-			}
-		}
-	}
-
-	// Scan static config as a fallback (covers env setups without multiMgr configs yet).
-	for _, sc := range rm.cfg.MediaServers {
-		if sc.Type == media.ServerTypeEmby {
-			return sc.ID, sc.Type
-		}
-	}
-
-	// Absolute fallback for legacy single-server installs.
-	return "default-emby", media.ServerTypeEmby
-}
-
 // processLibraryEntries handles the insertion and enrichment of library items
 func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, libraryEntries []emby.LibraryItem) int {
 	dbEntriesInserted := 0
-	serverID, serverType := rm.legacyEmbyIdentity()
+	serverID, serverType := tasks.ResolveEmbyServer(rm.cfg, rm.multiMgr)
 	// Cache SeriesID -> CSV genres to avoid repeated Emby lookups
 	seriesGenresCache := map[string]*string{}
 	for _, entry := range libraryEntries {

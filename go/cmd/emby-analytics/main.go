@@ -192,7 +192,7 @@ func main() {
 	logger.Info("Database connection established")
 
 	// Ensure legacy Emby rows carry file paths required for multi-server stats.
-	embyServerID, embyServerType := resolveEmbyServer(cfg, multiMgr)
+	embyServerID, embyServerType := tasks.ResolveEmbyServer(cfg, multiMgr)
 	tasks.BackfillLegacyFilePaths(sqlDB, em, embyServerID, embyServerType)
 
 	// Initial user sync AFTER schema is ready.
@@ -545,41 +545,6 @@ func startsWithAny(s string, prefixes ...string) bool {
 		}
 	}
 	return false
-}
-
-func resolveEmbyServer(cfg config.Config, mgr *media.MultiServerManager) (string, media.ServerType) {
-	if mgr != nil {
-		configs := mgr.GetServerConfigs()
-		legacyBase := strings.TrimRight(strings.ToLower(cfg.EmbyBaseURL), "/")
-		if legacyBase != "" {
-			for id, sc := range configs {
-				if sc.Type == media.ServerTypeEmby {
-					base := strings.TrimRight(strings.ToLower(sc.BaseURL), "/")
-					if base == legacyBase {
-						return id, sc.Type
-					}
-				}
-			}
-		}
-		if def := cfg.DefaultServerID; def != "" {
-			if sc, ok := configs[def]; ok && sc.Type == media.ServerTypeEmby {
-				return sc.ID, sc.Type
-			}
-		}
-		for id, sc := range configs {
-			if sc.Type == media.ServerTypeEmby {
-				return id, sc.Type
-			}
-		}
-	}
-
-	for _, sc := range cfg.MediaServers {
-		if sc.Type == media.ServerTypeEmby {
-			return sc.ID, sc.Type
-		}
-	}
-
-	return "default-emby", media.ServerTypeEmby
 }
 
 // ensureAuthTables defensively creates auth tables if they are missing.
