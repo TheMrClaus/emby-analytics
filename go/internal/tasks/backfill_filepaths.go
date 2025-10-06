@@ -54,7 +54,7 @@ func BackfillLegacyFilePaths(db *sql.DB, em *emby.Client, serverID string, serve
 		items, err := em.GetItemsChunk(pageSize, page)
 		if err != nil {
 			logging.Warn("legacy file_path backfill: failed to fetch chunk", "page", page, "error", err)
-			break
+			return
 		}
 		if len(items) == 0 {
 			break
