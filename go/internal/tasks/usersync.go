@@ -18,7 +18,7 @@ func StartUserSyncLoop(db *sql.DB, mgr *media.MultiServerManager, cfg config.Con
 		return
 	}
 	interval := time.Duration(cfg.UserSyncIntervalSec) * time.Second
-	logging.Debug("Starting user sync loop with interval %v", interval)
+	logging.Debug("Starting user sync loop", "interval", interval)
 
 	ticker := time.NewTicker(interval)
 	go func() {
@@ -139,8 +139,12 @@ func syncUserWatchData(db *sql.DB, client media.MediaServerClient, sc media.Serv
 	}
 
 	if traktItems > 0 || embyItems > 0 {
-		logging.Debug("[usersync] %s: server=%s emby_items=%d trakt_items=%d include_trakt=%v",
-			userName, sc.Name, embyItems, traktItems, includeTrakt)
+		logging.Debug("[usersync] processed user items",
+			"user", userName,
+			"server", sc.Name,
+			"emby_items", embyItems,
+			"trakt_items", traktItems,
+			"include_trakt", includeTrakt)
 	}
 
 	_, err = db.Exec(`

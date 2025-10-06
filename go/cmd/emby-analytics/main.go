@@ -191,6 +191,10 @@ func main() {
 	defer func(dbh *sql.DB) { _ = dbh.Close() }(sqlDB)
 	logger.Info("Database connection established")
 
+	// Ensure legacy Emby rows carry file paths required for multi-server stats.
+	embyServerID, embyServerType := tasks.ResolveEmbyServer(cfg, multiMgr)
+	tasks.BackfillLegacyFilePaths(sqlDB, em, embyServerID, embyServerType)
+
 	// Initial user sync AFTER schema is ready.
 	logger.Info("Starting initial user and lifetime stats sync")
 	tasks.RunUserSyncOnce(sqlDB, multiMgr)
@@ -385,12 +389,11 @@ func main() {
 	// Debug: inspect recent play_sessions
 	app.Get("/admin/debug/sessions", adminAuth, admin.DebugSessions(sqlDB))
 
-
 	// Cache stats endpoint (protected) - Enhanced with per-server details
 	app.Get("/admin/cache/stats", adminAuth, func(c fiber.Ctx) error {
 		metrics := sessionCache.GetMetrics()
 		entries := sessionCache.GetAll()
-		
+
 		// Build detailed per-server status
 		serverDetails := make([]fiber.Map, 0, len(entries))
 		for serverID, entry := range entries {
@@ -398,7 +401,7 @@ func main() {
 			if sessions, ok := entry.Sessions.([]media.Session); ok {
 				sessCount = len(sessions)
 			}
-			
+
 			detail := fiber.Map{
 				"server_id":   serverID,
 				"server_type": entry.ServerType,
@@ -412,13 +415,13 @@ func main() {
 			}
 			serverDetails = append(serverDetails, detail)
 		}
-		
+
 		return c.JSON(fiber.Map{
 			"metrics": metrics,
 			"servers": serverDetails,
 			"summary": fiber.Map{
 				"total_servers": len(entries),
-				"hit_rate":     metrics.HitRate(),
+				"hit_rate":      metrics.HitRate(),
 			},
 		})
 	})
