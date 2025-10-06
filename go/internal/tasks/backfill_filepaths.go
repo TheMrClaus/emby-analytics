@@ -44,7 +44,7 @@ func BackfillLegacyFilePaths(db *sql.DB, em *emby.Client, serverID string, serve
 		return
 	}
 
-	logging.Info("legacy file_path backfill starting", "server_id", serverID, "missing", missing)
+	logging.Info("legacy file_path backfill starting", "serverID", serverID, "missing", missing)
 
 	const pageSize = 200
 	updated := 0
