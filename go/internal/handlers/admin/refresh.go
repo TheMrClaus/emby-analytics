@@ -259,9 +259,50 @@ func (rm *RefreshManager) triggerMultiServerSync(db *sql.DB) {
 	}()
 }
 
+func (rm *RefreshManager) legacyEmbyIdentity() (string, media.ServerType) {
+	// Prefer an explicit multi-server config match for the legacy Emby client.
+	if rm.multiMgr != nil {
+		configs := rm.multiMgr.GetServerConfigs()
+		embyBase := strings.TrimRight(strings.ToLower(rm.cfg.EmbyBaseURL), "/")
+		if embyBase != "" {
+			for id, sc := range configs {
+				if sc.Type == media.ServerTypeEmby {
+					base := strings.TrimRight(strings.ToLower(sc.BaseURL), "/")
+					if base == embyBase {
+						return id, sc.Type
+					}
+				}
+			}
+		}
+		// Fallback to the configured default server if it is Emby.
+		if def := rm.cfg.DefaultServerID; def != "" {
+			if sc, ok := configs[def]; ok && sc.Type == media.ServerTypeEmby {
+				return sc.ID, sc.Type
+			}
+		}
+		// Otherwise pick the first Emby entry in the map.
+		for id, sc := range configs {
+			if sc.Type == media.ServerTypeEmby {
+				return id, sc.Type
+			}
+		}
+	}
+
+	// Scan static config as a fallback (covers env setups without multiMgr configs yet).
+	for _, sc := range rm.cfg.MediaServers {
+		if sc.Type == media.ServerTypeEmby {
+			return sc.ID, sc.Type
+		}
+	}
+
+	// Absolute fallback for legacy single-server installs.
+	return "default-emby", media.ServerTypeEmby
+}
+
 // processLibraryEntries handles the insertion and enrichment of library items
 func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, libraryEntries []emby.LibraryItem) int {
 	dbEntriesInserted := 0
+	serverID, serverType := rm.legacyEmbyIdentity()
 	// Cache SeriesID -> CSV genres to avoid repeated Emby lookups
 	seriesGenresCache := map[string]*string{}
 	for _, entry := range libraryEntries {
@@ -294,23 +335,25 @@ func (rm *RefreshManager) processLibraryEntries(db *sql.DB, em *emby.Client, lib
 			genresCSV = &g
 		}
 		result, err := db.Exec(`
-            INSERT INTO library_item (id, server_id, item_id, name, media_type, height, width, run_time_ticks, container, video_codec, file_size_bytes, bitrate_bps, genres, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            INSERT INTO library_item (id, server_id, server_type, item_id, name, media_type, height, width, run_time_ticks, container, video_codec, file_size_bytes, bitrate_bps, file_path, genres, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ON CONFLICT(id) DO UPDATE SET
-                server_id = COALESCE(excluded.server_id, library_item.server_id),
-                item_id = COALESCE(excluded.item_id, library_item.item_id),
-                name = COALESCE(excluded.name, library_item.name),
-                media_type = COALESCE(excluded.media_type, library_item.media_type),
+                server_id = COALESCE(NULLIF(excluded.server_id, ''), library_item.server_id),
+                server_type = COALESCE(NULLIF(excluded.server_type, ''), library_item.server_type),
+                item_id = COALESCE(NULLIF(excluded.item_id, ''), library_item.item_id),
+                name = COALESCE(NULLIF(excluded.name, ''), library_item.name),
+                media_type = COALESCE(NULLIF(excluded.media_type, ''), library_item.media_type),
                 height = COALESCE(excluded.height, library_item.height),
                 width = COALESCE(excluded.width, library_item.width),
                 run_time_ticks = COALESCE(excluded.run_time_ticks, library_item.run_time_ticks),
-                container = COALESCE(excluded.container, library_item.container),
-                video_codec = COALESCE(excluded.video_codec, library_item.video_codec),
+                container = COALESCE(NULLIF(excluded.container, ''), library_item.container),
+                video_codec = COALESCE(NULLIF(excluded.video_codec, ''), library_item.video_codec),
                 file_size_bytes = COALESCE(excluded.file_size_bytes, library_item.file_size_bytes),
                 bitrate_bps = COALESCE(excluded.bitrate_bps, library_item.bitrate_bps),
-                genres = COALESCE(excluded.genres, library_item.genres),
+                file_path = COALESCE(NULLIF(excluded.file_path, ''), library_item.file_path),
+                genres = COALESCE(NULLIF(excluded.genres, ''), library_item.genres),
                 updated_at = CURRENT_TIMESTAMP
-        `, entry.Id, entry.Id, entry.Id, entry.Name, entry.Type, entry.Height, width, entry.RunTimeTicks, entry.Container, entry.Codec, entry.FileSizeBytes, entry.BitrateBps, genresCSV)
+        `, entry.Id, serverID, string(serverType), entry.Id, entry.Name, entry.Type, entry.Height, width, entry.RunTimeTicks, entry.Container, entry.Codec, entry.FileSizeBytes, entry.BitrateBps, nullIfEmpty(entry.FilePath), genresCSV)
 
 		// For episodes, ensure we have proper series info
 		if entry.Type == "Episode" && em != nil {

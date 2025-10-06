@@ -191,6 +191,10 @@ func main() {
 	defer func(dbh *sql.DB) { _ = dbh.Close() }(sqlDB)
 	logger.Info("Database connection established")
 
+	// Ensure legacy Emby rows carry file paths required for multi-server stats.
+	embyServerID, embyServerType := resolveEmbyServer(cfg, multiMgr)
+	tasks.BackfillLegacyFilePaths(sqlDB, em, embyServerID, embyServerType)
+
 	// Initial user sync AFTER schema is ready.
 	logger.Info("Starting initial user and lifetime stats sync")
 	tasks.RunUserSyncOnce(sqlDB, multiMgr)
@@ -385,12 +389,11 @@ func main() {
 	// Debug: inspect recent play_sessions
 	app.Get("/admin/debug/sessions", adminAuth, admin.DebugSessions(sqlDB))
 
-
 	// Cache stats endpoint (protected) - Enhanced with per-server details
 	app.Get("/admin/cache/stats", adminAuth, func(c fiber.Ctx) error {
 		metrics := sessionCache.GetMetrics()
 		entries := sessionCache.GetAll()
-		
+
 		// Build detailed per-server status
 		serverDetails := make([]fiber.Map, 0, len(entries))
 		for serverID, entry := range entries {
@@ -398,7 +401,7 @@ func main() {
 			if sessions, ok := entry.Sessions.([]media.Session); ok {
 				sessCount = len(sessions)
 			}
-			
+
 			detail := fiber.Map{
 				"server_id":   serverID,
 				"server_type": entry.ServerType,
@@ -412,13 +415,13 @@ func main() {
 			}
 			serverDetails = append(serverDetails, detail)
 		}
-		
+
 		return c.JSON(fiber.Map{
 			"metrics": metrics,
 			"servers": serverDetails,
 			"summary": fiber.Map{
 				"total_servers": len(entries),
-				"hit_rate":     metrics.HitRate(),
+				"hit_rate":      metrics.HitRate(),
 			},
 		})
 	})
@@ -542,6 +545,41 @@ func startsWithAny(s string, prefixes ...string) bool {
 		}
 	}
 	return false
+}
+
+func resolveEmbyServer(cfg config.Config, mgr *media.MultiServerManager) (string, media.ServerType) {
+	if mgr != nil {
+		configs := mgr.GetServerConfigs()
+		legacyBase := strings.TrimRight(strings.ToLower(cfg.EmbyBaseURL), "/")
+		if legacyBase != "" {
+			for id, sc := range configs {
+				if sc.Type == media.ServerTypeEmby {
+					base := strings.TrimRight(strings.ToLower(sc.BaseURL), "/")
+					if base == legacyBase {
+						return id, sc.Type
+					}
+				}
+			}
+		}
+		if def := cfg.DefaultServerID; def != "" {
+			if sc, ok := configs[def]; ok && sc.Type == media.ServerTypeEmby {
+				return sc.ID, sc.Type
+			}
+		}
+		for id, sc := range configs {
+			if sc.Type == media.ServerTypeEmby {
+				return id, sc.Type
+			}
+		}
+	}
+
+	for _, sc := range cfg.MediaServers {
+		if sc.Type == media.ServerTypeEmby {
+			return sc.ID, sc.Type
+		}
+	}
+
+	return "default-emby", media.ServerTypeEmby
 }
 
 // ensureAuthTables defensively creates auth tables if they are missing.
