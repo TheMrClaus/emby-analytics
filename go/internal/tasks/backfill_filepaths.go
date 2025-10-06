@@ -60,20 +60,33 @@ func BackfillLegacyFilePaths(db *sql.DB, em *emby.Client, serverID string, serve
 			break
 		}
 
+		tx, err := db.Begin()
+		if err != nil {
+			logging.Warn("legacy file_path backfill: failed to begin transaction", "page", page, "error", err)
+			return
+		}
+
+		stmt, err := tx.Prepare(`
+			UPDATE library_item
+			SET file_path = ?,
+			    server_id = ?,
+			    server_type = ?,
+			    updated_at = CURRENT_TIMESTAMP
+			WHERE id = ?
+			  AND (file_path IS NULL OR TRIM(file_path) = '')
+		`)
+		if err != nil {
+			_ = tx.Rollback()
+			logging.Warn("legacy file_path backfill: failed to prepare statement", "page", page, "error", err)
+			return
+		}
+
 		for _, item := range items {
 			path := strings.TrimSpace(item.FilePath)
 			if path == "" {
 				continue
 			}
-			res, err := db.Exec(`
-				UPDATE library_item
-				SET file_path = ?,
-				    server_id = ?,
-				    server_type = ?,
-				    updated_at = CURRENT_TIMESTAMP
-				WHERE id = ?
-				  AND (file_path IS NULL OR TRIM(file_path) = '')
-			`, path, serverID, string(serverType), item.Id)
+			res, err := stmt.Exec(path, serverID, string(serverType), item.Id)
 			if err != nil {
 				logging.Debug("legacy file_path backfill: update failed", "item_id", item.Id, "error", err)
 				continue
@@ -81,6 +94,17 @@ func BackfillLegacyFilePaths(db *sql.DB, em *emby.Client, serverID string, serve
 			if rows, _ := res.RowsAffected(); rows > 0 {
 				updated += int(rows)
 			}
+		}
+
+		if err := stmt.Close(); err != nil {
+			logging.Warn("legacy file_path backfill: failed to close statement", "page", page, "error", err)
+			_ = tx.Rollback()
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			logging.Warn("legacy file_path backfill: failed to commit transaction", "page", page, "error", err)
+			return
 		}
 
 		if len(items) < pageSize {
