@@ -196,3 +196,65 @@ func (e *EmbyAdapter) convertSession(s emby.EmbySession) Session {
 	}
 	return sess
 }
+
+// FetchLibraryItems retrieves all library items from the Emby server.
+func (e *EmbyAdapter) FetchLibraryItems() ([]MediaItem, error) {
+	const pageSize = 200
+	var allItems []MediaItem
+	page := 0
+	for {
+		items, err := e.c.GetItemsChunk(pageSize, page)
+		if err != nil {
+			return nil, err
+		}
+		if len(items) == 0 {
+			break
+		}
+		for _, it := range items {
+			mi := MediaItem{
+				ID:             it.Id,
+				ServerID:       e.cfg.ID,
+				ServerType:     ServerTypeEmby,
+				Name:           it.Name,
+				Type:           it.Type,
+				Container:      it.Container,
+				ProductionYear: it.ProductionYear,
+				Genres:         it.Genres,
+			}
+			if it.RunTimeTicks != nil {
+				ms := *it.RunTimeTicks / 10000
+				mi.RuntimeMs = &ms
+			}
+			if it.Height != nil {
+				mi.Height = it.Height
+			}
+			if it.Width != nil {
+				mi.Width = it.Width
+			}
+			if it.Codec != "" {
+				mi.Codec = it.Codec // emby client might need normalization if not already done
+			}
+			if it.BitrateBps != nil {
+				mi.BitrateBps = it.BitrateBps
+			}
+			if it.FileSizeBytes != nil {
+				mi.FileSizeBytes = it.FileSizeBytes
+			}
+			if it.FilePath != "" {
+				mi.FilePath = it.FilePath
+			}
+
+			// For episodes, we might need series info if GetItemsChunk provides it?
+			// emby.LibraryItem doesn't have SeriesId/SeriesName directly populated by GetItemsChunk?
+			// Checking emby/client.go: DetailedLibraryItem has NO SeriesId/SeriesName!
+			// LibraryItem has no SeriesId/SeriesName!
+			// This is a limitation of GetItemsChunk in emby/client.go.
+			// We might need to enhance GetItemsChunk or fetch details.
+			// But for now, basic metadata is better than nothing for deletion tracking.
+
+			allItems = append(allItems, mi)
+		}
+		page++
+	}
+	return allItems, nil
+}
