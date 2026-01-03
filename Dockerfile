@@ -10,8 +10,12 @@ RUN npm run build
 # ---------- Stage 1: Build Go backend ----------
 FROM golang:1.25 AS builder
 # Work inside the Go module directory so go.mod is found
+# Work inside the Go module directory so go.mod is found
 WORKDIR /src/go
+COPY go/go.mod go/go.sum ./
+RUN go mod download
 COPY go/ .
+# Only tidy if needed, though download should be enough
 RUN go mod tidy
 # Build args for versioning (can be passed via docker build)
 ARG VERSION=dev

@@ -1,0 +1,28 @@
+.git
+.gitignore
+.env
+.env.*
+.DS_Store
+*.md
+
+# Frontend
+app/node_modules
+app/.next
+app/out
+app/.eslintcache
+node_modules
+
+# Go Backend
+go/emby-analytics
+go/web
+go/.gocache
+go/emby.db
+go/emby.db-shm
+go/emby.db-wal
+
+# Misc
+.claude
+.gemini
+sessions
+compose.override.yaml
+docker-compose.yml
