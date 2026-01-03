@@ -8,8 +8,7 @@ COPY app/ .
 RUN npm run build
 
 # ---------- Stage 1: Build Go backend ----------
-FROM golang:1.25 AS builder
-# Work inside the Go module directory so go.mod is found
+FROM --platform=$BUILDPLATFORM golang:1.25 AS builder
 # Work inside the Go module directory so go.mod is found
 WORKDIR /src/go
 COPY go/go.mod go/go.sum ./
@@ -22,10 +21,13 @@ ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE
 ARG REPO
+# Target architecture arguments provided by buildx
+ARG TARGETOS
+ARG TARGETARCH
 
 # Default DATE if not provided
 RUN if [ -z "$DATE" ]; then export DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ); fi; \
-    CGO_ENABLED=0 go build \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build \
     -ldflags "-X emby-analytics/internal/version.Version=${VERSION} -X emby-analytics/internal/version.Commit=${COMMIT} -X emby-analytics/internal/version.Date=${DATE} -X emby-analytics/internal/version.Repo=${REPO:-TheMrClaus/emby-analytics}" \
     -o /emby-analytics ./cmd/emby-analytics
 
