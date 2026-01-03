@@ -271,6 +271,20 @@ func (c *Client) doRequest(endpoint string) (*http.Response, error) {
 }
 
 // readXML reads and parses XML response
+
+// extractPlexID extracts the numeric ID from a Plex key path like "/library/metadata/123" -> "123"
+func extractPlexID(key string) string {
+	if key == "" {
+		return ""
+	}
+	// Plex keys are typically paths like "/library/metadata/123"
+	// Extract the last segment after the final /
+	parts := strings.Split(strings.TrimRight(key, "/"), "/")
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return key
+}
 func readXML(resp *http.Response, dst interface{}) error {
 	defer resp.Body.Close()
 
@@ -336,6 +350,7 @@ func (c *Client) convertSession(plexSess plexSession) media.Session {
 		ItemID:        plexSess.RatingKey,
 		ItemName:      plexSess.Title,
 		ItemType:      plexSess.Type,
+		SeriesID:      extractPlexID(plexSess.GrandparentKey),
 		PositionMs:    plexSess.ViewOffset,
 		DurationMs:    plexSess.Duration,
 		ClientApp:     plexSess.Player.Product,

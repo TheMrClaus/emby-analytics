@@ -1,0 +1,24 @@
+services:
+  emby-analytics:
+    # image: ghcr.io/themrclaus/emby-analytics:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: emby-analytics
+    restart: unless-stopped
+    volumes:
+      - emby_analytics_data:/var/lib/emby-analytics
+    env_file:
+      - .env
+    networks:
+      mediaserver:
+      frontend:
+
+networks:
+  mediaserver:
+    external: true
+  frontend:
+    external: true
+
+volumes:
+  emby_analytics_data:

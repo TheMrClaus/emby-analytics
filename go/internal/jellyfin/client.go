@@ -65,6 +65,7 @@ type jellyfinSession struct {
 		Name         string `json:"Name"`
 		Type         string `json:"Type"`
 		RunTimeTicks int64  `json:"RunTimeTicks"`
+		SeriesId     string `json:"SeriesId"`
 		Container    string `json:"Container"`
 
 		MediaStreams []struct {
@@ -302,6 +303,7 @@ func (c *Client) convertSession(jellySess jellyfinSession) media.Session {
 		ItemID:        jellySess.NowPlayingItem.Id,
 		ItemName:      jellySess.NowPlayingItem.Name,
 		ItemType:      jellySess.NowPlayingItem.Type,
+		SeriesID:      jellySess.NowPlayingItem.SeriesId,
 		DurationMs:    ticksToMs(jellySess.NowPlayingItem.RunTimeTicks),
 		ClientApp:     jellySess.Client,
 		DeviceName:    jellySess.DeviceName,
