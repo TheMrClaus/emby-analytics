@@ -13,7 +13,7 @@ type Param = {
 type Endpoint = {
   id: string;
   category: string;
-    method: "GET" | "POST" | "PUT" | "DELETE" | "ALL";
+  method: "GET" | "POST" | "PUT" | "DELETE" | "ALL";
   path: string; // may include :id path params
   description: string;
   usage: string;

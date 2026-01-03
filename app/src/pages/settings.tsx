@@ -696,269 +696,281 @@ export default function SettingsPage() {
                   preventing the most resource-intensive transcoding operations while preserving
                   user experience for audio and subtitle features.
                 </p>
-            </div>
-          </div>
-
-          {shouldLoadRuntimeOutliers && (
-            <div className="bg-neutral-800 rounded-lg p-6 mt-6">
-              <div className="flex items-center justify-between gap-4 mb-4">
-                <div>
-                  <h2 className="text-lg font-semibold">Runtime Outliers</h2>
-                  <p className="text-sm text-gray-400">
-                    Items reporting runtimes longer than {runtimeOutlierThresholdMinutes} minutes
-                    ({runtimeOutlierThresholdHours}h, {runtimeOutlierThresholdDays}d). These entries
-                    usually mean Emby cached a bad runtime before the source file was fixed.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void reloadRuntimeOutliers()}
-                  disabled={runtimeOutliersLoading}
-                  className={`inline-flex items-center gap-2 rounded-md border border-neutral-600 px-3 py-2 text-sm transition-colors ${
-                    runtimeOutliersLoading
-                      ? "bg-neutral-700/60 text-gray-400 cursor-wait"
-                      : "bg-neutral-800 hover:bg-neutral-700 text-gray-200"
-                  }`}
-                  title="Refresh runtime outliers"
-                >
-                  <RefreshCcw
-                    className={`w-4 h-4 ${runtimeOutliersLoading ? "animate-spin" : ""}`}
-                  />
-                  Refresh
-                </button>
               </div>
+            </div>
 
-              {runtimeOutliersLoading && (
-                <div className="animate-pulse space-y-3">
-                  <div className="h-4 bg-neutral-700 rounded w-1/3" />
-                  <div className="h-4 bg-neutral-700 rounded w-1/2" />
-                  <div className="h-32 bg-neutral-700/60 rounded" />
-                </div>
-              )}
-
-              {!runtimeOutliersLoading && runtimeOutliersError && (
-                <div className="flex items-center gap-2 text-red-400">
-                  <AlertCircle className="w-4 h-4" />
-                  <span>
-                    {runtimeOutliersError.message || "Failed to load runtime outliers"}
-                  </span>
-                </div>
-              )}
-
-              {!runtimeOutliersLoading && !runtimeOutliersError && runtimeOutlierItems.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-gray-300">
-                        <th className="py-2 pr-4">Title</th>
-                        <th className="py-2 pr-4">Runtime</th>
-                        <th className="py-2 pr-4">Updated</th>
-                        <th className="py-2 pr-4">Created</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {runtimeOutlierItems.map((item) => {
-                        const isSelected = selectedOutlier?.library_id === item.library_id;
-                        return (
-                          <tr
-                            key={item.library_id}
-                            className={`border-t border-neutral-700/60 ${
-                              isSelected ? "bg-neutral-700/40" : ""
-                            }`}
-                          >
-                            <td className="py-2 pr-4 align-top">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedOutlier(item)}
-                                className="w-full text-left"
-                                aria-label={`View runtime details for ${item.name || "unknown"}`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span className="text-white font-medium">
-                                    {item.name || "Unknown"}
-                                  </span>
-                                  <span className="text-xs text-amber-400">View details</span>
-                                </div>
-                                <div className="mt-1 space-y-1 text-xs text-gray-400">
-                                  {(item.server_type || item.server_id) && (
-                                    <div>
-                                      {(item.server_type && item.server_type.length > 0 && (
-                                        <span className="uppercase tracking-wide text-gray-300">
-                                          {item.server_type}
-                                        </span>
-                                      )) || null}
-                                      {item.server_id && (
-                                        <span className="ml-2 text-gray-500">{item.server_id}</span>
-                                      )}
-                                    </div>
-                                  )}
-                                  <div className="text-gray-500">
-                                    Library ID: <code className="text-gray-300">{item.library_id}</code>
-                                  </div>
-                                  {item.item_id && (
-                                    <div className="text-gray-500">
-                                      Server Item: <code className="text-gray-300">{item.item_id}</code>
-                                    </div>
-                                  )}
-                                  <div className="text-gray-500">
-                                    Stored ticks: <code className="text-gray-300">{item.runtime_ticks}</code>
-                                  </div>
-                                </div>
-                              </button>
-                            </td>
-                            <td className="py-2 pr-4 align-top text-gray-200">
-                              <div className="font-semibold">{item.runtime_hours}</div>
-                              <div className="text-xs text-gray-500">{item.runtime_minutes} minutes</div>
-                            </td>
-                            <td className="py-2 pr-4 align-top text-gray-400">
-                              {item.updated_at || "—"}
-                            </td>
-                            <td className="py-2 pr-4 align-top text-gray-400">
-                              {item.created_at || "—"}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {!runtimeOutliersLoading && !runtimeOutliersError && runtimeOutlierItems.length === 0 && (
-                <div className="text-sm text-gray-400">
-                  All stored runtimes are below the current threshold. Newly corrected titles will
-                  drop off this list after the next library sync.
-                </div>
-              )}
-
-              {runtimeOutliers?.has_more && !runtimeOutliersLoading && !runtimeOutliersError && (
-                <p className="text-xs text-amber-300 mt-3">
-                  Showing the first {runtimeOutlierItems.length} entries. Use the admin API to
-                  inspect the full list if needed.
-                </p>
-              )}
-
-              {selectedOutlier && (
-                <div className="mt-4 bg-neutral-900/40 border border-neutral-700 rounded-md p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-semibold text-white">
-                        {selectedOutlier.name || "Unknown title"}
-                      </h3>
-                      <p className="text-xs text-gray-400 mt-1">
-                        Library ID: <code className="text-gray-300">{selectedOutlier.library_id}</code>
-                        {selectedOutlier.item_id && (
-                          <>
-                            <span className="mx-2">•</span>Server Item ID:{" "}
-                            <code className="text-gray-300">{selectedOutlier.item_id}</code>
-                          </>
-                        )}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedOutlier(null)}
-                      className="text-xs text-gray-400 hover:text-white"
-                    >
-                      Close
-                    </button>
+            {shouldLoadRuntimeOutliers && (
+              <div className="bg-neutral-800 rounded-lg p-6 mt-6">
+                <div className="flex items-center justify-between gap-4 mb-4">
+                  <div>
+                    <h2 className="text-lg font-semibold">Runtime Outliers</h2>
+                    <p className="text-sm text-gray-400">
+                      Items reporting runtimes longer than {runtimeOutlierThresholdMinutes} minutes
+                      ({runtimeOutlierThresholdHours}h, {runtimeOutlierThresholdDays}d). These
+                      entries usually mean Emby cached a bad runtime before the source file was
+                      fixed.
+                    </p>
                   </div>
-
-                  <div className="mt-3 text-sm text-gray-300">
-                    <div>
-                      Reported runtime: <strong>{selectedOutlier.runtime_hours}</strong> (
-                      {selectedOutlier.runtime_minutes} minutes)
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">
-                      Updated at {selectedOutlier.updated_at || "—"} • Created at {" "}
-                      {selectedOutlier.created_at || "—"}
-                    </div>
-                  </div>
-
-                  {selectedOutlierDetailsLoading && (
-                    <div className="mt-3 text-xs text-gray-400">Loading source metadata…</div>
-                  )}
-                  {selectedOutlierDetailsError && (
-                    <div className="mt-3 text-xs text-red-400">
-                      Failed to load item metadata. It may have been removed from the source
-                      server.
-                    </div>
-                  )}
-                  {!selectedOutlierDetailsLoading && !selectedOutlierDetailsError && (
-                    <div className="mt-3 text-xs text-gray-300 space-y-1">
-                      {selectedOutlierDetails && selectedOutlierDetails.length > 0 ? (
-                        <>
-                          <div>
-                            <span className="text-gray-400">Analytics record:</span>{" "}
-                            {selectedOutlierDetails[0].name || "(no name cached)"}
-                          </div>
-                          {selectedOutlierDetails[0].type && (
-                            <div className="text-gray-400">
-                              Media type: {selectedOutlierDetails[0].type}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div>
-                          No analytics metadata is currently cached for this server item. This
-                          usually means the title was removed from Emby without running the missing
-                          item cleanup job yet.
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                    {selectedOutlier.item_id && (
-                      <a
-                        href={`/items/by-ids?ids=${encodeURIComponent(selectedOutlier.item_id)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-neutral-700 text-gray-200 hover:border-amber-500 hover:text-amber-200"
-                      >
-                        View analytics JSON
-                      </a>
-                    )}
                   <button
                     type="button"
-                    onClick={() => {
-                      if (typeof navigator !== "undefined" && navigator.clipboard) {
-                        void navigator.clipboard.writeText(selectedOutlier.library_id);
-                      }
-                    }}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-neutral-700 text-gray-200 hover:border-amber-500 hover:text-amber-200"
+                    onClick={() => void reloadRuntimeOutliers()}
+                    disabled={runtimeOutliersLoading}
+                    className={`inline-flex items-center gap-2 rounded-md border border-neutral-600 px-3 py-2 text-sm transition-colors ${
+                      runtimeOutliersLoading
+                        ? "bg-neutral-700/60 text-gray-400 cursor-wait"
+                        : "bg-neutral-800 hover:bg-neutral-700 text-gray-200"
+                    }`}
+                    title="Refresh runtime outliers"
                   >
-                    Copy library ID
+                    <RefreshCcw
+                      className={`w-4 h-4 ${runtimeOutliersLoading ? "animate-spin" : ""}`}
+                    />
+                    Refresh
                   </button>
-                  {selectedOutlier.item_id && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (typeof navigator !== "undefined" && navigator.clipboard) {
-                          void navigator.clipboard.writeText(selectedOutlier.item_id);
-                        }
-                      }}
-                      className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-neutral-700 text-gray-200 hover:border-amber-500 hover:text-amber-200"
-                    >
-                        Copy server item ID
-                      </button>
-                    )}
-                  </div>
                 </div>
-              )}
 
-              <div className="mt-4 text-xs text-gray-500 bg-neutral-900/40 border border-neutral-700 rounded-md p-3">
-                Entries with unrealistic runtimes are automatically reset the next time they are
-                encountered. If you already refreshed a title in Emby, run a library sync to
-                repopulate its accurate runtime or use the missing-items cleanup job to remove stale
-                library rows.
+                {runtimeOutliersLoading && (
+                  <div className="animate-pulse space-y-3">
+                    <div className="h-4 bg-neutral-700 rounded w-1/3" />
+                    <div className="h-4 bg-neutral-700 rounded w-1/2" />
+                    <div className="h-32 bg-neutral-700/60 rounded" />
+                  </div>
+                )}
+
+                {!runtimeOutliersLoading && runtimeOutliersError && (
+                  <div className="flex items-center gap-2 text-red-400">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{runtimeOutliersError.message || "Failed to load runtime outliers"}</span>
+                  </div>
+                )}
+
+                {!runtimeOutliersLoading &&
+                  !runtimeOutliersError &&
+                  runtimeOutlierItems.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-gray-300">
+                            <th className="py-2 pr-4">Title</th>
+                            <th className="py-2 pr-4">Runtime</th>
+                            <th className="py-2 pr-4">Updated</th>
+                            <th className="py-2 pr-4">Created</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {runtimeOutlierItems.map((item) => {
+                            const isSelected = selectedOutlier?.library_id === item.library_id;
+                            return (
+                              <tr
+                                key={item.library_id}
+                                className={`border-t border-neutral-700/60 ${
+                                  isSelected ? "bg-neutral-700/40" : ""
+                                }`}
+                              >
+                                <td className="py-2 pr-4 align-top">
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedOutlier(item)}
+                                    className="w-full text-left"
+                                    aria-label={`View runtime details for ${item.name || "unknown"}`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-white font-medium">
+                                        {item.name || "Unknown"}
+                                      </span>
+                                      <span className="text-xs text-amber-400">View details</span>
+                                    </div>
+                                    <div className="mt-1 space-y-1 text-xs text-gray-400">
+                                      {(item.server_type || item.server_id) && (
+                                        <div>
+                                          {(item.server_type && item.server_type.length > 0 && (
+                                            <span className="uppercase tracking-wide text-gray-300">
+                                              {item.server_type}
+                                            </span>
+                                          )) ||
+                                            null}
+                                          {item.server_id && (
+                                            <span className="ml-2 text-gray-500">
+                                              {item.server_id}
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                      <div className="text-gray-500">
+                                        Library ID:{" "}
+                                        <code className="text-gray-300">{item.library_id}</code>
+                                      </div>
+                                      {item.item_id && (
+                                        <div className="text-gray-500">
+                                          Server Item:{" "}
+                                          <code className="text-gray-300">{item.item_id}</code>
+                                        </div>
+                                      )}
+                                      <div className="text-gray-500">
+                                        Stored ticks:{" "}
+                                        <code className="text-gray-300">{item.runtime_ticks}</code>
+                                      </div>
+                                    </div>
+                                  </button>
+                                </td>
+                                <td className="py-2 pr-4 align-top text-gray-200">
+                                  <div className="font-semibold">{item.runtime_hours}</div>
+                                  <div className="text-xs text-gray-500">
+                                    {item.runtime_minutes} minutes
+                                  </div>
+                                </td>
+                                <td className="py-2 pr-4 align-top text-gray-400">
+                                  {item.updated_at || "—"}
+                                </td>
+                                <td className="py-2 pr-4 align-top text-gray-400">
+                                  {item.created_at || "—"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                {!runtimeOutliersLoading &&
+                  !runtimeOutliersError &&
+                  runtimeOutlierItems.length === 0 && (
+                    <div className="text-sm text-gray-400">
+                      All stored runtimes are below the current threshold. Newly corrected titles
+                      will drop off this list after the next library sync.
+                    </div>
+                  )}
+
+                {runtimeOutliers?.has_more && !runtimeOutliersLoading && !runtimeOutliersError && (
+                  <p className="text-xs text-amber-300 mt-3">
+                    Showing the first {runtimeOutlierItems.length} entries. Use the admin API to
+                    inspect the full list if needed.
+                  </p>
+                )}
+
+                {selectedOutlier && (
+                  <div className="mt-4 bg-neutral-900/40 border border-neutral-700 rounded-md p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-white">
+                          {selectedOutlier.name || "Unknown title"}
+                        </h3>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Library ID:{" "}
+                          <code className="text-gray-300">{selectedOutlier.library_id}</code>
+                          {selectedOutlier.item_id && (
+                            <>
+                              <span className="mx-2">•</span>Server Item ID:{" "}
+                              <code className="text-gray-300">{selectedOutlier.item_id}</code>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOutlier(null)}
+                        className="text-xs text-gray-400 hover:text-white"
+                      >
+                        Close
+                      </button>
+                    </div>
+
+                    <div className="mt-3 text-sm text-gray-300">
+                      <div>
+                        Reported runtime: <strong>{selectedOutlier.runtime_hours}</strong> (
+                        {selectedOutlier.runtime_minutes} minutes)
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Updated at {selectedOutlier.updated_at || "—"} • Created at{" "}
+                        {selectedOutlier.created_at || "—"}
+                      </div>
+                    </div>
+
+                    {selectedOutlierDetailsLoading && (
+                      <div className="mt-3 text-xs text-gray-400">Loading source metadata…</div>
+                    )}
+                    {selectedOutlierDetailsError && (
+                      <div className="mt-3 text-xs text-red-400">
+                        Failed to load item metadata. It may have been removed from the source
+                        server.
+                      </div>
+                    )}
+                    {!selectedOutlierDetailsLoading && !selectedOutlierDetailsError && (
+                      <div className="mt-3 text-xs text-gray-300 space-y-1">
+                        {selectedOutlierDetails && selectedOutlierDetails.length > 0 ? (
+                          <>
+                            <div>
+                              <span className="text-gray-400">Analytics record:</span>{" "}
+                              {selectedOutlierDetails[0].name || "(no name cached)"}
+                            </div>
+                            {selectedOutlierDetails[0].type && (
+                              <div className="text-gray-400">
+                                Media type: {selectedOutlierDetails[0].type}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div>
+                            No analytics metadata is currently cached for this server item. This
+                            usually means the title was removed from Emby without running the
+                            missing item cleanup job yet.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                      {selectedOutlier.item_id && (
+                        <a
+                          href={`/items/by-ids?ids=${encodeURIComponent(selectedOutlier.item_id)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-neutral-700 text-gray-200 hover:border-amber-500 hover:text-amber-200"
+                        >
+                          View analytics JSON
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof navigator !== "undefined" && navigator.clipboard) {
+                            void navigator.clipboard.writeText(selectedOutlier.library_id);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-neutral-700 text-gray-200 hover:border-amber-500 hover:text-amber-200"
+                      >
+                        Copy library ID
+                      </button>
+                      {selectedOutlier.item_id && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (typeof navigator !== "undefined" && navigator.clipboard) {
+                              void navigator.clipboard.writeText(selectedOutlier.item_id);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 px-3 py-1 rounded-md border border-neutral-700 text-gray-200 hover:border-amber-500 hover:text-amber-200"
+                        >
+                          Copy server item ID
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-4 text-xs text-gray-500 bg-neutral-900/40 border border-neutral-700 rounded-md p-3">
+                  Entries with unrealistic runtimes are automatically reset the next time they are
+                  encountered. If you already refreshed a title in Emby, run a library sync to
+                  repopulate its accurate runtime or use the missing-items cleanup job to remove
+                  stale library rows.
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {meRole && meRole.toLowerCase() === "admin" && (
-            <div className="bg-neutral-800 rounded-lg p-6 mt-6">
-              <div className="flex items-center gap-2 mb-4">
+            {meRole && meRole.toLowerCase() === "admin" && (
+              <div className="bg-neutral-800 rounded-lg p-6 mt-6">
+                <div className="flex items-center gap-2 mb-4">
                   <User className="w-5 h-5 text-gray-400" />
                   <h2 className="text-lg font-semibold">Users</h2>
                 </div>

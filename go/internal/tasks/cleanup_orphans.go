@@ -41,8 +41,37 @@ func CleanupOrphanedServerItems(db *sql.DB, mgr *media.MultiServerManager) {
 		return
 	}
 
+	// ... existing logic ...
 	rows, _ := result.RowsAffected()
 	if rows > 0 {
 		logging.Info("Cleaned up orphaned library items", "count", rows, "valid_servers", validIDs)
+	}
+
+	CleanupOrphanedSeries(db)
+}
+
+// CleanupOrphanedSeries removes series that have no remaining library items associated with them.
+func CleanupOrphanedSeries(db *sql.DB) {
+	// Delete series that are not referenced by any library_item (as series_id) 
+	// AND not referenced by any library_item (as the item itself, though typically series table IS the metadata source)
+	// Generally, if no library_item has series_id = X, then Series X is empty/gone.
+	query := `
+		DELETE FROM series 
+		WHERE id NOT IN (
+			SELECT DISTINCT series_id 
+			FROM library_item 
+			WHERE series_id IS NOT NULL AND series_id != ''
+		)
+	`
+	
+	result, err := db.Exec(query)
+	if err != nil {
+		logging.Warn("Failed to cleanup orphaned series", "error", err)
+		return
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows > 0 {
+		logging.Info("Cleaned up orphaned series records", "count", rows)
 	}
 }

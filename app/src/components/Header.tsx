@@ -148,7 +148,11 @@ export default function Header() {
                 target="_blank"
                 rel="noreferrer"
                 className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-gray-300 font-mono"
-                title={versionInfo.update_available ? `Update: ${versionInfo.latest_tag}` : versionInfo.version}
+                title={
+                  versionInfo.update_available
+                    ? `Update: ${versionInfo.latest_tag}`
+                    : versionInfo.version
+                }
               >
                 {versionInfo.version}
                 {versionInfo.update_available && <span className="ml-1 text-red-500">●</span>}
@@ -170,7 +174,12 @@ export default function Header() {
               aria-label="Open menu"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
               </svg>
             </button>
           </div>
@@ -190,116 +199,116 @@ export default function Header() {
 
           {/* Stats + Refresh */}
           <div className="flex items-center gap-6">
-          {/* Version badge */}
-          <div className="text-xs text-gray-300">
-            {versionInfo && (
-              <a
-                href={versionInfo.url || "#"}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 border border-neutral-700"
-                title={
-                  versionInfo.update_available
-                    ? `Update available: ${versionInfo.latest_tag}`
-                    : `Version ${versionInfo.version}`
-                }
-              >
-                <span className="font-mono">
-                  {versionInfo.version}
-                  {versionInfo.commit && versionInfo.version === "dev" && (
-                    <span className="opacity-70">@{versionInfo.commit}</span>
+            {/* Version badge */}
+            <div className="text-xs text-gray-300">
+              {versionInfo && (
+                <a
+                  href={versionInfo.url || "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 border border-neutral-700"
+                  title={
+                    versionInfo.update_available
+                      ? `Update available: ${versionInfo.latest_tag}`
+                      : `Version ${versionInfo.version}`
+                  }
+                >
+                  <span className="font-mono">
+                    {versionInfo.version}
+                    {versionInfo.commit && versionInfo.version === "dev" && (
+                      <span className="opacity-70">@{versionInfo.commit}</span>
+                    )}
+                  </span>
+                  {versionInfo.update_available && (
+                    <span
+                      className="inline-block w-2 h-2 rounded-full bg-red-500"
+                      title={`New: ${versionInfo.latest_tag}`}
+                    />
                   )}
-                </span>
-                {versionInfo.update_available && (
-                  <span
-                    className="inline-block w-2 h-2 rounded-full bg-red-500"
-                    title={`New: ${versionInfo.latest_tag}`}
-                  />
-                )}
-              </a>
-            )}
-          </div>
-          {/* Weekly Hours */}
-          <div className="text-center">
-            <div className="text-sm text-gray-400">Weekly Hours</div>
-            <div className="text-xl font-bold text-white">
-              {usageError ? (
-                <span className="text-red-400 text-sm">Error</span>
-              ) : (
-                fmtHours(weeklyHours)
+                </a>
               )}
             </div>
-          </div>
-
-          {/* Refresh Control (always yellow) */}
-          <div className="relative">
-            <button
-              onClick={handleRefresh}
-              disabled={isRunning}
-              className={[
-                "relative rounded-lg px-4 py-2 font-semibold text-black",
-                "bg-amber-600 hover:bg-amber-500 active:translate-y-[1px]",
-                "shadow-md transition-colors",
-                "h-10",
-                isRunning ? "opacity-90 cursor-not-allowed" : "",
-              ].join(" ")}
-              style={{ minWidth: 220 }}
-            >
-              <span className="relative z-10">
-                {!isRunning && "Refresh Library Index"}
-                {isRunning && (
-                  <>
-                    {"Refreshing… "}
-                    {Math.round(progress)}%
-                    {displayTotal > 0 && (
-                      <span className="text-xs ml-1 opacity-90">
-                        ({displayProcessed}/{displayTotal})
-                      </span>
-                    )}
-                  </>
+            {/* Weekly Hours */}
+            <div className="text-center">
+              <div className="text-sm text-gray-400">Weekly Hours</div>
+              <div className="text-xl font-bold text-white">
+                {usageError ? (
+                  <span className="text-red-400 text-sm">Error</span>
+                ) : (
+                  fmtHours(weeklyHours)
                 )}
-              </span>
+              </div>
+            </div>
 
-              {/* Inline progress bar, only while refreshing */}
-              {isRunning && (
-                <span
-                  className="absolute left-1 right-1 bottom-1 h-1 rounded-sm bg-amber-900/40"
-                  aria-hidden="true"
-                >
-                  <span
-                    className="absolute left-0 top-0 h-full rounded-sm bg-amber-300 transition-all duration-300"
-                    style={{ width: `${Math.max(2, Math.min(100, progress))}%` }}
-                  />
+            {/* Refresh Control (always yellow) */}
+            <div className="relative">
+              <button
+                onClick={handleRefresh}
+                disabled={isRunning}
+                className={[
+                  "relative rounded-lg px-4 py-2 font-semibold text-black",
+                  "bg-amber-600 hover:bg-amber-500 active:translate-y-[1px]",
+                  "shadow-md transition-colors",
+                  "h-10",
+                  isRunning ? "opacity-90 cursor-not-allowed" : "",
+                ].join(" ")}
+                style={{ minWidth: 220 }}
+              >
+                <span className="relative z-10">
+                  {!isRunning && "Refresh Library Index"}
+                  {isRunning && (
+                    <>
+                      {"Refreshing… "}
+                      {Math.round(progress)}%
+                      {displayTotal > 0 && (
+                        <span className="text-xs ml-1 opacity-90">
+                          ({displayProcessed}/{displayTotal})
+                        </span>
+                      )}
+                    </>
+                  )}
                 </span>
-              )}
-            </button>
-          </div>
 
-          {/* Quick nav links */}
-          <div className="flex items-center gap-3 text-sm">
-            <Link
-              href="/settings"
-              className="text-blue-300 hover:text-white underline decoration-dotted"
-            >
-              Settings
-            </Link>
-            <span className="text-gray-500">|</span>
-            <Link
-              href="/api-explorer"
-              className="text-blue-300 hover:text-white underline decoration-dotted"
-            >
-              API Explorer
-            </Link>
-            <span className="text-gray-500">|</span>
-            <button
-              onClick={handleLogout}
-              className="text-red-300 hover:text-white underline decoration-dotted"
-              title="Logout"
-            >
-              Logout
-            </button>
+                {/* Inline progress bar, only while refreshing */}
+                {isRunning && (
+                  <span
+                    className="absolute left-1 right-1 bottom-1 h-1 rounded-sm bg-amber-900/40"
+                    aria-hidden="true"
+                  >
+                    <span
+                      className="absolute left-0 top-0 h-full rounded-sm bg-amber-300 transition-all duration-300"
+                      style={{ width: `${Math.max(2, Math.min(100, progress))}%` }}
+                    />
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Quick nav links */}
+            <div className="flex items-center gap-3 text-sm">
+              <Link
+                href="/settings"
+                className="text-blue-300 hover:text-white underline decoration-dotted"
+              >
+                Settings
+              </Link>
+              <span className="text-gray-500">|</span>
+              <Link
+                href="/api-explorer"
+                className="text-blue-300 hover:text-white underline decoration-dotted"
+              >
+                API Explorer
+              </Link>
+              <span className="text-gray-500">|</span>
+              <button
+                onClick={handleLogout}
+                className="text-red-300 hover:text-white underline decoration-dotted"
+                title="Logout"
+              >
+                Logout
+              </button>
+            </div>
           </div>
-        </div>
         </div>
       </header>
 
@@ -325,7 +334,12 @@ export default function Header() {
                   aria-label="Close menu"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   </svg>
                 </button>
               </div>
@@ -378,7 +392,12 @@ export default function Header() {
                   >
                     <span>Settings</span>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
                     </svg>
                   </Link>
 
@@ -389,7 +408,12 @@ export default function Header() {
                   >
                     <span>API Explorer</span>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
                     </svg>
                   </Link>
 
@@ -402,7 +426,12 @@ export default function Header() {
                   >
                     <span>Logout</span>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                      />
                     </svg>
                   </button>
                 </div>

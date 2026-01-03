@@ -69,6 +69,9 @@ func IngestLibraries(db *sql.DB, mgr *media.MultiServerManager, include map[stri
 		}
 		_ = setSettingValue(db, librarySyncSettingPrefix+serverID, time.Now().UTC().Format(time.RFC3339))
 	}
+
+	// Post-ingestion cleanup: remove series that no longer have any episodes/items
+	CleanupOrphanedSeries(db)
 }
 
 func ingestEmbyLibrary(db *sql.DB, sc media.ServerConfig, client *media.EmbyAdapter) error {

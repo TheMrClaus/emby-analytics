@@ -499,24 +499,31 @@ export default function PlaybackMethodsCard() {
                         itemDirection: "left-to-right",
                         itemOpacity: 0.85,
                         symbolSize: 12,
-                  // Add left padding inside the legend item background by
-                  // shifting the color swatch a few pixels to the right.
-                  symbolShape: ({ x, y, size, fill, borderWidth, borderColor }: SymbolProps) => (
-                    <rect
-                      x={x + 6}
-                      y={y}
-                      width={size}
-                      height={size}
-                      fill={fill}
-                      stroke={borderColor}
-                      strokeWidth={borderWidth}
-                      rx={2}
-                      ry={2}
-                    />
-                  ),
-                  symbolSpacing: 8,
-                  itemBackground: "#ffffff",
-                  itemTextColor: "#000000",
+                        // Add left padding inside the legend item background by
+                        // shifting the color swatch a few pixels to the right.
+                        symbolShape: ({
+                          x,
+                          y,
+                          size,
+                          fill,
+                          borderWidth,
+                          borderColor,
+                        }: SymbolProps) => (
+                          <rect
+                            x={x + 6}
+                            y={y}
+                            width={size}
+                            height={size}
+                            fill={fill}
+                            stroke={borderColor}
+                            strokeWidth={borderWidth}
+                            rx={2}
+                            ry={2}
+                          />
+                        ),
+                        symbolSpacing: 8,
+                        itemBackground: "#ffffff",
+                        itemTextColor: "#000000",
                         effects: [
                           {
                             on: "hover",

@@ -183,9 +183,7 @@ export default function NowPlaying() {
 
     // Use provided poster
     if (entry.poster) {
-      return entry.poster.startsWith("/img/")
-        ? `${apiBase}${entry.poster}`
-        : entry.poster;
+      return entry.poster.startsWith("/img/") ? `${apiBase}${entry.poster}` : entry.poster;
     }
 
     // Fallback to placeholder
@@ -448,12 +446,18 @@ export default function NowPlaying() {
                         <div className="flex items-center justify-between gap-2">
                           <div>{s.app || s.device || "Unknown Client"}</div>
                           <div className="flex gap-1">
-                            {s.width && s.height && <Chip tone="ok" label={`${s.width}×${s.height}`} />}
+                            {s.width && s.height && (
+                              <Chip tone="ok" label={`${s.width}×${s.height}`} />
+                            )}
                             {(() => {
-                              const isVideoTrans = (s.video_method || "Direct Play") === "Transcode";
-                              const isAudioTrans = (s.audio_method || "Direct Play") === "Transcode";
+                              const isVideoTrans =
+                                (s.video_method || "Direct Play") === "Transcode";
+                              const isAudioTrans =
+                                (s.audio_method || "Direct Play") === "Transcode";
                               const remuxOnly =
-                                (s.play_method || "") === "Transcode" && !isVideoTrans && !isAudioTrans;
+                                (s.play_method || "") === "Transcode" &&
+                                !isVideoTrans &&
+                                !isAudioTrans;
                               if (!remuxOnly) return null;
                               const sp = (s.stream_path || "").toUpperCase();
                               const label = sp ? `Remux/${sp}` : "Remux";
