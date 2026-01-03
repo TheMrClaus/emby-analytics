@@ -30,6 +30,10 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             tag="${{ github.event.inputs.tag }}"
+            # Auto-prepend 'v' if missing
+            if [[ "$tag" != v* ]]; then
+              tag="v$tag"
+            fi
           else
             tag="${GITHUB_REF_NAME}"
           fi
