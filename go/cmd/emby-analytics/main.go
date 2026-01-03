@@ -204,6 +204,9 @@ func main() {
 	tasks.StartSyncLoop(sqlDB, multiMgr, cfg)
 	tasks.StartUserSyncLoop(sqlDB, multiMgr, cfg)
 
+	// One-off cleanup of orphaned server items on startup
+	tasks.CleanupOrphanedServerItems(sqlDB, multiMgr)
+
 	// ---- Session Processing (Hybrid State-Polling Approach) ----
 	sessionProcessor := tasks.NewSessionProcessor(sqlDB, multiMgr)
 	logger.Info("Session processor initialized")
