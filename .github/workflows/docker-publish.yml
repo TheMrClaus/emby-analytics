@@ -17,8 +17,7 @@ on:
         default: "false"
         type: choice
         options: ["false", "true"]
-  schedule:
-    - cron: '0 2 * * 1'  # weekly, Mondays at 02:00 UTC to refresh cache only
+
 
 permissions:
   contents: read
@@ -34,6 +33,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -88,19 +89,19 @@ jobs:
           echo "date=${date}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
-      - name: Build and push (tags only, amd64)
+      - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: ${{ github.ref_type == 'tag' }}
-          platforms: linux/amd64
+          push: true
+          platforms: linux/amd64,linux/arm64
           tags: |
             ${{ steps.meta.outputs.tags }}
             ${{ steps.vars.outputs.extra_tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          pull: ${{ github.event_name == 'schedule' || github.event.inputs.pull_base == 'true' }}
+          pull: ${{ github.event.inputs.pull_base == 'true' }}
           no-cache: ${{ github.event.inputs.no_cache == 'true' }}
           build-args: |
             VERSION=${{ github.ref_type == 'tag' && github.ref_name || steps.vars.outputs.version }}

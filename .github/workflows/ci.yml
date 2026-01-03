@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  lint-and-typecheck:
+  backend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -15,6 +15,20 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+
+      - name: Download Go modules
+        working-directory: go
+        run: go mod download
+
+      - name: Run Go linters
+        run: make lint-go
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -27,10 +41,11 @@ jobs:
         working-directory: app
         run: npm ci
 
-      - name: Download Go modules
-        working-directory: go
-        run: go mod download
+      - name: Typecheck
+        working-directory: app
+        run: npm run typecheck
 
-      - name: Run linters and typecheck
-        run: make lint
+      - name: Lint
+        working-directory: app
+        run: npm run lint
 

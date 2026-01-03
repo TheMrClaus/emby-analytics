@@ -66,8 +66,7 @@ jobs:
             echo "has_notes=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create GitHub Release (tag notes)
-        if: steps.notes.outputs.has_notes == 'true'
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
@@ -75,20 +74,7 @@ jobs:
           draft: false
           prerelease: ${{ steps.tag.outputs.is_prerelease == 'true' }}
           make_latest: ${{ steps.tag.outputs.is_prerelease == 'true' && 'false' || 'true' }}
-          body_path: ${{ steps.notes.outputs.body_path }}
-          generate_release_notes: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create GitHub Release (auto notes)
-        if: steps.notes.outputs.has_notes != 'true'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: ${{ steps.tag.outputs.tag }}
-          draft: false
-          prerelease: ${{ steps.tag.outputs.is_prerelease == 'true' }}
-          make_latest: ${{ steps.tag.outputs.is_prerelease == 'true' && 'false' || 'true' }}
-          generate_release_notes: true
+          body_path: ${{ steps.notes.outputs.has_notes == 'true' && steps.notes.outputs.body_path || '' }}
+          generate_release_notes: ${{ steps.notes.outputs.has_notes != 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
