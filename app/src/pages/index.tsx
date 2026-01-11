@@ -9,7 +9,9 @@ import NowPlaying from "../components/NowPlaying";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import DragDropDashboard from "../components/DragDropDashboard";
 import LibraryServerSelector from "../components/LibraryServerSelector";
+
 import ClientOnly from "../components/ClientOnly";
+import ActivityChart from "../components/ActivityChart";
 
 export default function Dashboard() {
   return (
@@ -46,6 +48,12 @@ export default function Dashboard() {
 
           {/* Pin Media Qualities & Media Codecs just above Most Active */}
           <div className="space-y-4">
+            <ErrorBoundary>
+              <ClientOnly>
+                <ActivityChart />
+              </ClientOnly>
+            </ErrorBoundary>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <ErrorBoundary>
                 <ClientOnly>

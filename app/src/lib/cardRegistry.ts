@@ -4,6 +4,7 @@ import MovieStatsCard from "../components/MovieStatsCard";
 import SeriesStatsCard from "../components/SeriesStatsCard";
 import TopUsers from "../components/TopUsers";
 import TopItems from "../components/TopItems";
+import ActivityChart from "../components/ActivityChart";
 
 export const CARD_REGISTRY: Record<string, Omit<DashboardCard, "isVisible" | "position">> = {
   "playback-methods": {
@@ -41,6 +42,13 @@ export const CARD_REGISTRY: Record<string, Omit<DashboardCard, "isVisible" | "po
     category: "activity",
     component: TopItems,
   },
+  "activity-chart": {
+    id: "activity-chart",
+    title: "Activity Chart",
+    description: "User activity heat map",
+    category: "activity",
+    component: ActivityChart,
+  },
 };
 
 export const DEFAULT_CARD_ORDER = [
@@ -48,7 +56,9 @@ export const DEFAULT_CARD_ORDER = [
   "movie-stats",
   "series-stats",
   "top-users",
+
   "top-items",
+
 ];
 
 export function getDefaultLayout(): DashboardCard[] {

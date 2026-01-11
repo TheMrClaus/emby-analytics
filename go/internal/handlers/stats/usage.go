@@ -44,7 +44,7 @@ func Usage(db *sql.DB) fiber.Handler {
                 ) / 3600.0 AS hours
             FROM play_intervals pi
             JOIN emby_user u ON u.id = pi.user_id
-            JOIN library_item li ON li.id = pi.item_id
+            LEFT JOIN library_item li ON li.id = pi.item_id
             WHERE
                 pi.start_ts <= ? AND pi.end_ts >= ?
                 AND COALESCE(li.media_type, 'Unknown') NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')

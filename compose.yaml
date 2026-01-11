@@ -1,10 +1,9 @@
 services:
   emby-analytics:
-    image: ghcr.io/themrclaus/emby-analytics:latest
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    #   network: host
+    # image: ghcr.io/themrclaus/emby-analytics:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: emby-analytics
     restart: unless-stopped
     volumes:
@@ -13,12 +12,12 @@ services:
       - .env
     networks:
       mediaserver:
-      frontend:
+      pangolin:
 
 networks:
   mediaserver:
     external: true
-  frontend:
+  pangolin:
     external: true
 
 volumes:
