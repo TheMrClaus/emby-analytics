@@ -110,17 +110,9 @@ export default function ActivityChart() {
                             monthLegendOffset={10}
                             theme={theme}
                             tooltip={({ day, value }) => (
-                                <div
-                                    style={{
-                                        padding: 12,
-                                        color: "#f3f4f6",
-                                        background: "#1f2937",
-                                        borderRadius: 4,
-                                    }}
-                                >
-                                    <strong>{day}</strong>
-                                    <br />
-                                    {value} hours
+                                <div className="bg-gray-800 text-gray-100 p-3 rounded shadow-lg border border-gray-700 whitespace-nowrap min-w-[100px] text-center">
+                                    <strong className="block mb-1">{day}</strong>
+                                    <span>{value} hours</span>
                                 </div>
                             )}
                         />
