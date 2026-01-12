@@ -95,7 +95,55 @@ func syncServerUsers(db *sql.DB, client media.MediaServerClient, sc media.Server
 		processed++
 		syncUserWatchData(db, client, sc, remoteID, storedID, u.Name)
 	}
+
+	// Mark users that no longer exist on server as deleted
+	markDeletedUsers(db, sc.ID, users)
+
 	return processed
+}
+
+// markDeletedUsers sets deleted_at for users in DB that are not in the server's user list
+func markDeletedUsers(db *sql.DB, serverID string, liveUsers []media.User) {
+	// Build set of live user IDs
+	liveSet := make(map[string]bool)
+	for _, u := range liveUsers {
+		storedID := storageUserID(serverID, u.ID)
+		liveSet[storedID] = true
+	}
+
+	// Get all users for this server from DB
+	rows, err := db.Query(`SELECT id FROM emby_user WHERE server_id = ? AND deleted_at IS NULL`, serverID)
+	if err != nil {
+		logging.Debug("markDeletedUsers: failed to query users", "server_id", serverID, "error", err)
+		return
+	}
+	defer rows.Close()
+
+	var toDelete []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			continue
+		}
+		if !liveSet[id] {
+			toDelete = append(toDelete, id)
+		}
+	}
+
+	// Mark as deleted
+	for _, id := range toDelete {
+		_, err := db.Exec(`UPDATE emby_user SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?`, id)
+		if err != nil {
+			logging.Debug("markDeletedUsers: failed to mark user as deleted", "user_id", id, "error", err)
+		} else {
+			logging.Debug("markDeletedUsers: marked user as deleted", "user_id", id)
+		}
+	}
+
+	// Clear deleted_at for users that exist again (re-added)
+	for id := range liveSet {
+		_, _ = db.Exec(`UPDATE emby_user SET deleted_at = NULL WHERE id = ? AND deleted_at IS NOT NULL`, id)
+	}
 }
 
 func syncUserWatchData(db *sql.DB, client media.MediaServerClient, sc media.ServerConfig, remoteUserID, storedUserID, userName string) {

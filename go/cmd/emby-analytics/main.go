@@ -276,7 +276,7 @@ func main() {
 	// Stats API Routes
 	app.Get("/stats/overview", stats.Overview(sqlDB))
 	app.Get("/stats/usage", stats.Usage(sqlDB, multiMgr))
-	app.Get("/stats/top/users", stats.TopUsers(sqlDB))
+	app.Get("/stats/top/users", stats.TopUsers(sqlDB, multiMgr))
 
 	app.Get("/stats/top/items", stats.TopItems(sqlDB, em))
 	// Inject manager so TopItems can enrich non-Emby items
@@ -298,7 +298,7 @@ func main() {
 	app.Get("/stats/top/series", stats.TopSeries(sqlDB))
 
 	// Backward compatibility routes (hyphenated versions)
-	app.Get("/stats/top-users", stats.TopUsers(sqlDB))
+	app.Get("/stats/top-users", stats.TopUsers(sqlDB, multiMgr))
 	app.Get("/stats/top-items", stats.TopItems(sqlDB, em))
 	app.Get("/stats/playback-methods", stats.PlayMethods(sqlDB, em))
 

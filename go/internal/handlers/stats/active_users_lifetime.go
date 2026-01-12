@@ -30,7 +30,7 @@ func ActiveUsersLifetime(db *sql.DB) fiber.Handler {
 				COALESCE(lw.emby_ms, 0) AS emby_ms,
 				COALESCE(lw.trakt_ms, 0) AS trakt_ms
 			FROM lifetime_watch lw
-			JOIN emby_user u ON u.id = lw.user_id
+			JOIN emby_user u ON u.id = lw.user_id AND u.deleted_at IS NULL
 			WHERE lw.emby_ms > 0 OR lw.trakt_ms > 0
 			ORDER BY 
 				CASE WHEN ? = 1 THEN (COALESCE(lw.emby_ms, 0) + COALESCE(lw.trakt_ms, 0))

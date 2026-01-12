@@ -69,6 +69,9 @@ func runSyncFiltered(db *sql.DB, mgr *media.MultiServerManager, cfg config.Confi
 		return
 	}
 
+	// Sync users first to ensure we have up-to-date user info and track deletions
+	runUserSync(db, mgr)
+
 	totalInserted := 0
 	totalAPICalls := 0
 	start := time.Now()

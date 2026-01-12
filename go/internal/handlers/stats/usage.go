@@ -48,7 +48,7 @@ func Usage(db *sql.DB, mgr *media.MultiServerManager) fiber.Handler {
                     )
                 ) / 3600.0 AS hours
             FROM play_intervals pi
-            JOIN emby_user u ON u.id = pi.user_id
+            JOIN emby_user u ON u.id = pi.user_id AND u.deleted_at IS NULL
             LEFT JOIN library_item li ON li.id = pi.item_id
             WHERE
                 pi.start_ts <= ? AND pi.end_ts >= ?
@@ -68,6 +68,7 @@ func Usage(db *sql.DB, mgr *media.MultiServerManager) fiber.Handler {
 			var r UsageRow
 			if err := rows.Scan(&r.Day, &r.User, &r.ServerID, &r.Hours); err != nil {
 				return c.Status(500).JSON(fiber.Map{"error": "failed to scan usage row: " + err.Error()})
+			}
 		    out = append(out, r)
 		}
 		

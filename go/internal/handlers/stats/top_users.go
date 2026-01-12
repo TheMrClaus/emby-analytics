@@ -3,6 +3,7 @@ package stats
 import (
 	"database/sql"
 	"emby-analytics/internal/handlers/settings"
+	"emby-analytics/internal/media"
 	"emby-analytics/internal/queries"
 	"emby-analytics/internal/tasks"
 	"sort"
@@ -12,12 +13,14 @@ import (
 )
 
 type TopUser struct {
-	UserID string  `json:"user_id"`
-	Name   string  `json:"name"`
-	Hours  float64 `json:"hours"`
+	UserID     string  `json:"user_id"`
+	Name       string  `json:"name"`
+	ServerID   string  `json:"server_id"`
+	ServerName string  `json:"server_name"`
+	Hours      float64 `json:"hours"`
 }
 
-func TopUsers(db *sql.DB) fiber.Handler {
+func TopUsers(db *sql.DB, mgr *media.MultiServerManager) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		// --- Parameter Parsing ---
 		timeframe := c.Query("timeframe", "")
@@ -58,6 +61,7 @@ func TopUsers(db *sql.DB) fiber.Handler {
 				SELECT
 					u.id,
 					u.name,
+					u.server_id,
 					CASE WHEN ? = 1 THEN 
 						COALESCE((lw.emby_ms + lw.trakt_ms) / 3600000.0, 0)
 					ELSE 
@@ -65,7 +69,7 @@ func TopUsers(db *sql.DB) fiber.Handler {
 					END AS hours
 				FROM emby_user u
 				LEFT JOIN lifetime_watch lw ON lw.user_id = u.id
-				WHERE lw.emby_ms > 0 OR lw.trakt_ms > 0
+				WHERE (lw.emby_ms > 0 OR lw.trakt_ms > 0) AND u.deleted_at IS NULL
 				ORDER BY hours DESC
 				LIMIT ?;
 			`, includeTrakt, limit)
@@ -75,10 +79,16 @@ func TopUsers(db *sql.DB) fiber.Handler {
 			defer rows.Close()
 
 			out := []TopUser{}
+			configs := mgr.GetServerConfigs()
 			for rows.Next() {
 				var u TopUser
-				if err := rows.Scan(&u.UserID, &u.Name, &u.Hours); err != nil {
+				if err := rows.Scan(&u.UserID, &u.Name, &u.ServerID, &u.Hours); err != nil {
 					return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+				}
+				if cfg, ok := configs[u.ServerID]; ok {
+					u.ServerName = cfg.Name
+				} else {
+					u.ServerName = u.ServerID
 				}
 				out = append(out, u)
 			}
@@ -119,7 +129,7 @@ func TopUsers(db *sql.DB) fiber.Handler {
 				historicalRows = []queries.TopUserRow{}
 				for rows.Next() {
 					var r queries.TopUserRow
-					if err := rows.Scan(&r.UserID, &r.Name, &r.Hours); err == nil {
+					if err := rows.Scan(&r.UserID, &r.Name, &r.ServerID, &r.Hours); err == nil {
 						historicalRows = append(historicalRows, r)
 					}
 				}
@@ -129,10 +139,12 @@ func TopUsers(db *sql.DB) fiber.Handler {
 		// 2. Prepare to combine historical and live data
 		combinedHours := make(map[string]float64)
 		userNames := make(map[string]string)
+		userServers := make(map[string]string)
 
 		for _, row := range historicalRows {
 			combinedHours[row.UserID] += row.Hours
 			userNames[row.UserID] = row.Name
+			userServers[row.UserID] = row.ServerID
 		}
 
 		// 3. Get live data from the Intervalizer and merge it
@@ -150,13 +162,21 @@ func TopUsers(db *sql.DB) fiber.Handler {
 		}
 
 		// 4. Convert the combined map back to a slice for sorting
+		configs := mgr.GetServerConfigs()
 		finalResult := make([]TopUser, 0, len(combinedHours))
 		for userID, hours := range combinedHours {
 			if userNames[userID] != "" { // Only include users we have a name for
+				serverID := userServers[userID]
+				serverName := serverID
+				if cfg, ok := configs[serverID]; ok {
+					serverName = cfg.Name
+				}
 				finalResult = append(finalResult, TopUser{
-					UserID: userID,
-					Name:   userNames[userID],
-					Hours:  hours,
+					UserID:     userID,
+					Name:       userNames[userID],
+					ServerID:   serverID,
+					ServerName: serverName,
+					Hours:      hours,
 				})
 			}
 		}

@@ -6,9 +6,10 @@ import (
 )
 
 type TopUserRow struct {
-	UserID string  `json:"user_id"`
-	Name   string  `json:"name"`
-	Hours  float64 `json:"hours"`
+	UserID   string  `json:"user_id"`
+	Name     string  `json:"name"`
+	ServerID string  `json:"server_id"`
+	Hours    float64 `json:"hours"`
 }
 
 type TopItemRow struct {
@@ -26,6 +27,7 @@ func TopUsersByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd in
         SELECT
             l.user_id,
             u.name,
+            u.server_id,
             SUM(
                 MAX(
                     0,
@@ -39,12 +41,12 @@ func TopUsersByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd in
                 )
             ) / 3600.0 AS hours
         FROM play_intervals l
-        JOIN emby_user u ON u.id = l.user_id
+        JOIN emby_user u ON u.id = l.user_id AND u.deleted_at IS NULL
         JOIN library_item li ON li.id = l.item_id
         WHERE
             l.start_ts <= ? AND l.end_ts >= ?
             AND COALESCE(li.media_type, 'Unknown') NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')
-        GROUP BY l.user_id, u.name
+        GROUP BY l.user_id, u.name, u.server_id
         HAVING hours > 0
         ORDER BY hours DESC
         LIMIT ?;
@@ -58,7 +60,7 @@ func TopUsersByWatchSeconds(ctx context.Context, db *sql.DB, winStart, winEnd in
 	var out []TopUserRow
 	for rows.Next() {
 		var r TopUserRow
-		if err := rows.Scan(&r.UserID, &r.Name, &r.Hours); err != nil {
+		if err := rows.Scan(&r.UserID, &r.Name, &r.ServerID, &r.Hours); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
