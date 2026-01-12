@@ -146,9 +146,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                       {r.name}
                     </span>
                   </td>
-                  <td className="py-1 text-gray-400">
-                    {r.server_name || r.server_id || "-"}
-                  </td>
+                  <td className="py-1 text-gray-400">{r.server_name || r.server_id || "-"}</td>
                   <td className="py-1 text-right tabular-nums" title={fmtTooltipTime(r.hours)}>
                     {fmtSpanDHMW(r.hours)}
                   </td>
