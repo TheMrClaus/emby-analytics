@@ -1,7 +1,13 @@
 // app/src/types.ts
 export type UsageRow = { day: string; user: string; hours: number };
 
-export type TopUser = { user_id?: string; name: string; hours: number };
+export type TopUser = {
+  user_id?: string;
+  name: string;
+  server_id?: string;
+  server_name?: string;
+  hours: number;
+};
 
 export type UserDetail = {
   user_id: string;
@@ -22,6 +28,9 @@ export type UserTopItem = {
   item_id: string;
   name: string;
   type: string;
+  user: string;
+  server_id?: string;
+  server_name?: string;
   hours: number;
 };
 

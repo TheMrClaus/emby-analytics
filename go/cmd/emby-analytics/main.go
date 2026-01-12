@@ -275,7 +275,7 @@ func main() {
 	app.Get("/version", verhandler.GetVersion())
 	// Stats API Routes
 	app.Get("/stats/overview", stats.Overview(sqlDB))
-	app.Get("/stats/usage", stats.Usage(sqlDB))
+	app.Get("/stats/usage", stats.Usage(sqlDB, multiMgr))
 	app.Get("/stats/top/users", stats.TopUsers(sqlDB))
 
 	app.Get("/stats/top/items", stats.TopItems(sqlDB, em))

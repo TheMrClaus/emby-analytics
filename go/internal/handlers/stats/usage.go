@@ -5,15 +5,19 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
+
+	"emby-analytics/internal/media"
 )
 
 type UsageRow struct {
-	Day   string  `json:"day"`
-	User  string  `json:"user"`
-	Hours float64 `json:"hours"`
+	Day        string  `json:"day"`
+	User       string  `json:"user"`
+	ServerID   string  `json:"server_id"`
+	ServerName string  `json:"server_name"`
+	Hours      float64 `json:"hours"`
 }
 
-func Usage(db *sql.DB) fiber.Handler {
+func Usage(db *sql.DB, mgr *media.MultiServerManager) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		days := parseQueryInt(c, "days", 14)
 		if days <= 0 {
@@ -30,6 +34,7 @@ func Usage(db *sql.DB) fiber.Handler {
             SELECT
                 strftime('%Y-%m-%d', datetime(pi.start_ts, 'unixepoch')) AS day,
                 u.name,
+                u.server_id,
                 SUM(
                     MAX(
                         0,
@@ -48,7 +53,7 @@ func Usage(db *sql.DB) fiber.Handler {
             WHERE
                 pi.start_ts <= ? AND pi.end_ts >= ?
                 AND COALESCE(li.media_type, 'Unknown') NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')
-            GROUP BY day, u.name
+            GROUP BY day, u.name, u.server_id
             ORDER BY day ASC, u.name ASC;
         `
 
@@ -61,11 +66,21 @@ func Usage(db *sql.DB) fiber.Handler {
 		out := []UsageRow{}
 		for rows.Next() {
 			var r UsageRow
-			if err := rows.Scan(&r.Day, &r.User, &r.Hours); err != nil {
+			if err := rows.Scan(&r.Day, &r.User, &r.ServerID, &r.Hours); err != nil {
 				return c.Status(500).JSON(fiber.Map{"error": "failed to scan usage row: " + err.Error()})
-			}
-			out = append(out, r)
+		    out = append(out, r)
 		}
+		
+		// Fill in server names
+		configs := mgr.GetServerConfigs()
+		for i := range out {
+			if cfg, ok := configs[out[i].ServerID]; ok {
+				out[i].ServerName = cfg.Name
+			} else {
+				out[i].ServerName = out[i].ServerID
+			}
+		}
+
 		return c.JSON(out)
 	}
 }

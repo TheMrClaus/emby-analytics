@@ -58,7 +58,6 @@ export const DEFAULT_CARD_ORDER = [
   "top-users",
 
   "top-items",
-
 ];
 
 export function getDefaultLayout(): DashboardCard[] {
