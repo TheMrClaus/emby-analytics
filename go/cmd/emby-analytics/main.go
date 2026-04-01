@@ -203,6 +203,7 @@ func main() {
 	// Kick off background sync loops for playback history and user metadata across servers
 	tasks.StartSyncLoop(sqlDB, multiMgr, cfg)
 	tasks.StartUserSyncLoop(sqlDB, multiMgr, cfg)
+	tasks.StartSnapshotLoop(sqlDB)
 
 	// One-off cleanup of orphaned server items on startup
 	tasks.CleanupOrphanedServerItems(sqlDB, multiMgr)
@@ -296,6 +297,12 @@ func main() {
 	app.Get("/stats/movies", stats.Movies(sqlDB))
 	app.Get("/stats/series", stats.Series(sqlDB))
 	app.Get("/stats/top/series", stats.TopSeries(sqlDB))
+
+	// Storage Analytics Routes
+	app.Get("/stats/storage/stale-content", stats.StaleContent(sqlDB))
+	app.Get("/stats/storage/roi", stats.ROIAnalysis(sqlDB))
+	app.Get("/stats/storage/duplicates", stats.Duplicates(sqlDB))
+	app.Get("/stats/storage/predictions", stats.StoragePredictions(sqlDB))
 
 	// Backward compatibility routes (hyphenated versions)
 	app.Get("/stats/top-users", stats.TopUsers(sqlDB, multiMgr))

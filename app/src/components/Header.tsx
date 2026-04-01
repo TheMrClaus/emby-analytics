@@ -300,6 +300,13 @@ export default function Header() {
                 API Explorer
               </Link>
               <span className="text-gray-500">|</span>
+              <Link
+                href="/storage-analytics"
+                className="text-blue-300 hover:text-white underline decoration-dotted"
+              >
+                Storage Analytics
+              </Link>
+              <span className="text-gray-500">|</span>
               <button
                 onClick={handleLogout}
                 className="text-red-300 hover:text-white underline decoration-dotted"
@@ -417,6 +424,23 @@ export default function Header() {
                     </svg>
                   </Link>
 
+                  
+
+                  <Link
+                    href="/storage-analytics"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center justify-between w-full p-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white transition-colors min-h-[44px]"
+                  >
+                    <span>Storage Analytics</span>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 5l7 7-7 7"
+                      />
+                    </svg>
+                  </Link>
                   <button
                     onClick={() => {
                       handleLogout();
