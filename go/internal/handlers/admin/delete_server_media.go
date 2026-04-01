@@ -76,6 +76,14 @@ func DeleteServerMedia(db *sql.DB, mgr *media.MultiServerManager) fiber.Handler 
 		}
 		orphanSeries, _ := seriesResult.RowsAffected()
 
+		// Soft-delete users from this server to maintain historical analytics while marking them as removed
+		userResult, err := tx.Exec(`UPDATE emby_user SET deleted_at = CURRENT_TIMESTAMP WHERE server_id = ? AND deleted_at IS NULL`, serverID)
+		if err != nil {
+			logging.Debug("delete media: failed to soft-delete users", "server_id", serverID, "error", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to soft-delete users"})
+		}
+		softDeletedUsers, _ := userResult.RowsAffected()
+
 		if err := tx.Commit(); err != nil {
 			logging.Debug("delete media: failed to commit", "server_id", serverID, "error", err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to finalize deletion"})
@@ -83,7 +91,7 @@ func DeleteServerMedia(db *sql.DB, mgr *media.MultiServerManager) fiber.Handler 
 		committed = true
 		tasks.ResetServerSyncProgress(serverID)
 
-		logging.Debug("delete media: completed", "server_id", serverID, "deleted_library_items", deletedItems, "cleared_settings", fmt.Sprintf("%v", clearedSettings), "removed_series", orphanSeries)
+		logging.Debug("delete media: completed", "server_id", serverID, "deleted_library_items", deletedItems, "soft_deleted_users", softDeletedUsers, "cleared_settings", fmt.Sprintf("%v", clearedSettings), "removed_series", orphanSeries)
 
 		return c.JSON(fiber.Map{
 			"success":               true,
@@ -91,6 +99,7 @@ func DeleteServerMedia(db *sql.DB, mgr *media.MultiServerManager) fiber.Handler 
 			"deleted_library_items": deletedItems,
 			"removed_orphan_series": orphanSeries,
 			"cleared_settings":      clearedSettings,
+		"soft_deleted_users":     softDeletedUsers,
 		})
 	}
 }
