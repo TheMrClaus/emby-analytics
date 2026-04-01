@@ -154,9 +154,8 @@ func upsertMediaItems(db *sql.DB, sc media.ServerConfig, items []media.MediaItem
 	// Step 1: Get all existing IDs for this server to track deletions
 	existingIDs, err := getAllLibraryItemIDs(db, sc.ID)
 	if err != nil {
-		logging.Debug("failed to fetch existing library items for deletion tracking", "server", sc.Name, "error", err)
-		// We proceed anyway, but deletion will be disabled for this run to be safe
-		existingIDs = nil
+		logging.Warn("failed to fetch existing library items for deletion tracking - aborting sync", "server", sc.Name, "error", err)
+		return fmt.Errorf("failed to fetch existing items for deletion tracking: %w", err)
 	} else {
 		logging.Info("IngestLibraries: tracking deletions", "existing_db_count", len(existingIDs))
 	}
@@ -256,15 +255,24 @@ func upsertMediaItems(db *sql.DB, sc media.ServerConfig, items []media.MediaItem
 	// Step 2: Delete items that were not found in the current sync
 	if existingIDs != nil && len(existingIDs) > 0 {
 		deletedCount := 0
+		deleteFailed := false
 		// Delete in batches prevents huge queries if many items are deleted
 		batchSize := 50
 		toDelete := make([]string, 0, batchSize)
 
 		for id := range existingIDs {
+			// Check for cancellation during deletion phase
+			if isSyncDisabled(db, sc.ID, sc.Enabled) {
+				CancelServerSyncProgress(sc.ID, "Sync cancelled by user during deletion phase")
+				return ErrSyncCancelled
+			}
+
 			toDelete = append(toDelete, id)
 			if len(toDelete) >= batchSize {
 				if err := deleteLibraryItems(db, toDelete); err != nil {
-					logging.Debug("failed to delete batch of stale items", "error", err)
+					logging.Warn("failed to delete batch of stale items", "error", err, "batch_size", len(toDelete))
+					deleteFailed = true
+					// Continue trying other batches instead of aborting entirely
 				} else {
 					deletedCount += len(toDelete)
 				}
@@ -273,15 +281,24 @@ func upsertMediaItems(db *sql.DB, sc media.ServerConfig, items []media.MediaItem
 		}
 		if len(toDelete) > 0 {
 			if err := deleteLibraryItems(db, toDelete); err != nil {
-				logging.Debug("failed to delete final batch of stale items", "error", err)
+				logging.Warn("failed to delete final batch of stale items", "error", err, "batch_size", len(toDelete))
+				deleteFailed = true
 			} else {
 				deletedCount += len(toDelete)
 			}
 		}
 		if deletedCount > 0 {
-			logging.Debug("pruned stale library items", "server", sc.Name, "count", deletedCount)
+			logging.Info("pruned stale library items", "server", sc.Name, "count", deletedCount)
+		}
+		if deleteFailed {
+			staleCount := len(existingIDs) - deletedCount
+			logging.Warn("some deletions failed - stale items remain", "server", sc.Name, "deleted", deletedCount, "remaining_stale", staleCount)
+			SetServerSyncStage(sc.ID, fmt.Sprintf("Partial sync: %d items ingested, %d deletions failed", len(items), staleCount))
+			// Don't return error - upserts succeeded, only cleanup had issues
+			// The next sync will retry deletion of still-missing items
 		}
 	}
+
 
 	for sid, sname := range seriesUpserts {
 		_, err := db.Exec(`

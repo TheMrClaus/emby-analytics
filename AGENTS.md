@@ -45,3 +45,47 @@ This repository uses a tag-driven release workflow and a branch-first developmen
 
 - Avoid destructive operations (resets, force pushes) unless explicitly requested.
 - Never publish images or tags without explicit user approval.
+
+## DATA GATHERING & SYNC
+
+### Deletion Sync (IMPLEMENTED)
+
+**Library Items**: Hard delete (permanent removal from `library_item` table)
+- Automatically synced during `IngestLibraries()` in `go/internal/tasks/library_ingest.go`
+- Items not found in current server fetch are deleted in batches (50 per batch)
+- Historical data (`play_sessions`, `play_intervals`) is intentionally preserved
+
+**Users**: Soft delete (marked with `deleted_at` timestamp)
+- Automatically synced during `runUserSync()` in `go/internal/tasks/usersync.go`  
+- Users not found on server are marked with `deleted_at = CURRENT_TIMESTAMP`
+- Preserves historical analytics (watch time, top users)
+- Users that reappear have `deleted_at` cleared automatically
+
+### Key Design Decisions
+
+**Asymmetric Deletion Strategy** (intentional):
+- `library_item` = current catalog state → hard delete
+- `emby_user` = historical identity → soft delete
+- `play_sessions`/`play_intervals` = immutable history → never deleted
+
+**Statistics Filtering**:
+- Most stats endpoints filter `deleted_at IS NULL` for users
+- Overview endpoint was fixed to match this pattern
+- Item counts use normalized file paths for cross-server deduplication
+- Pathless items counted by ID (no deduplication possible)
+
+### Troubleshooting Data Counts
+
+**User count seems wrong?**
+- Check for soft-deleted users: `SELECT COUNT(*) FROM emby_user WHERE deleted_at IS NOT NULL`
+- Overview endpoint now correctly filters deleted users
+
+**Item count doesn't match Emby?**
+- Items without `file_path` are counted by ID (no deduplication)
+- Live TV/channels excluded from counts
+- Cross-server duplicates detected by normalized file path
+
+**Deletion sync not working?**
+- Check logs for "deletion tracking" messages
+- Sync failure now aborts instead of silently succeeding
+- Next sync will retry deletion of still-missing items

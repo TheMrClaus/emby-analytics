@@ -2,6 +2,7 @@ package stats
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"time"
 
@@ -22,45 +23,34 @@ func Overview(db *sql.DB) fiber.Handler {
 		start := time.Now()
 		data := OverviewData{}
 
-		// Count users
-		err := db.QueryRow(`SELECT COUNT(*) FROM emby_user`).Scan(&data.TotalUsers)
+		// Count users (exclude soft-deleted users)
+		err := db.QueryRow(`SELECT COUNT(*) FROM emby_user WHERE deleted_at IS NULL`).Scan(&data.TotalUsers)
 		if err != nil {
 			log.Printf("[overview] Error counting users: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to count users"})
 		}
 
-		// Count unique library items (excluding live TV, deduplicated by normalized file_path across servers)
-		// Only count items that have file_path populated (excludes servers without path support)
-		// Normalize paths by extracting everything after common library folders (Movies/, TV/, etc)
-		err = db.QueryRow(`
-			SELECT COUNT(DISTINCT
-				COALESCE(
-					NULLIF(
-						CASE WHEN INSTR(LOWER(REPLACE(file_path, '\', '/')), '/movies/') > 0
-							THEN SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/movies/') + LENGTH('/movies/'))
-							ELSE NULL END, 
-						''
-					),
-					NULLIF(
-						CASE WHEN INSTR(LOWER(REPLACE(file_path, '\', '/')), '/tv/') > 0
-							THEN SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/tv/') + LENGTH('/tv/'))
-							ELSE NULL END,
-						''
-					),
-					NULLIF(
-						CASE WHEN INSTR(LOWER(REPLACE(file_path, '\', '/')), '/shows/') > 0
-							THEN SUBSTR(file_path, INSTR(LOWER(REPLACE(file_path, '\', '/')), '/shows/') + LENGTH('/shows/'))
-							ELSE NULL END,
-						''
-					),
-					file_path
-				)
+		// Count unique library items using normalized paths and including pathless items
+		// Uses the same normalization as other stats endpoints for consistency
+		normalizedPath := normalizedFilePathExpr("")
+		query := fmt.Sprintf(`
+			SELECT COUNT(*) FROM (
+				-- Items with file paths: dedupe by normalized path
+				SELECT DISTINCT 'path:' || (%s) AS dedupe_key
+				FROM library_item
+				WHERE media_type NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')
+					AND file_path IS NOT NULL
+					AND TRIM(file_path) != ''
+				UNION
+				-- Items without file paths: count by ID (no cross-server deduplication possible)
+				SELECT DISTINCT 'id:' || id AS dedupe_key
+				FROM library_item
+				WHERE media_type NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')
+					AND (file_path IS NULL OR TRIM(file_path) = '')
 			)
-			FROM library_item
-			WHERE media_type NOT IN ('TvChannel', 'LiveTv', 'Channel', 'TvProgram')
-				AND file_path IS NOT NULL
-				AND file_path != ''
-		`).Scan(&data.TotalItems)
+		`, normalizedPath)
+		
+		err = db.QueryRow(query).Scan(&data.TotalItems)
 		if err != nil {
 			log.Printf("[overview] Error counting library items: %v", err)
 			return c.Status(500).JSON(fiber.Map{"error": "Failed to count library items"})
