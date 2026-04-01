@@ -11,7 +11,6 @@ interface StaleContentItem {
   title: string;
   item_type: string;
   server_id: string;
-  server_name: string;
   size_gb: number;
   added_at?: string;
   file_path?: string;
@@ -22,7 +21,6 @@ interface ROIItem {
   title: string;
   item_type: string;
   server_id: string;
-  server_name: string;
   play_count: number;
   watch_hours: number;
   size_gb: number;
@@ -60,6 +58,18 @@ async function fetcher(url: string) {
   const res = await fetch(url);
   if (!res.ok) throw new Error("Failed to fetch");
   return res.json();
+}
+
+/** Format a value in GB to the most appropriate unit (GB, TB, PB, EB). */
+function formatSizeGB(gb: number): string {
+  const units = ["GB", "TB", "PB", "EB"];
+  let value = gb;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex++;
+  }
+  return `${value.toFixed(2)} ${units[unitIndex]}`;
 }
 
 export default function StorageAnalyticsPage() {
@@ -160,13 +170,15 @@ export default function StorageAnalyticsPage() {
             <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
               <div className="text-sm text-gray-400 mb-1">Current Storage</div>
               <div className="text-2xl font-bold text-white">
-                {predictionsData ? `${predictionsData.current_size_gb.toFixed(2)} GB` : "—"}
+                {predictionsData && predictionsData.current_size_gb > 0
+                  ? formatSizeGB(predictionsData.current_size_gb)
+                  : "—"}
               </div>
             </div>
             <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
               <div className="text-sm text-gray-400 mb-1">Stale Content Size</div>
               <div className="text-2xl font-bold text-amber-400">
-                {totalStaleSize > 0 ? `${totalStaleSize.toFixed(2)} GB` : "—"}
+                {totalStaleSize > 0 ? formatSizeGB(totalStaleSize) : "—"}
               </div>
               <div className="text-xs text-gray-500 mt-1">
                 {staleItems.length} items never played
@@ -175,15 +187,25 @@ export default function StorageAnalyticsPage() {
             <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
               <div className="text-sm text-gray-400 mb-1">Projected Size (6mo)</div>
               <div className="text-2xl font-bold text-blue-400">
-                {predictionsData ? `${predictionsData.projected_size_gb_6mo.toFixed(2)} GB` : "—"}
+                {predictionsData && predictionsData.projected_size_gb_6mo > 0
+                  ? formatSizeGB(predictionsData.projected_size_gb_6mo)
+                  : "—"}
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                {predictionsData
-                  ? `+${predictionsData.growth_rate_gb_per_day.toFixed(2)} GB/day`
+                {predictionsData && predictionsData.growth_rate_gb_per_day > 0
+                  ? `+${formatSizeGB(predictionsData.growth_rate_gb_per_day)}/day`
                   : ""}
               </div>
             </div>
           </div>
+
+          {/* Accuracy Warning */}
+          {predictionsData?.message && (
+            <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg px-4 py-3 flex items-start gap-3">
+              <TrendingUp className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+              <p className="text-sm text-amber-200">{predictionsData.message}</p>
+            </div>
+          )}
 
           {/* Storage Predictions */}
           <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-6">
@@ -191,9 +213,7 @@ export default function StorageAnalyticsPage() {
               <TrendingUp className="w-5 h-5 text-blue-400" />
               <h2 className="text-xl font-semibold text-white">Storage Growth Forecast</h2>
             </div>
-            {predictionsData?.message ? (
-              <div className="text-gray-400 text-sm">{predictionsData.message}</div>
-            ) : chartData.length > 0 ? (
+            {chartData.length > 0 ? (
               <div style={{ height: 300 }}>
                 <ResponsiveLine
                   data={chartData}
@@ -281,7 +301,7 @@ export default function StorageAnalyticsPage() {
                     <th className="text-left p-3 font-semibold text-gray-300">Title</th>
                     <th className="text-left p-3 font-semibold text-gray-300">Type</th>
                     <th className="text-left p-3 font-semibold text-gray-300">Server</th>
-                    <th className="text-right p-3 font-semibold text-gray-300">Size (GB)</th>
+                    <th className="text-right p-3 font-semibold text-gray-300">Size</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -296,9 +316,9 @@ export default function StorageAnalyticsPage() {
                     <tr key={item.id} className="border-b border-neutral-700 hover:bg-neutral-750">
                       <td className="p-3 text-white">{item.title}</td>
                       <td className="p-3 text-gray-400">{item.item_type}</td>
-                      <td className="p-3 text-gray-400">{item.server_name || item.server_id}</td>
+                      <td className="p-3 text-gray-400">{item.server_id}</td>
                       <td className="p-3 text-right text-amber-400 font-mono">
-                        {item.size_gb.toFixed(2)}
+                        {formatSizeGB(item.size_gb)}
                       </td>
                     </tr>
                   ))}
@@ -331,7 +351,7 @@ export default function StorageAnalyticsPage() {
                     <th className="text-left p-3 font-semibold text-gray-300">Type</th>
                     <th className="text-right p-3 font-semibold text-gray-300">Plays</th>
                     <th className="text-right p-3 font-semibold text-gray-300">Watch Hours</th>
-                    <th className="text-right p-3 font-semibold text-gray-300">Size (GB)</th>
+                    <th className="text-right p-3 font-semibold text-gray-300">Size</th>
                     <th className="text-right p-3 font-semibold text-gray-300">Hours/GB</th>
                   </tr>
                 </thead>
@@ -366,7 +386,7 @@ export default function StorageAnalyticsPage() {
                           {item.watch_hours.toFixed(1)}
                         </td>
                         <td className="p-3 text-right text-gray-400 font-mono">
-                          {item.size_gb.toFixed(2)}
+                          {formatSizeGB(item.size_gb)}
                         </td>
                         <td className={`p-3 text-right font-mono font-bold ${roiColor}`}>
                           {item.hours_per_gb.toFixed(2)}
@@ -399,7 +419,7 @@ export default function StorageAnalyticsPage() {
                       {group.normalized_path}
                     </div>
                     <div className="text-purple-400 font-bold">
-                      {group.total_size_gb.toFixed(2)} GB
+                      {formatSizeGB(group.total_size_gb)}
                     </div>
                   </div>
                   <div className="text-xs text-gray-500">

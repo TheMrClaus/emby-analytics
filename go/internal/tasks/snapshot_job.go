@@ -64,7 +64,6 @@ func captureLibrarySnapshot(db *sql.DB) error {
 			COUNT(*), 
 			COALESCE(SUM(file_size_bytes), 0)
 		FROM library_item
-		WHERE deleted_at IS NULL
 	`).Scan(&totalItems, &totalSize)
 	if err != nil {
 		return err
@@ -73,11 +72,11 @@ func captureLibrarySnapshot(db *sql.DB) error {
 	// Counts by type
 	rows, err := db.Query(`
 		SELECT 
-			item_type,
+			media_type,
 			COUNT(*)
 		FROM library_item
-		WHERE deleted_at IS NULL AND item_type IN ('Movie', 'Series', 'Episode')
-		GROUP BY item_type
+		WHERE media_type IN ('Movie', 'Series', 'Episode')
+		GROUP BY media_type
 	`)
 	if err != nil {
 		return err
@@ -104,14 +103,14 @@ func captureLibrarySnapshot(db *sql.DB) error {
 	qualityRows, err := db.Query(`
 		SELECT 
 			CASE
-				WHEN video_resolution >= 2160 THEN '4K'
-				WHEN video_resolution >= 1080 THEN '1080p'
-				WHEN video_resolution >= 720 THEN '720p'
+				WHEN height >= 2160 THEN '4K'
+				WHEN height >= 1080 THEN '1080p'
+				WHEN height >= 720 THEN '720p'
 				ELSE 'SD'
 			END as quality,
 			COUNT(*)
 		FROM library_item
-		WHERE deleted_at IS NULL AND video_resolution IS NOT NULL
+		WHERE height IS NOT NULL
 		GROUP BY quality
 	`)
 	if err != nil {
