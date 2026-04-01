@@ -62,7 +62,7 @@ func captureLibrarySnapshot(db *sql.DB) error {
 	err := db.QueryRow(`
 		SELECT 
 			COUNT(*), 
-			COALESCE(SUM(file_size), 0)
+			COALESCE(SUM(file_size_bytes), 0)
 		FROM library_item
 		WHERE deleted_at IS NULL
 	`).Scan(&totalItems, &totalSize)

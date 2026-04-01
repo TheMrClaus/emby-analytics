@@ -76,16 +76,16 @@ func StaleContent(db *sql.DB) fiber.Handler {
 				li.item_type,
 				li.server_id,
 				COALESCE(ms.name, '') as server_name,
-				li.file_size / 1073741824.0 as size_gb,
+				li.file_size_bytes / 1073741824.0 as size_gb,
 				li.created_at
 			FROM library_item li
 			LEFT JOIN play_sessions ps ON li.id = ps.library_item_id
 			LEFT JOIN media_server ms ON li.server_id = ms.id
 			WHERE ps.id IS NULL 
-				AND li.file_size > 0 
+				AND li.file_size_bytes > 0 
 				AND li.deleted_at IS NULL
 			GROUP BY li.id
-			ORDER BY li.file_size DESC
+			ORDER BY li.file_size_bytes DESC
 			LIMIT ?
 		`, limit)
 		if err != nil {
@@ -133,12 +133,12 @@ func ROIAnalysis(db *sql.DB) fiber.Handler {
 				COALESCE(ms.name, '') as server_name,
 				COUNT(ps.id) as play_count,
 				SUM(ps.watch_seconds) / 3600.0 as total_watch_hours,
-				li.file_size / 1073741824.0 as size_gb,
-				(SUM(ps.watch_seconds) / 3600.0) / (li.file_size / 1073741824.0) as hours_per_gb
+				li.file_size_bytes / 1073741824.0 as size_gb,
+				(SUM(ps.watch_seconds) / 3600.0) / (li.file_size_bytes / 1073741824.0) as hours_per_gb
 			FROM library_item li
 			LEFT JOIN play_sessions ps ON li.id = ps.library_item_id
 			LEFT JOIN media_server ms ON li.server_id = ms.id
-			WHERE li.file_size > 0 AND li.deleted_at IS NULL
+			WHERE li.file_size_bytes > 0 AND li.deleted_at IS NULL
 			GROUP BY li.id
 			HAVING play_count > 0
 			ORDER BY %s
@@ -180,7 +180,7 @@ func Duplicates(db *sql.DB) fiber.Handler {
 			SELECT 
 				LOWER(REPLACE(REPLACE(file_path, '\', '/'), '//', '/')) as normalized_path,
 				COUNT(*) as duplicate_count,
-				SUM(file_size) / 1073741824.0 as total_size_gb,
+				SUM(file_size_bytes) / 1073741824.0 as total_size_gb,
 				GROUP_CONCAT(id) as item_ids,
 				GROUP_CONCAT(title) as titles
 			FROM library_item
