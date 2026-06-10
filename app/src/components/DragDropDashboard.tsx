@@ -25,7 +25,7 @@ function DraggableCardWrapper({ card, index, isEditMode, onRemove }: DraggableCa
           {...provided.draggableProps}
           className={`${isEditMode ? "" : "break-inside-avoid mb-4"} transition-all duration-200 ${
             snapshot.isDragging ? "opacity-75 scale-105 z-50" : ""
-          } ${isEditMode ? "ring-2 ring-blue-500/30 ring-offset-2 ring-offset-neutral-900" : ""}`}
+          } ${isEditMode ? "ring-1 ring-amber-400/40 ring-offset-2 ring-offset-neutral-900" : ""}`}
         >
           <div className="relative group">
             {isEditMode && (
@@ -33,7 +33,7 @@ function DraggableCardWrapper({ card, index, isEditMode, onRemove }: DraggableCa
                 {/* Drag Handle */}
                 <div
                   {...provided.dragHandleProps}
-                  className="absolute -top-2 -left-2 z-10 bg-blue-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-grab active:cursor-grabbing"
+                  className="absolute -top-2 -left-2 z-10 bg-neutral-600 hover:bg-neutral-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-grab active:cursor-grabbing"
                 >
                   <GripVertical className="w-4 h-4" />
                 </div>
@@ -74,7 +74,7 @@ function AddCardDropdown({ availableCards, onAddCard }: AddCardDropdownProps) {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+        className="flex items-center gap-2 px-4 py-2 bg-neutral-700 hover:bg-neutral-600 text-neutral-200 rounded-lg transition-colors"
       >
         <Plus className="w-4 h-4" />
         Add Card
@@ -127,7 +127,7 @@ function EditControls({
         onClick={onToggleEdit}
         className={`px-4 py-2 rounded-lg font-medium transition-colors ${
           isEditMode
-            ? "bg-green-600 hover:bg-green-700 text-white"
+            ? "bg-amber-500 hover:bg-amber-400 text-black"
             : "bg-neutral-700 hover:bg-neutral-600 text-neutral-200"
         }`}
       >

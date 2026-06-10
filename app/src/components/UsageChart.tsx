@@ -47,7 +47,7 @@ export default function UsageChart({ days = 14 }: { days?: number }) {
 
   if (error) {
     return (
-      <div className="bg-neutral-800 rounded-2xl p-4 shadow">
+      <div className="bg-neutral-800 border border-white/10 rounded-2xl p-4">
         <div className="text-sm text-gray-400 mb-2">Usage (hours per day by user)</div>
         <div className="text-red-400">Failed to load usage data</div>
       </div>
@@ -55,7 +55,7 @@ export default function UsageChart({ days = 14 }: { days?: number }) {
   }
 
   return (
-    <div className="bg-neutral-800 rounded-2xl p-4 shadow">
+    <div className="bg-neutral-800 border border-white/10 rounded-2xl p-4">
       <div className="text-sm text-gray-400 mb-2">
         Usage (hours per day by user)
         {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}

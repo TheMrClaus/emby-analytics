@@ -73,7 +73,7 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
         <select
           value={timeframe}
           onChange={(e) => setTimeframe(e.target.value)}
-          className="bg-neutral-700 text-white text-xs px-2 py-1 rounded border border-neutral-600 focus:border-blue-500 focus:outline-none"
+          className="bg-neutral-700 text-white text-xs px-2 py-1 rounded border border-neutral-600 focus:border-amber-400 focus:outline-none"
         >
           {timeframeOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -113,7 +113,7 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
                       className="object-cover rounded"
                     />
                     <span
-                      className="cursor-pointer hover:text-blue-400 transition-colors"
+                      className="cursor-pointer hover:text-amber-300 transition-colors"
                       title={embyExternalUrl ? "Click to open in Emby" : undefined}
                       onClick={() => {
                         const st = (r.server_type || "").toLowerCase();
@@ -154,7 +154,7 @@ export default function TopItems({ limit = 10 }: { limit?: number }) {
         </tbody>
       </table>
       {rows.length === 0 && !isLoading && (
-        <div className="text-gray-500 text-center py-4">No items found</div>
+        <div className="text-gray-400 text-center py-4">No items found</div>
       )}
     </Card>
   );

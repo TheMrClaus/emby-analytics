@@ -168,12 +168,6 @@ export default function NowPlaying() {
     }
   };
 
-  const hexToRgb = (hex: string): { r: number; g: number; b: number } => {
-    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    if (!m) return { r: 82, g: 181, b: 75 };
-    return { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) };
-  };
-
   const getPosterUrl = (entry: NowEntry): string => {
     // Episodes use series poster for consistent aspect ratio
     if (entry.item_type === "Episode" && entry.series_id) {
@@ -317,22 +311,13 @@ export default function NowPlaying() {
       <div className="hero-foreground space-y-5">
         <div className="flex items-center gap-3 flex-wrap">
           {(() => {
-            const first = sessions[0];
-            const th = theme(first?.server_type);
-            const rgb = hexToRgb(th.hex);
+            const transcodes = summary?.active_transcodes ?? 0;
             return (
               <>
-                <h2 className="ty-title" style={{ color: th.hex }}>
-                  Now Playing
-                </h2>
+                <h2 className="ty-title text-white">Now Playing</h2>
                 <div className="flex items-center gap-2 text-xs">
                   <span
-                    className="px-2 py-1 rounded-full border"
-                    style={{
-                      borderColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)`,
-                      backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1)`,
-                      color: th.hex,
-                    }}
+                    className="px-2 py-1 rounded-full border border-gray-500/30 bg-gray-500/10 text-gray-200"
                     title="5s rolling average of all active session bitrates."
                   >
                     Outbound: {summary ? (summary.outbound_mbps ?? 0).toFixed(1) : "0.0"} Mbps
@@ -340,8 +325,14 @@ export default function NowPlaying() {
                   <span className="px-2 py-1 rounded-full border border-gray-500/30 bg-gray-500/10 text-gray-200">
                     Streams: {summary ? summary.active_streams : 0}
                   </span>
-                  <span className="px-2 py-1 rounded-full border border-orange-500/30 bg-orange-500/10 text-orange-300">
-                    Transcodes: {summary ? summary.active_transcodes : 0}
+                  <span
+                    className={`px-2 py-1 rounded-full border ${
+                      transcodes > 0
+                        ? "border-orange-500/30 bg-orange-500/10 text-orange-300"
+                        : "border-gray-500/30 bg-gray-500/10 text-gray-200"
+                    }`}
+                  >
+                    Transcodes: {transcodes}
                   </span>
                 </div>
               </>
@@ -352,7 +343,7 @@ export default function NowPlaying() {
         {error && <div className="text-red-400 text-sm">{error}</div>}
 
         {sessions.length === 0 ? (
-          <div className="text-gray-500 text-sm">Nobody is watching right now.</div>
+          <div className="text-gray-400 text-sm">Nobody is watching right now.</div>
         ) : (
           <div className="flex flex-wrap gap-4 items-start">
             {sessions.map((s) => {
@@ -389,7 +380,7 @@ export default function NowPlaying() {
                 <article
                   key={s.session_id}
                   className="card overflow-hidden flex flex-col p-3 flex-none w-[290px] rounded-lg"
-                  style={{ borderColor: th.hex, borderWidth: 3, borderStyle: "solid" }}
+                  style={{ borderColor: `${th.hex}59` }}
                 >
                   {/* Top row: poster + title/meta arranged symmetrically */}
                   <div className="flex gap-3">
@@ -649,7 +640,7 @@ export default function NowPlaying() {
                           />
                           <button
                             onClick={() => void sendServer(s, "message", msgText[keyFor(s)])}
-                            className="px-2 py-1 text-xs rounded bg-emerald-600 hover:bg-emerald-500 text-white"
+                            className="px-2 py-1 text-xs rounded bg-amber-500 hover:bg-amber-400 text-black font-medium"
                           >
                             Send
                           </button>

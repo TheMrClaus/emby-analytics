@@ -50,7 +50,7 @@ export default function CodecsTable() {
               <td className="py-3">
                 <Link
                   href={`/codecs/${encodeURIComponent(r.codec)}`}
-                  className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+                  className="text-amber-300 hover:text-amber-200 hover:underline transition-colors"
                 >
                   {r.codec}
                 </Link>
@@ -59,24 +59,24 @@ export default function CodecsTable() {
                 {r.movies > 0 ? (
                   <Link
                     href={`/codecs/${encodeURIComponent(r.codec)}?media_type=Movie`}
-                    className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+                    className="text-amber-300 hover:text-amber-200 hover:underline transition-colors"
                   >
                     {fmtInt(r.movies)}
                   </Link>
                 ) : (
-                  <span className="text-gray-500">0</span>
+                  <span className="text-gray-400">0</span>
                 )}
               </td>
               <td className="py-3 text-right">
                 {r.episodes > 0 ? (
                   <Link
                     href={`/codecs/${encodeURIComponent(r.codec)}?media_type=Episode`}
-                    className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+                    className="text-amber-300 hover:text-amber-200 hover:underline transition-colors"
                   >
                     {fmtInt(r.episodes)}
                   </Link>
                 ) : (
-                  <span className="text-gray-500">0</span>
+                  <span className="text-gray-400">0</span>
                 )}
               </td>
             </tr>
@@ -84,7 +84,7 @@ export default function CodecsTable() {
         </tbody>
       </table>
       {rows.length === 0 && !isLoading && (
-        <div className="text-gray-500 text-center py-4">No codec data found</div>
+        <div className="text-gray-400 text-center py-4">No codec data found</div>
       )}
     </Card>
   );

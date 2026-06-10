@@ -15,7 +15,7 @@ export default function ActiveUsersLifetime({ limit = 10 }: { limit?: number }) 
 
   if (error) {
     return (
-      <div className="bg-neutral-800 rounded-2xl p-4 shadow">
+      <div className="bg-neutral-800 border border-white/10 rounded-2xl p-4">
         <div className="text-sm text-gray-400 mb-2">Most Active (lifetime)</div>
         <div className="text-red-400">Failed to load active users data</div>
       </div>
@@ -23,7 +23,7 @@ export default function ActiveUsersLifetime({ limit = 10 }: { limit?: number }) 
   }
 
   return (
-    <div className="bg-neutral-800 rounded-2xl p-4 shadow">
+    <div className="bg-neutral-800 border border-white/10 rounded-2xl p-4">
       <div className="text-sm text-gray-400 mb-2">
         Most Active (lifetime)
         {isLoading && <span className="ml-2 text-xs opacity-60">Loading...</span>}
@@ -31,21 +31,21 @@ export default function ActiveUsersLifetime({ limit = 10 }: { limit?: number }) 
       <table className="w-full text-sm text-left text-gray-300">
         <thead className="text-gray-400 border-b border-neutral-700">
           <tr>
-            <th>User</th>
-            <th className="text-right">Watch Time</th>
+            <th className="py-2">User</th>
+            <th className="py-2 text-right">Watch Time</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} className="border-b border-neutral-700 last:border-0">
-              <td>{r.user}</td>
-              <td className="text-right tabular-nums">{fmt(r)}</td>
+              <td className="py-2">{r.user}</td>
+              <td className="py-2 text-right tabular-nums">{fmt(r)}</td>
             </tr>
           ))}
         </tbody>
       </table>
       {rows.length === 0 && !isLoading && (
-        <div className="text-gray-500 text-center py-4">No active users found</div>
+        <div className="text-gray-400 text-center py-4">No active users found</div>
       )}
     </div>
   );

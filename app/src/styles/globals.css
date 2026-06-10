@@ -15,9 +15,7 @@ body,
   height: 100%;
 }
 body {
-  background:
-    radial-gradient(1200px 800px at 20% -10%, rgba(58, 170, 53, 0.15), transparent),
-    radial-gradient(1000px 600px at 90% 10%, rgba(58, 170, 53, 0.1), transparent), var(--bg);
+  background: var(--bg);
   color: white;
   font-family:
     ui-sans-serif,
@@ -33,7 +31,7 @@ body {
 
 /* Handy utilities */
 .card {
-  @apply rounded-2xl border border-white/5 shadow-[0_8px_24px_rgba(0,0,0,.08)] bg-[color:var(--panel)];
+  @apply rounded-2xl border border-white/10 bg-[color:var(--panel)];
 }
 .badge {
   @apply inline-flex items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-xs text-[color:var(--hi)]/90;
@@ -91,16 +89,9 @@ body {
 /* Premium Hero (Now Playing) */
 /* ========================= */
 
-/* Main hero container (rounded, border, subtle gradient panel) */
+/* Main hero container (rounded panel; backdrop art provides the atmosphere) */
 .hero {
-  @apply relative overflow-hidden rounded-2xl shadow-[0_12px_32px_rgba(0,0,0,.25)]
-         border border-emerald-500/20 bg-gradient-to-br
-         from-[rgba(58,170,53,0.15)] to-[rgba(18,24,38,0.95)];
-}
-
-/* Optional larger title look inside hero */
-.hero h2.ty-title {
-  @apply text-3xl font-extrabold text-emerald-400;
+  @apply relative overflow-hidden rounded-2xl border border-white/10 bg-[color:var(--panel)];
 }
 
 /* Two stacked layers that crossfade via opacity and gently parallax */
@@ -179,79 +170,6 @@ body {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
 }
 
-/* ===================== */
-/* Premium Buttons (UI)  */
-/* ===================== */
-.btn-premium {
-  @apply relative inline-flex items-center justify-center select-none
-         rounded-xl px-3 py-1.5 text-sm font-medium
-         transition-all duration-150 ease-out
-         outline-none;
-  color: var(--gold-500);
-  background: linear-gradient(#0f1116, #000000);
-  border: 1px solid rgba(245, 181, 21, 0.35); /* gold-ish */
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.05) inset,
-    0 8px 18px rgba(0, 0, 0, 0.35);
-}
-.btn-premium:hover {
-  filter: brightness(1.05);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 10px 22px rgba(0, 0, 0, 0.45);
-}
-.btn-premium:active {
-  transform: translateY(1px) scale(0.98);
-}
-
-/* Focus ring (keyboard) */
-.btn-premium:focus-visible {
-  box-shadow:
-    0 0 0 2px rgba(11, 14, 19, 0.9),
-    0 0 0 4px rgba(245, 181, 21, 0.45);
-}
-
-/* Subtle pulse on click */
-.btn-premium::after {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  background: radial-gradient(circle at center, rgba(255, 200, 56, 0.35), transparent 60%);
-  opacity: 0;
-  transform: scale(0.9);
-  pointer-events: none;
-}
-.btn-premium:active::after {
-  animation: btn-bloom 380ms ease-out forwards;
-}
-
-@keyframes btn-bloom {
-  0% {
-    opacity: 0.55;
-    transform: scale(0.55);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.55);
-  }
-}
-
-/* Variant for destructive actions (Stop) while staying on brand */
-.btn-premium--danger {
-  color: #ffdede;
-  border-color: rgba(255, 70, 70, 0.55);
-  background: linear-gradient(#1a0e0e, #090000);
-}
-.btn-premium--danger:hover {
-  filter: brightness(1.05);
-}
-
-/* --- Dashboard cards (match dark premium theme) --- */
-.card-dark {
-  @apply rounded-2xl border border-white/10 bg-[#0f1218] p-4 md:p-6 shadow-[0_8px_24px_rgba(0,0,0,.35)];
-}
-
 .section-title {
   @apply text-white/80 font-medium mb-3 tracking-wide;
 }
@@ -295,4 +213,10 @@ body {
 
 .ticker-content:hover {
   animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-content {
+    animation: none;
+  }
 }
