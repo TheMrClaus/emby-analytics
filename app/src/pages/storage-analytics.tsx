@@ -114,7 +114,7 @@ export default function StorageAnalyticsPage() {
 
   const chartData = useMemo(() => {
     if (!predictionsData) return [];
-    
+
     const historical = predictionsData.historical_data.map((d) => ({
       x: d.date,
       y: d.size_gb,
@@ -375,10 +375,13 @@ export default function StorageAnalyticsPage() {
                       item.hours_per_gb >= 1
                         ? "text-green-400"
                         : item.hours_per_gb >= 0.5
-                        ? "text-yellow-400"
-                        : "text-red-400";
+                          ? "text-yellow-400"
+                          : "text-red-400";
                     return (
-                      <tr key={item.id} className="border-b border-neutral-700 hover:bg-neutral-750">
+                      <tr
+                        key={item.id}
+                        className="border-b border-neutral-700 hover:bg-neutral-750"
+                      >
                         <td className="p-3 text-white">{item.title}</td>
                         <td className="p-3 text-gray-400">{item.item_type}</td>
                         <td className="p-3 text-right text-gray-300">{item.play_count}</td>
@@ -422,9 +425,7 @@ export default function StorageAnalyticsPage() {
                       {formatSizeGB(group.total_size_gb)}
                     </div>
                   </div>
-                  <div className="text-xs text-gray-500">
-                    {group.duplicate_count} copies found
-                  </div>
+                  <div className="text-xs text-gray-500">{group.duplicate_count} copies found</div>
                   <div className="mt-2 space-y-1">
                     {group.titles.map((title, i) => (
                       <div key={i} className="text-sm text-gray-300">
