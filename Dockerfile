@@ -1,5 +1,5 @@
 # ---------- Stage 0: Build UI (Next.js export mode) ----------
-FROM node:20-alpine3.22 AS ui
+FROM --platform=$BUILDPLATFORM node:20-alpine3.22 AS ui
 WORKDIR /ui/app
 # Install deps using lockfile first for better caching
 COPY app/package*.json ./
