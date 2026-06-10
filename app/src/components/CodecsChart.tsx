@@ -23,7 +23,7 @@ export default function CodecsChart() {
 
   if (error) {
     return (
-      <div className="bg-neutral-800 rounded-2xl p-4 shadow">
+      <div className="bg-neutral-800 border border-white/10 rounded-2xl p-4">
         <div className="text-sm text-gray-400 mb-2">Codecs</div>
         <div className="text-red-400">Failed to load codecs data</div>
       </div>
@@ -31,7 +31,7 @@ export default function CodecsChart() {
   }
 
   return (
-    <div className="bg-neutral-800 rounded-2xl p-4 shadow">
+    <div className="bg-neutral-800 border border-white/10 rounded-2xl p-4">
       <div className="text-sm text-gray-400 mb-2">
         Codecs
         {serverLabel && (

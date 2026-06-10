@@ -386,7 +386,7 @@ export default function PlaybackMethodsCard() {
 
   if (error) {
     return (
-      <div className="bg-neutral-800 rounded-2xl p-4 shadow inline-block w-full align-top break-inside-avoid mb-4">
+      <div className="bg-neutral-800 border border-white/10 rounded-2xl p-4 inline-block w-full align-top break-inside-avoid mb-4">
         <div className="text-sm text-gray-400 mb-2">Playback Methods</div>
         <div className="text-red-400">{error}</div>
       </div>
@@ -394,7 +394,7 @@ export default function PlaybackMethodsCard() {
   }
 
   return (
-    <div className="bg-neutral-800 rounded-2xl p-4 shadow inline-block w-full align-top break-inside-avoid mb-4">
+    <div className="bg-neutral-800 border border-white/10 rounded-2xl p-4 inline-block w-full align-top break-inside-avoid mb-4">
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm text-gray-400">Playback Methods ({selectedOption?.label})</div>
         {showDetailed ? (
@@ -408,7 +408,7 @@ export default function PlaybackMethodsCard() {
           <select
             value={timeframe}
             onChange={(e) => setTimeframe(e.target.value)}
-            className="bg-neutral-700 text-white text-xs px-2 py-1 rounded border border-neutral-600 focus:border-blue-500 focus:outline-none"
+            className="bg-neutral-700 text-white text-xs px-2 py-1 rounded border border-neutral-600 focus:border-amber-400 focus:outline-none"
           >
             {timeframeOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -581,13 +581,13 @@ export default function PlaybackMethodsCard() {
                 placeholder="Search sessions..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-neutral-700 text-white text-xs px-3 py-2 rounded border border-neutral-600 focus:border-blue-500 focus:outline-none"
+                className="w-full bg-neutral-700 text-white text-xs px-3 py-2 rounded border border-neutral-600 focus:border-amber-400 focus:outline-none"
               />
             </div>
             <select
               value={userFilter}
               onChange={(e) => setUserFilter(e.target.value)}
-              className="bg-neutral-700 text-white text-xs px-3 py-2 rounded border border-neutral-600 focus:border-blue-500 focus:outline-none"
+              className="bg-neutral-700 text-white text-xs px-3 py-2 rounded border border-neutral-600 focus:border-amber-400 focus:outline-none"
             >
               <option value="">All Users</option>
               {allUniqueUsers.map((user) => (
@@ -617,7 +617,7 @@ export default function PlaybackMethodsCard() {
                   key={idx}
                   onClick={() => handleRectangleClick(filterKey)}
                   className={`bg-neutral-700/50 rounded p-3 cursor-pointer transition-all hover:bg-neutral-600/50 ${
-                    isActive ? "ring-2 ring-blue-500 bg-blue-500/20" : ""
+                    isActive ? "ring-1 ring-amber-400/60 bg-amber-400/10" : ""
                   }`}
                 >
                   <div className="text-white font-bold text-lg">{item.value}</div>
@@ -659,7 +659,7 @@ export default function PlaybackMethodsCard() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 min-w-0">
                         <div
-                          className="font-medium text-white truncate cursor-pointer hover:text-blue-400 transition-colors"
+                          className="font-medium text-white truncate cursor-pointer hover:text-amber-300 transition-colors"
                           onClick={() => {
                             const st = (session.server_type || "").toLowerCase();
                             if (st === "emby") {
@@ -757,7 +757,7 @@ export default function PlaybackMethodsCard() {
                   <button
                     onClick={loadMoreSessions}
                     disabled={loading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    className="px-4 py-2 bg-neutral-700 text-neutral-200 rounded hover:bg-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm transition-colors"
                   >
                     {loading ? "Loading..." : "Load More"}
                   </button>

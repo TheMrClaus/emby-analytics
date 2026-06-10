@@ -83,7 +83,7 @@ export default function ActivityChart() {
       loadingFallback={
         <Card title={title}>
           <div className="h-[280px] flex items-center justify-center animate-pulse">
-            <div className="text-neutral-600">Loading activity...</div>
+            <div className="text-neutral-400">Loading activity...</div>
           </div>
         </Card>
       }
@@ -97,8 +97,8 @@ export default function ActivityChart() {
               to={toDate}
               maxValue={10} // Cap scale at 10 hours to show more color variation for typical usage
               emptyColor="#262626" // neutral-800
-              // Removed the first dark color so low usage is visible
-              colors={["#0e4429", "#006d32", "#26a641", "#39d353"]}
+              // Gold ramp per design system (data carries the accent color)
+              colors={["#5b4300", "#8a6800", "#c79b00", "#ffc838"]}
               // Show all days of the week (0=Sunday to 6=Saturday)
               weekdayTicks={[0, 1, 2, 3, 4, 5, 6]}
               weekdays={["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]}
@@ -116,13 +116,13 @@ export default function ActivityChart() {
               )}
             />
           </div>
-          <div className="flex items-center justify-end gap-2 mt-2 text-xs text-gray-500">
+          <div className="flex items-center justify-end gap-2 mt-2 text-xs text-gray-400">
             <span>Less</span>
             <div className="flex gap-1">
-              <div className="w-3 h-3 bg-[#0e4429] rounded-sm" />
-              <div className="w-3 h-3 bg-[#006d32] rounded-sm" />
-              <div className="w-3 h-3 bg-[#26a641] rounded-sm" />
-              <div className="w-3 h-3 bg-[#39d353] rounded-sm" />
+              <div className="w-3 h-3 bg-[#5b4300] rounded-sm" />
+              <div className="w-3 h-3 bg-[#8a6800] rounded-sm" />
+              <div className="w-3 h-3 bg-[#c79b00] rounded-sm" />
+              <div className="w-3 h-3 bg-[#ffc838] rounded-sm" />
             </div>
             <span>More</span>
           </div>

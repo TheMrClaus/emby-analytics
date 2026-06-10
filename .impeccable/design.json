@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-10T00:00:00Z",
+  "title": "Design System: Emby Analytics",
+  "extensions": {
+    "colorMeta": {
+      "void": { "role": "neutral", "displayName": "Void", "canonical": "#0b0e13", "tonalRamp": ["#06080b", "#0b0e13", "#121722", "#1c2230", "#2a3242", "#4a5468", "#7a8499", "#b8c0d0"] },
+      "panel": { "role": "neutral", "displayName": "Panel", "canonical": "#121722", "tonalRamp": ["#0b0e13", "#121722", "#1a2030", "#242c40", "#323c54", "#4e5a78", "#8290ad", "#c2cadb"] },
+      "panel-raised": { "role": "neutral", "displayName": "Raised Panel", "canonical": "#262626", "tonalRamp": ["#171717", "#262626", "#404040", "#525252", "#737373", "#a3a3a3", "#d4d4d4", "#f5f5f5"] },
+      "gold": { "role": "primary", "displayName": "Projector Gold", "canonical": "#ffc838", "tonalRamp": ["#4a3700", "#7a5b00", "#a87e00", "#d6a200", "#f5b515", "#ffc838", "#ffd54a", "#ffe79c"] },
+      "signal-green": { "role": "secondary", "displayName": "Signal Green", "canonical": "#34d399", "tonalRamp": ["#022c22", "#064e3b", "#065f46", "#059669", "#10b981", "#34d399", "#6ee7b7", "#d1fae5"] },
+      "signal-red": { "role": "secondary", "displayName": "Signal Red", "canonical": "#ef4444", "tonalRamp": ["#450a0a", "#7f1d1d", "#991b1b", "#dc2626", "#ef4444", "#f87171", "#fca5a5", "#fee2e2"] },
+      "ink-muted": { "role": "neutral", "displayName": "Muted Ink", "canonical": "#9aa4b2", "tonalRamp": ["#2a2f38", "#3d444f", "#525a68", "#6b7585", "#85909f", "#9aa4b2", "#b8c0cb", "#dde1e7"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page-level headline; one per page." },
+      "title": { "displayName": "Title", "purpose": "Section titles." },
+      "heading": { "displayName": "Heading", "purpose": "Card titles." },
+      "body": { "displayName": "Body", "purpose": "Tables, descriptions, controls — the working size." },
+      "label": { "displayName": "Label", "purpose": "Uppercase table column headers only." },
+      "mono": { "displayName": "Mono", "purpose": "Codecs, bitrates, IDs, file paths." }
+    },
+    "shadows": [
+      { "name": "overlay", "value": "0 25px 50px -12px rgba(0,0,0,0.6)", "purpose": "Modals, drawers, dropdown menus only — never resting cards (the Tonal Stack Rule)." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "150ms ease-out", "purpose": "Hover/state transitions on controls." },
+      { "name": "hero-crossfade", "value": "opacity 600ms ease", "purpose": "Now Playing backdrop crossfade; disabled under prefers-reduced-motion." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Gold-on-black primary action; calm at rest, no glow.",
+      "html": "<button class=\"ds-btn-primary\">Refresh Library</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(#0f1116, #000000); color: #ffc838; border: 1px solid rgba(245,181,21,0.35); border-radius: 12px; padding: 6px 12px; font-size: 14px; font-weight: 500; font-family: ui-sans-serif, system-ui, sans-serif; cursor: pointer; transition: filter 150ms ease-out, transform 150ms ease-out; } .ds-btn-primary:hover { filter: brightness(1.1); } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(11,14,19,0.9), 0 0 0 4px rgba(245,181,21,0.45); }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive admin action; plain and explicit, never a showpiece.",
+      "html": "<button class=\"ds-btn-danger\">Stop Session</button>",
+      "css": ".ds-btn-danger { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(#1a0e0e, #090000); color: #ffdede; border: 1px solid rgba(255,70,70,0.55); border-radius: 12px; padding: 6px 12px; font-size: 14px; font-weight: 500; font-family: ui-sans-serif, system-ui, sans-serif; cursor: pointer; transition: filter 150ms ease-out; } .ds-btn-danger:hover { filter: brightness(1.1); } .ds-btn-danger:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(11,14,19,0.9), 0 0 0 4px rgba(239,68,68,0.45); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Workhorse utility control for filters and selectors.",
+      "html": "<button class=\"ds-btn-ghost\">Last 30 days</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; gap: 8px; background: #262626; color: #ffffff; border: 1px solid #404040; border-radius: 8px; padding: 8px 12px; font-size: 14px; font-family: ui-sans-serif, system-ui, sans-serif; cursor: pointer; transition: background 150ms ease-out; } .ds-btn-ghost:hover { background: #404040; } .ds-btn-ghost:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(11,14,19,0.9), 0 0 0 4px rgba(255,255,255,0.3); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Resting dashboard panel: tonal step + hairline border, no shadow.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-title\">Top Users</div><div class=\"ds-card-body\">42 users watched 1,204 hours</div></div>",
+      "css": ".ds-card { background: #121722; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 16px; font-family: ui-sans-serif, system-ui, sans-serif; } .ds-card-title { font-size: 14px; color: #9aa4b2; margin-bottom: 8px; } .ds-card-body { font-size: 14px; color: #ffffff; }"
+    },
+    {
+      "name": "Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Pill for counts, codecs, and server types.",
+      "html": "<span class=\"ds-badge\">HEVC</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 4px; border: 1px solid rgba(255,255,255,0.1); border-radius: 9999px; padding: 2px 8px; font-size: 12px; color: rgba(230,246,236,0.9); font-family: ui-sans-serif, system-ui, sans-serif; }"
+    },
+    {
+      "name": "Data Table",
+      "kind": "custom",
+      "refersTo": "table-dark",
+      "description": "The dashboard's signature component: dark table with hairline rows and right-aligned numerics.",
+      "html": "<table class=\"ds-table\"><thead><tr><th>User</th><th class=\"ds-num\">Hours</th></tr></thead><tbody><tr><td>marcello</td><td class=\"ds-num\">182.4</td></tr><tr><td>guest</td><td class=\"ds-num\">36.1</td></tr></tbody></table>",
+      "css": ".ds-table { width: 100%; border-collapse: collapse; font-size: 14px; color: #ffffff; font-family: ui-sans-serif, system-ui, sans-serif; } .ds-table thead th { color: rgba(255,255,255,0.6); text-transform: uppercase; font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-align: left; padding: 12px 8px; } .ds-table tbody tr { border-top: 1px solid rgba(255,255,255,0.1); transition: background 150ms ease-out; } .ds-table tbody tr:hover { background: rgba(255,255,255,0.05); } .ds-table td { padding: 12px 8px; } .ds-table .ds-num { text-align: right; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Nav Link",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "Header navigation link; hover tints toward gold.",
+      "html": "<a class=\"ds-nav-link\" href=\"#\">Storage</a>",
+      "css": ".ds-nav-link { color: #ffffff; font-size: 14px; font-weight: 500; text-decoration: none; font-family: ui-sans-serif, system-ui, sans-serif; transition: color 150ms ease-out; } .ds-nav-link:hover { color: #ffd54a; } .ds-nav-link:focus-visible { outline: 2px solid rgba(245,181,21,0.45); outline-offset: 2px; border-radius: 4px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Server Room",
+    "overview": "Emby Analytics looks like the room where the machines live: dark, calm, and instrument-grade. Surfaces are deep near-black panels stacked in subtle tonal steps; the only light in the room comes from the data itself — gold chart bars, green status lights, live session art. The chrome never competes. If a screen feels bland, the answer is sharper data presentation, never more ornament on the frame.",
+    "keyCharacteristics": [
+      "Deep, flat, near-black tonal stack (#0b0e13 → #121722 → #262626) with 1px hairline borders",
+      "One accent: gold (#ffc838) — used sparingly, where attention is earned",
+      "Green and red are status semantics (live / healthy / error), never decoration",
+      "System font stack, tight tracking on headings, data in tables and Nivo charts",
+      "Motion only on live surfaces (Now Playing); historical views are still"
+    ],
+    "rules": [
+      { "name": "The Single Lamp Rule", "body": "Gold is the only accent in the chrome, and it covers no more than ~10% of any screen. If two things glow gold, neither is important.", "section": "colors" },
+      { "name": "The Status Light Rule", "body": "Green means live or healthy; red means failed or destructive. Neither color ever appears for decoration, branding, or emphasis.", "section": "colors" },
+      { "name": "The Two-Second Rule", "body": "Every card's headline reading (the number, the now-playing title, the trend) must be legible at a glance in Display/Title weight; supporting detail drops to Body below it.", "section": "typography" },
+      { "name": "The Tonal Stack Rule", "body": "A resting surface gets a background step and a hairline border, never a shadow. If you reach for a shadow, the element must be an overlay that can be dismissed.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep chrome neutral and let data carry the color — gold charts, status lights, session artwork (the Single Lamp Rule).",
+      "Do build depth with background steps (#0b0e13 → #121722 → #262626) and 1px hairline borders; reserve shadows for overlays.",
+      "Do keep body text at 14px/white or 14px/#9aa4b2 minimum contrast; tertiary white/50 text is for short captions only.",
+      "Do give every interactive element a visible keyboard focus ring and ≥44px touch targets on mobile.",
+      "Do provide a prefers-reduced-motion alternative for every animation, as the hero crossfade already does.",
+      "Do right-align numeric table columns and use the mono stack for codecs, bitrates, and IDs."
+    ],
+    "donts": [
+      "Don't ship the \"neon gamer aesthetic\" PRODUCT.md forbids: no glow blooms, pulse keyframes, radial-gradient washes, or RGB-tinted borders. The legacy btn-premium bloom animation and the emerald body gradient are the named offenders — retire, don't imitate.",
+      "Don't ship the \"generic SaaS dashboard\" PRODUCT.md forbids: no grids of identical stat cards, no gradient hero metrics, no decorative icon+heading+text card rows.",
+      "Don't use Signal Green or Signal Red decoratively; they are status semantics only.",
+      "Don't introduce a second accent hue. Gold (#ffc838) is the lamp; everything else is neutral or status.",
+      "Don't put shadows on resting cards or nest cards inside cards.",
+      "Don't drop text below 12px or below Muted Ink (#9aa4b2) contrast for anything that must be read.",
+      "Don't animate historical/analytics surfaces; motion belongs to live data only."
+    ]
+  }
+}

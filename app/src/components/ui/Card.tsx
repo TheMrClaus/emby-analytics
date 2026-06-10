@@ -17,7 +17,7 @@ export default function Card({
       className={
         // inline-block + w-full so each card is a single masonry item
         // break-inside-avoid prevents splitting between columns
-        `bg-neutral-800 rounded-2xl p-4 shadow inline-block w-full align-top
+        `bg-neutral-800 border border-white/10 rounded-2xl p-4 inline-block w-full align-top
          break-inside-avoid mb-4 ${className}`
       }
     >

@@ -288,21 +288,21 @@ export default function Header() {
             <div className="flex items-center gap-3 text-sm">
               <Link
                 href="/settings"
-                className="text-blue-300 hover:text-white underline decoration-dotted"
+                className="text-gray-300 hover:text-amber-300 underline decoration-dotted transition-colors"
               >
                 Settings
               </Link>
               <span className="text-gray-500">|</span>
               <Link
                 href="/api-explorer"
-                className="text-blue-300 hover:text-white underline decoration-dotted"
+                className="text-gray-300 hover:text-amber-300 underline decoration-dotted transition-colors"
               >
                 API Explorer
               </Link>
               <span className="text-gray-500">|</span>
               <Link
                 href="/storage-analytics"
-                className="text-blue-300 hover:text-white underline decoration-dotted"
+                className="text-gray-300 hover:text-amber-300 underline decoration-dotted transition-colors"
               >
                 Storage Analytics
               </Link>
@@ -423,8 +423,6 @@ export default function Header() {
                       />
                     </svg>
                   </Link>
-
-                  
 
                   <Link
                     href="/storage-analytics"

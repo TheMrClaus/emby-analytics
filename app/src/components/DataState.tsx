@@ -26,9 +26,9 @@ export function DataState({
     }
 
     return (
-      <div className="flex items-center justify-center p-6 bg-red-50 border border-red-200 rounded-lg">
+      <div className="flex items-center justify-center p-6 bg-red-900/20 border border-red-500/20 rounded-2xl">
         <div className="text-center">
-          <div className="text-red-600 mb-2">
+          <div className="text-red-400 mb-2">
             <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -38,10 +38,10 @@ export function DataState({
               />
             </svg>
           </div>
-          <p className="text-red-800 font-medium">Failed to load data</p>
-          <p className="text-red-600 text-sm mt-1">{error.message}</p>
+          <p className="text-red-300 font-medium">Failed to load data</p>
+          <p className="text-red-400 text-sm mt-1">{error.message}</p>
           <button
-            className="mt-3 px-3 py-1 text-sm bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+            className="mt-3 px-3 py-1 text-sm bg-red-900/40 border border-red-500/40 text-red-200 rounded hover:bg-red-900/60 transition-colors"
             onClick={() => window.location.reload()}
           >
             Try Again
@@ -58,11 +58,11 @@ export function DataState({
     }
 
     return (
-      <div className="flex items-center justify-center p-6">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
+      <div className="p-6 animate-pulse" aria-busy="true" aria-live="polite">
+        <div className="h-4 bg-neutral-700 rounded w-32 mb-3"></div>
+        <div className="h-3 bg-neutral-700/70 rounded w-full mb-2"></div>
+        <div className="h-3 bg-neutral-700/70 rounded w-2/3"></div>
+        <span className="sr-only">Loading…</span>
       </div>
     );
   }
@@ -78,9 +78,9 @@ export function DataState({
     }
 
     return (
-      <div className="flex items-center justify-center p-6 bg-gray-50 border border-gray-200 rounded-lg">
+      <div className="flex items-center justify-center p-6 bg-neutral-800 border border-white/10 rounded-2xl">
         <div className="text-center">
-          <div className="text-gray-400 mb-2">
+          <div className="text-gray-500 mb-2">
             <svg className="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -90,7 +90,7 @@ export function DataState({
               />
             </svg>
           </div>
-          <p className="text-gray-600">No data available</p>
+          <p className="text-gray-400">No data available</p>
         </div>
       </div>
     );

@@ -41,3 +41,6 @@ go/emby.db-wal
 
 # GitHub App credentials
 gha-creds-*.json
+
+# Local agent workspace
+.sisyphus/

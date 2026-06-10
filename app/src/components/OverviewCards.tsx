@@ -15,7 +15,7 @@ export default function OverviewCards() {
       errorFallback={
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-red-900/20 border border-red-500/20 rounded-2xl p-4 shadow">
+            <div key={i} className="bg-red-900/20 border border-red-500/20 rounded-2xl p-4">
               <div className="text-sm text-red-400">Connection Error</div>
               <div className="text-red-300 text-sm">Unable to load stats</div>
               <div className="text-xs text-red-400 mt-1">Check server connection</div>
@@ -26,7 +26,10 @@ export default function OverviewCards() {
       loadingFallback={
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="bg-neutral-800 rounded-2xl p-4 shadow animate-pulse">
+            <div
+              key={i}
+              className="bg-neutral-800 border border-white/10 rounded-2xl p-4 animate-pulse"
+            >
               <div className="h-4 bg-neutral-700 rounded w-16 mb-2"></div>
               <div className="h-8 bg-neutral-700 rounded w-20"></div>
             </div>
@@ -65,12 +68,9 @@ export default function OverviewCards() {
 function Card({ label, value, isStale }: { label: string; value: string; isStale?: boolean }) {
   return (
     <div
-      className={`rounded-2xl p-4 shadow ${isStale ? "bg-yellow-900/20 border border-yellow-500/20" : "bg-neutral-800"}`}
+      className={`rounded-2xl p-4 border ${isStale ? "bg-yellow-900/20 border-yellow-500/20" : "bg-neutral-800 border-white/10"}`}
     >
-      <div className={`text-sm ${isStale ? "text-yellow-400" : "text-gray-400"}`}>
-        {label}
-        {isStale && <span className="ml-1 text-xs">⚠️</span>}
-      </div>
+      <div className={`text-sm ${isStale ? "text-yellow-400" : "text-gray-400"}`}>{label}</div>
       <div className={`text-2xl font-bold ${isStale ? "text-yellow-300" : "text-white"}`}>
         {value}
       </div>

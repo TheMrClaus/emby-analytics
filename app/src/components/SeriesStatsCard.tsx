@@ -103,11 +103,11 @@ export default function SeriesStatsCard() {
                   <Link
                     key={genre.genre}
                     href={`/genres?genre=${encodeURIComponent(genre.genre)}&media_type=Series`}
-                    className="bg-purple-900/30 border border-purple-500/30 rounded-lg px-3 py-1 text-sm hover:bg-purple-900/50"
+                    className="bg-neutral-700/50 border border-neutral-600 rounded-lg px-3 py-1 text-sm hover:bg-neutral-700 hover:border-neutral-500 transition-colors"
                     title={`View episodes in ${genre.genre}`}
                   >
-                    <span className="text-purple-200">{genre.genre}</span>
-                    <span className="text-purple-300 ml-1">({fmtInt(genre.count)})</span>
+                    <span className="text-gray-200">{genre.genre}</span>
+                    <span className="text-gray-400 ml-1">({fmtInt(genre.count)})</span>
                   </Link>
                 ))}
               </div>
@@ -141,14 +141,11 @@ function StatItem({
 }) {
   return (
     <div className={`${isStale ? "text-yellow-300" : "text-white"}`}>
-      <div className={`text-xs ${isStale ? "text-yellow-400" : "text-gray-400"} mb-1`}>
-        {label}
-        {isStale && <span className="ml-1">⚠️</span>}
-      </div>
+      <div className={`text-xs ${isStale ? "text-yellow-400" : "text-gray-400"} mb-1`}>{label}</div>
       <div className={`font-semibold ${isStale ? "text-yellow-300" : "text-white"}`}>{value}</div>
       {subtitle && (
         <div
-          className={`text-xs mt-1 ${isStale ? "text-yellow-400" : "text-gray-500"} truncate`}
+          className={`text-xs mt-1 ${isStale ? "text-yellow-400" : "text-gray-400"} truncate`}
           title={subtitle}
         >
           {subtitle}

@@ -48,14 +48,14 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="flex items-center justify-center p-8 bg-red-50 border border-red-200 rounded-lg">
+        <div className="flex items-center justify-center p-8 bg-red-900/20 border border-red-500/20 rounded-2xl">
           <div className="text-center">
-            <h3 className="text-lg font-semibold text-red-800 mb-2">Something went wrong</h3>
-            <p className="text-red-600 mb-4">
+            <h3 className="text-lg font-semibold text-red-300 mb-2">Something went wrong</h3>
+            <p className="text-red-400 text-sm mb-4">
               This component encountered an error and could not render properly.
             </p>
             <button
-              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+              className="px-4 py-2 bg-red-900/40 border border-red-500/40 text-red-200 rounded-lg hover:bg-red-900/60 transition-colors"
               onClick={() => window.location.reload()}
             >
               Reload Page

@@ -114,7 +114,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
           <select
             value={timeframe}
             onChange={(e) => setTimeframe(e.target.value)}
-            className="bg-neutral-700 text-white text-xs px-2 py-1 rounded border border-neutral-600 focus:border-blue-500 focus:outline-none"
+            className="bg-neutral-700 text-white text-xs px-2 py-1 rounded border border-neutral-600 focus:border-amber-400 focus:outline-none"
           >
             {timeframeOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -140,7 +140,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                 <tr key={i} className="border-b border-neutral-800 last:border-0">
                   <td className="py-1">
                     <span
-                      className="cursor-pointer hover:text-blue-400 transition-colors"
+                      className="cursor-pointer hover:text-amber-300 transition-colors"
                       onClick={() => handleUserClick(r)}
                     >
                       {r.name}
@@ -155,7 +155,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
             </tbody>
           </table>
           {rows.length === 0 && !isLoading && (
-            <div className="text-gray-500 text-center py-4">No data available</div>
+            <div className="text-gray-400 text-center py-4">No data available</div>
           )}
         </>
       ) : (
@@ -165,7 +165,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
             <select
               value={timeframe}
               onChange={(e) => setTimeframe(e.target.value)}
-              className="bg-neutral-700 text-white text-xs px-3 py-2 rounded border border-neutral-600 focus:border-blue-500 focus:outline-none"
+              className="bg-neutral-700 text-white text-xs px-3 py-2 rounded border border-neutral-600 focus:border-amber-400 focus:outline-none"
             >
               {timeframeOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -176,7 +176,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
             <select
               value={userFilter || selectedUser?.user_id || ""}
               onChange={(e) => setUserFilter(e.target.value)}
-              className="bg-neutral-700 text-white text-xs px-3 py-2 rounded border border-neutral-600 focus:border-blue-500 focus:outline-none"
+              className="bg-neutral-700 text-white text-xs px-3 py-2 rounded border border-neutral-600 focus:border-amber-400 focus:outline-none"
             >
               {allUsers.map((user) => (
                 <option key={user.id} value={user.id}>
@@ -231,7 +231,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                         className="py-2 px-3 bg-neutral-700/30 rounded"
                       >
                         <div
-                          className="font-medium text-white text-sm cursor-pointer hover:text-blue-400 transition-colors"
+                          className="font-medium text-white text-sm cursor-pointer hover:text-amber-300 transition-colors"
                           onClick={() => {
                             if (embyExternalUrl)
                               openInEmby(movie.item_id, embyExternalUrl, embyServerId);
@@ -260,7 +260,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                         className="py-2 px-3 bg-neutral-700/30 rounded"
                       >
                         <div
-                          className="font-medium text-white text-sm cursor-pointer hover:text-blue-400 transition-colors"
+                          className="font-medium text-white text-sm cursor-pointer hover:text-amber-300 transition-colors"
                           onClick={() => {
                             if (embyExternalUrl)
                               openInEmby(episode.item_id, embyExternalUrl, embyServerId);
@@ -291,7 +291,7 @@ export default function TopUsers({ limit = 10 }: { limit?: number }) {
                         className="py-2 px-3 bg-neutral-700/30 rounded"
                       >
                         <div
-                          className="font-medium text-white text-sm cursor-pointer hover:text-blue-400 transition-colors"
+                          className="font-medium text-white text-sm cursor-pointer hover:text-amber-300 transition-colors"
                           onClick={() => {
                             if (embyExternalUrl)
                               openInEmby(series.item_id, embyExternalUrl, embyServerId);
