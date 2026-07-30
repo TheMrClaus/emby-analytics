@@ -1,0 +1,20 @@
+[Unit]
+Description=Emby Analytics (rootless Podman)
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=ghcr.io/themrclaus/emby-analytics:latest
+ContainerName=emby-analytics
+UserNS=keep-id
+EnvironmentFile=/opt/emby-analytics/.env
+Volume=/opt/emby-analytics/data:/var/lib/emby-analytics
+PublishPort=172.18.0.1:18083:8080
+Pull=never
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

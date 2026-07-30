@@ -17,6 +17,7 @@ CLAUDE.sessions.md
 
 # SQLite DB and runtime data
 data/
+backups/
 
 # Go build artifacts
 go/web/
