@@ -1,10 +1,6 @@
-# Docker rollback definition. Production runs from emby-analytics.container via a rootless Podman user Quadlet.
-# Never run Docker and Podman simultaneously against ./data.
-# Roll back with: docker compose --profile docker-rollback up -d
+# emby-analytics — Docker Compose (primary engine).
 services:
   emby-analytics:
-    profiles:
-      - docker-rollback
     image: ghcr.io/themrclaus/emby-analytics:latest
     container_name: emby-analytics
     restart: unless-stopped
@@ -13,11 +9,10 @@ services:
     env_file:
       - .env
     networks:
-      mediaserver:
-      pangolin:
-
+      mediaserver: null
+      traefik: null
 networks:
   mediaserver:
     external: true
-  pangolin:
+  traefik:
     external: true
